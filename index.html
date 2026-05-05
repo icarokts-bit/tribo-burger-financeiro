@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v4.2</title>
+    <title>Tribo Burger | Gestão Total v4.3</title>
+    
+    <!-- Configuração do Favicon -->
+    <link rel="icon" type="image/png" href="logo.png">
     
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -28,6 +31,17 @@
         .header-red { background-color: #FF0000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; }
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; }
         .dre-row:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+
+        /* Estilo para a marca d'água */
+        .bg-watermark {
+            position: fixed;
+            bottom: -50px;
+            right: -50px;
+            opacity: 0.03;
+            z-index: -1;
+            transform: rotate(-15deg);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="antialiased selection:bg-[#D97757] selection:text-white">
@@ -77,7 +91,6 @@
             const [selectedAccount, setSelectedAccount] = useState(ACCOUNTS[0]);
             const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
             
-            // Datas separadas: Emissão e Compensação
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [clearanceDate, setClearanceDate] = useState(new Date().toISOString().split('T')[0]);
             
@@ -111,13 +124,12 @@
                     description: desc, 
                     amount: parseFloat(val), 
                     type, 
-                    date, // Data de lançamento (competência)
-                    clearanceDate, // Data de compensação (caixa)
+                    date, 
+                    clearanceDate,
                     account: selectedAccount,
                     category: selectedCategory
                 });
                 setDesc(''); setVal('');
-                // Reset das datas para hoje após salvar
                 const today = new Date().toISOString().split('T')[0];
                 setDate(today);
                 setClearanceDate(today);
@@ -203,15 +215,27 @@
 
             return (
                 <div className="min-h-screen flex flex-col">
+                    {/* Logótipo em Marca d'Água no fundo */}
+                    <img src="logo.png" className="bg-watermark w-96" alt="" />
+
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-2xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-white p-1 rounded-xl w-14 h-14 flex items-center justify-center border-2 border-[#D97757]">
-                                    <img src="logo.png" alt="TB" className="h-full w-auto object-contain" onerror="this.src='https://via.placeholder.com/100?text=TRIBO'" />
+                            <div className="flex items-center gap-6">
+                                {/* Logótipo Adaptado no Header */}
+                                <div className="relative group">
+                                    <div className="absolute -inset-1 bg-[#D97757] rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                    <div className="relative bg-white p-0.5 rounded-full w-16 h-16 flex items-center justify-center border-2 border-[#F8CC82] shadow-xl">
+                                        <img 
+                                            src="logo.png" 
+                                            alt="Tribo Burger" 
+                                            className="h-12 w-12 object-contain" 
+                                            onerror="this.src='https://via.placeholder.com/100?text=TRIBO'" 
+                                        />
+                                    </div>
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-black uppercase text-[#F8CC82] tracking-tighter">Tribo Burger</h1>
-                                    <p className="text-[10px] font-extrabold opacity-50 uppercase tracking-[0.2em]">Gestão Total</p>
+                                    <h1 className="text-2xl font-black uppercase text-[#F8CC82] tracking-tighter leading-none">Tribo Burger</h1>
+                                    <p className="text-[10px] font-extrabold opacity-50 uppercase tracking-[0.3em] mt-1">Gestão Financeira</p>
                                 </div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar w-full md:w-auto">
@@ -229,7 +253,7 @@
                             <div className="max-w-6xl mx-auto space-y-8">
                                 <section className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
                                     {ACCOUNTS.map(acc => (
-                                        <div key={acc} className="glass-card p-3 rounded-2xl text-center">
+                                        <div key={acc} className="glass-card p-3 rounded-2xl text-center hover:scale-105 transition-transform cursor-default">
                                             <p className="text-[8px] font-black uppercase text-slate-400 truncate">{acc}</p>
                                             <p className={`text-[10px] font-black ${finances.balances[acc] >= 0 ? 'text-slate-700' : 'text-red-500'}`}>{formatMoney(finances.balances[acc])}</p>
                                         </div>
@@ -239,41 +263,41 @@
                                     <div className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm h-fit">
                                         <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2 text-[#1A202C]"><Icon name="plus-circle" size={16} className="text-[#D97757]" /> Lançamento</h4>
                                         <form onSubmit={handleSaveTransaction} className="space-y-4">
-                                            <input type="text" placeholder="Descrição" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
-                                            <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
+                                            <input type="text" placeholder="Descrição" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-[#D97757]" value={val} onChange={e => setVal(e.target.value)} />
                                             
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Data do Gasto</label>
-                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={date} onChange={e => setDate(e.target.value)} />
+                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px] outline-none" value={date} onChange={e => setDate(e.target.value)} />
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Compensação</label>
-                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} />
+                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px] outline-none" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} />
                                                 </div>
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Conta</label>
-                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold outline-none" value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Categoria</label>
-                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold outline-none" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
                                                 </div>
                                             </div>
 
                                             <div className="flex gap-2">
-                                                <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl text-[10px] font-black ${type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>ENTRADA</button>
-                                                <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl text-[10px] font-black ${type === 'saida' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>SAÍDA</button>
+                                                <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>ENTRADA</button>
+                                                <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>SAÍDA</button>
                                             </div>
 
-                                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs tracking-widest mt-2">Guardar Registo</button>
+                                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl hover:shadow-[#D97757]/20 uppercase text-xs tracking-widest mt-2 transition-all active:scale-95">Guardar Registo</button>
                                         </form>
                                     </div>
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
-                                        <div className="p-6 bg-slate-50 font-black text-[10px] text-slate-400 uppercase flex justify-between tracking-widest"><span>Histórico</span><span>{transactions.length} itens</span></div>
+                                        <div className="p-6 bg-slate-50 font-black text-[10px] text-slate-400 uppercase flex justify-between tracking-widest border-b"><span>Histórico de Lançamentos</span><span>{transactions.length} itens</span></div>
                                         <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
                                             {transactions.map(t => (
                                                 <div key={t.id} className="flex items-center justify-between p-4 bg-white border rounded-2xl group hover:shadow-md transition-all">
@@ -282,12 +306,12 @@
                                                         <div>
                                                             <p className="font-bold text-sm text-[#1A202C] uppercase leading-tight">{t.description}</p>
                                                             <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">
-                                                                Reg: {t.date.split('-').reverse().join('/')} • Cai em: {t.clearanceDate ? t.clearanceDate.split('-').reverse().join('/') : t.date.split('-').reverse().join('/')}
+                                                                Reg: {t.date.split('-').reverse().join('/')} • Compensação: {t.clearanceDate ? t.clearanceDate.split('-').reverse().join('/') : t.date.split('-').reverse().join('/')}
                                                             </p>
                                                             <p className="text-[8px] font-black text-[#D97757] uppercase tracking-tighter">{t.account}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="opacity-0 group-hover:opacity-100 text-red-300 transition-opacity"><Icon name="trash-2" size={14}/></button></div>
+                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-600 transition-opacity"><Icon name="trash-2" size={14}/></button></div>
                                                 </div>
                                             ))}
                                         </div>
@@ -299,22 +323,27 @@
                         {activeTab === 'planilha' && (
                             <div className="glass-card rounded-3xl shadow-sm overflow-hidden">
                                 <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Vendas Diárias</h2>
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-[#1A202C] p-2 rounded-xl">
+                                            <Icon name="table" size={20} className="text-[#F8CC82]" />
+                                        </div>
+                                        <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Fecho de Vendas</h2>
+                                    </div>
                                     <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border shadow-sm">
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="font-black text-xs outline-none px-2" />
                                         <div className="h-6 w-px bg-slate-200 mx-1"></div>
                                         <input type="date" value={newDayDate} onChange={e => setNewDayDate(e.target.value)} className="text-xs font-bold border-0 outline-none" />
-                                        <button onClick={async () => { if(!dailyRecords[newDayDate]) await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-tighter">ABRIR DIA</button>
+                                        <button onClick={async () => { if(!dailyRecords[newDayDate]) await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-tighter hover:bg-[#D97757] transition-colors">ABRIR DIA</button>
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto no-scrollbar">
                                     <table className="w-full text-center text-[11px] border-collapse min-w-[1400px]">
                                         <thead>
                                             <tr>
-                                                <th className="p-3 header-black sticky left-0 z-20">Dias</th>
-                                                <th className="p-3 header-black">Total Dia:</th>
+                                                <th className="p-3 header-black sticky left-0 z-20">Data de Venda</th>
+                                                <th className="p-3 header-black">Total Bruto:</th>
                                                 {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-3 header-green">{h}</th>)}
-                                                <th className="p-3 header-red">Entregador</th><th className="p-3 header-red">Taxa</th><th className="p-3 header-red">Ações</th>
+                                                <th className="p-3 header-red">Motoboy</th><th className="p-3 header-red">Taxa iFood</th><th className="p-3 header-red">Gestão</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
@@ -328,7 +357,7 @@
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => <td key={f} className="p-0 border-r min-w-[80px]"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>)}
                                                         <td className="p-0 border-r bg-red-50/20 min-w-[100px]"><input className="table-input text-red-600" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)}/></td>
                                                         <td className="p-0 border-r bg-red-50/20 min-w-[100px]"><input className="table-input text-red-600" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)}/></td>
-                                                        <td className="p-2"><button onClick={() => { if(confirm("Apagar dia?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete(); }} className="text-red-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></td>
+                                                        <td className="p-2"><button onClick={() => { if(confirm("Apagar registo do dia?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete(); }} className="text-red-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></td>
                                                     </tr>
                                                 );
                                             })}
@@ -341,31 +370,42 @@
                         {activeTab === 'resultados' && (
                             <div className="max-w-6xl mx-auto space-y-8 animate-in zoom-in duration-500">
                                 <div className="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
-                                    <div><h2 className="text-xl font-black text-[#1A202C] uppercase tracking-tight">Relatório de Resultados</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">BI • Desempenho Mensal</p></div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-[#D97757] p-2 rounded-xl">
+                                            <Icon name="bar-chart-3" size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-black text-[#1A202C] uppercase tracking-tight">Performance Mensal</h2>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Business Intelligence</p>
+                                        </div>
+                                    </div>
                                     <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Venda Bruta</span><h3 className="text-2xl font-black">{formatMoney(results.current.receitaBruta)}</h3><p className={`text-[9px] font-bold mt-2 ${results.growth >= 0 ? 'text-green-600' : 'text-red-500'}`}>{results.growth.toFixed(1)}% vs anterior</p></div>
-                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custos</span><h3 className="text-2xl font-black text-red-600">{formatMoney(results.current.custosOperacionais)}</h3></div>
-                                    <div className="bg-[#1A202C] p-6 rounded-[2.5rem] text-white shadow-xl"><span className="text-[10px] font-black text-[#F8CC82] uppercase tracking-widest">Lucro Líquido</span><h3 className="text-2xl font-black">{formatMoney(results.current.lucroLiquido)}</h3></div>
-                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margem</span><h3 className="text-2xl font-black text-[#D97757]">{results.current.margem.toFixed(1)}%</h3></div>
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Faturação Bruta</span><h3 className="text-2xl font-black">{formatMoney(results.current.receitaBruta)}</h3><p className={`text-[9px] font-bold mt-2 ${results.growth >= 0 ? 'text-green-600' : 'text-red-500'}`}>{results.growth.toFixed(1)}% vs mês ant.</p></div>
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais</span><h3 className="text-2xl font-black text-red-600">{formatMoney(results.current.custosOperacionais)}</h3></div>
+                                    <div className="bg-[#1A202C] p-6 rounded-[2.5rem] text-white shadow-xl"><span className="text-[10px] font-black text-[#F8CC82] uppercase tracking-widest">Saldo Líquido</span><h3 className="text-2xl font-black">{formatMoney(results.current.lucroLiquido)}</h3></div>
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margem Operacional</span><h3 className="text-2xl font-black text-[#D97757]">{results.current.margem.toFixed(1)}%</h3></div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="glass-card p-8 rounded-[3rem] shadow-sm">
-                                        <h4 className="text-xs font-black uppercase text-[#1A202C] mb-6 border-b pb-4 tracking-widest">Canais de Venda</h4>
+                                        <h4 className="text-xs font-black uppercase text-[#1A202C] mb-6 border-b pb-4 tracking-widest">Canais de Receita</h4>
                                         <div className="space-y-4">
-                                            {[{l: 'Direto', v: results.current.diretoRevenue, c: '#1A202C'}, {l: 'iFood', v: results.current.ifoodRevenue, c: '#D97757'}].map(item => (
+                                            {[{l: 'Vendas Diretas', v: results.current.diretoRevenue, c: '#1A202C'}, {l: 'Canal iFood', v: results.current.ifoodRevenue, c: '#D97757'}].map(item => (
                                                 <div key={item.l}>
                                                     <div className="flex justify-between text-[10px] font-black uppercase mb-1"><span>{item.l}</span><span>{((item.v / (results.current.receitaBruta || 1)) * 100).toFixed(0)}%</span></div>
-                                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="h-full" style={{ width: `${(item.v / (results.current.receitaBruta || 1)) * 100}%`, backgroundColor: item.c }}></div></div>
+                                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="h-full transition-all duration-1000" style={{ width: `${(item.v / (results.current.receitaBruta || 1)) * 100}%`, backgroundColor: item.c }}></div></div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="glass-card p-8 rounded-[3rem] flex flex-col justify-center text-center shadow-sm">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Performance Global</p>
-                                        <h4 className="text-4xl font-black my-2">{results.current.lucroLiquido >= 0 ? 'POSITIVO' : 'NEGATIVO'}</h4>
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">O lucro real este mês é de {formatMoney(results.current.lucroLiquido)}</p>
+                                    <div className="glass-card p-8 rounded-[3rem] flex flex-col justify-center text-center shadow-sm relative overflow-hidden">
+                                        <img src="logo.png" className="absolute opacity-5 w-48 -right-10 -bottom-10 rotate-12" alt="" />
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado da Operação</p>
+                                        <h4 className={`text-4xl font-black my-2 ${results.current.lucroLiquido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {results.current.lucroLiquido >= 0 ? 'SAUDÁVEL' : 'ALERTA'}
+                                        </h4>
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">O lucro real deste período é de {formatMoney(results.current.lucroLiquido)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -378,15 +418,15 @@
                                     <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
                                 </div>
                                 <div className="glass-card rounded-[3rem] shadow-xl overflow-hidden bg-white p-8 space-y-4">
-                                    <div className="flex justify-between items-center p-4 bg-green-50 rounded-2xl border border-green-100"><span className="font-black uppercase text-sm">RECEITA BRUTA</span><span className="font-black text-green-700 text-lg">{formatMoney(dreData.receitaBruta)}</span></div>
-                                    <div className="flex justify-between items-center px-6 py-3 dre-row"><span className="font-bold text-red-500 uppercase text-xs">(-) Deduções e Taxas</span><span className="font-bold text-red-600">{formatMoney(dreData.taxasDeducoes)}</span></div>
-                                    <div className="flex justify-between items-center p-4 bg-slate-100 rounded-2xl border"><span className="font-black text-slate-700 uppercase text-sm">RECEITA LÍQUIDA</span><span className="font-black text-slate-800 text-lg">{formatMoney(dreData.receitaLiquida)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-green-50 rounded-2xl border border-green-100"><span className="font-black uppercase text-sm">RECEITA BRUTA OPERACIONAL</span><span className="font-black text-green-700 text-lg">{formatMoney(dreData.receitaBruta)}</span></div>
+                                    <div className="flex justify-between items-center px-6 py-3 dre-row"><span className="font-bold text-red-500 uppercase text-xs">(-) Custos de Venda e Taxas</span><span className="font-bold text-red-600">{formatMoney(dreData.taxasDeducoes)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-slate-100 rounded-2xl border"><span className="font-black text-slate-700 uppercase text-sm">LUCRO BRUTO / MARGEM</span><span className="font-black text-slate-800 text-lg">{formatMoney(dreData.receitaLiquida)}</span></div>
                                     <div className="py-4 space-y-2">
                                         {CATEGORIES.map(cat => (
                                             <div key={cat} className="flex justify-between items-center px-6 py-2 dre-row"><span className="text-xs font-medium text-slate-600">{cat}</span><span className="font-bold text-red-400">{formatMoney(dreData.categoriasCusto[cat])}</span></div>
                                         ))}
                                     </div>
-                                    <div className={`flex justify-between items-center p-6 rounded-[2.5rem] shadow-inner ${dreData.lucroLiquido >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-lg font-black uppercase tracking-widest">LUCRO LÍQUIDO</h3><span className="text-3xl font-black">{formatMoney(dreData.lucroLiquido)}</span></div>
+                                    <div className={`flex justify-between items-center p-6 rounded-[2.5rem] shadow-inner ${dreData.lucroLiquido >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-lg font-black uppercase tracking-widest">RESULTADO LÍQUIDO</h3><span className="text-3xl font-black">{formatMoney(dreData.lucroLiquido)}</span></div>
                                 </div>
                             </div>
                         )}
@@ -397,7 +437,7 @@
                                     {suppliers.map(s => (
                                         <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group h-56 flex flex-col justify-center border-2 border-slate-50 hover:border-[#D97757]/40 transition-all shadow-sm">
                                             <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={18} /></button>
-                                            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner"><Icon name="truck" size={24} /></div>
+                                            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner"><Icon name="truck" size={24} /></div>
                                             <p className="font-black text-sm text-[#1A202C] uppercase truncate px-2">{s.name}</p>
                                             <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest uppercase">{s.phone || 'S/ CONTACTO'}</p>
                                         </div>
@@ -410,8 +450,9 @@
                         )}
                     </main>
 
-                    <footer className="py-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">
-                        Tribo Burger • Business Intelligence v4.2
+                    <footer className="py-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.5em] flex flex-col items-center gap-4">
+                        <img src="logo.png" alt="Tribo Burger" className="h-10 opacity-30 grayscale" />
+                        <span>Tribo Burger • Business Intelligence v4.3</span>
                     </footer>
                 </div>
             );
