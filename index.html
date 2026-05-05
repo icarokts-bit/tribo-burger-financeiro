@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v5.7</title>
+    <title>Tribo Burger | Gestão Total v5.8</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -78,7 +78,11 @@
         const appId = 'tribo-burger-financeiro';
         const apiKey = ""; // Chave fornecida pelo ambiente
 
-        const DEFAULT_ACCOUNTS = ['Mercado Pago', 'C6 Bank', 'Caixa Loja'];
+        const DEFAULT_ACCOUNTS = [
+            { name: 'Mercado Pago', type: 'corrente' },
+            { name: 'C6 Bank', type: 'corrente' },
+            { name: 'Caixa Loja', type: 'corrente' }
+        ];
         const DEFAULT_CATEGORIES = ['CMV Insumos', 'CMV Bebidas', 'Salários', 'Aluguer/Luz', 'Marketing', 'Outros'];
 
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -104,7 +108,7 @@
             // Estados do Formulário Principal
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
-            const [type, setType] = useState('saida'); // saida, entrada, transferencia
+            const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
             const [targetAccount, setTargetAccount] = useState('');
             const [cat, setCat] = useState('');
@@ -115,6 +119,7 @@
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [newDay, setNewDay] = useState(new Date().toISOString().split('T')[0]);
             const [newItemName, setNewItemName] = useState('');
+            const [newItemType, setNewItemType] = useState('corrente');
 
             // AI States
             const [aiResponse, setAiResponse] = useState('');
@@ -145,7 +150,7 @@
                 const unsubAccounts = db.collection(`${path}/accounts`)
                     .onSnapshot(snap => {
                         if (snap.empty) {
-                            DEFAULT_ACCOUNTS.forEach(name => db.collection(`${path}/accounts`).add({ name }));
+                            DEFAULT_ACCOUNTS.forEach(acc => db.collection(`${path}/accounts`).add(acc));
                         } else {
                             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                             setAccounts(list);
@@ -185,8 +190,6 @@
             const saveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
-                
-                // Se não for transferência, descrição é obrigatória
                 if (type !== 'transferencia' && !desc) return;
 
                 const id = Date.now().toString();
@@ -216,7 +219,9 @@
 
             const addItem = async (collectionName) => {
                 if (!newItemName) return;
-                await db.collection(`artifacts/${appId}/users/${user.uid}/${collectionName}`).add({ name: newItemName });
+                const path = `artifacts/${appId}/users/${user.uid}/${collectionName}`;
+                const data = collectionName === 'accounts' ? { name: newItemName, type: newItemType } : { name: newItemName };
+                await db.collection(path).add(data);
                 setNewItemName('');
             };
 
@@ -224,6 +229,11 @@
                 if (!confirm("Remover este item?")) return;
                 await db.doc(`artifacts/${appId}/users/${user.uid}/${collectionName}/${id}`).delete();
             };
+
+            const selectedAccountIsCredit = useMemo(() => {
+                const acc = accounts.find(a => a.name === account);
+                return acc?.type === 'cartao';
+            }, [account, accounts]);
 
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
@@ -256,7 +266,6 @@
 
                 transactions.forEach(t => {
                     if (t.date.startsWith(filterMonth)) {
-                        // Transferências não entram no cálculo de Receita ou Despesa (DRE/Resultados)
                         if (t.type === 'transferencia') return;
 
                         const amount = p(t.amount);
@@ -286,7 +295,6 @@
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // FUNÇÃO DA INTELIGÊNCIA ARTIFICIAL
             const askAiConsultant = async () => {
                 setAiLoading(true);
                 setAiResponse('');
@@ -347,7 +355,7 @@
                     <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] fade-in">
                         <div className="text-center mb-8">
                             <img src="logo.png" className="w-24 mx-auto mb-4 drop-shadow-lg" alt="Logo" onerror="this.src='https://via.placeholder.com/150?text=TRIBO'" />
-                            <h2 className="text-2xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Financeiro</h2>
+                            <h2 className="text-2xl font-black text-[#1A202C] uppercase tracking-tighter text-center">Tribo Financeiro</h2>
                         </div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm outline-none" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
@@ -357,7 +365,7 @@
                                 {isRegistering ? 'Registar' : 'Entrar'}
                             </button>
                         </form>
-                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-[10px] font-black text-[#D97757] uppercase tracking-widest">
+                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-[10px] font-black text-[#D97757] uppercase tracking-widest text-center">
                             {isRegistering ? 'Voltar ao Login' : 'Novo Utilizador'}
                         </button>
                     </div>
@@ -387,6 +395,13 @@
                     <main className="p-4 max-w-6xl mx-auto w-full flex-1">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
+                                <div className="flex justify-center mb-4">
+                                    <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 shadow-sm border border-[#F8CC82]/20">
+                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Análise do Período:</span>
+                                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-green-500 shadow-sm text-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Bruta</p>
@@ -413,7 +428,7 @@
                                                 <input type="text" placeholder="Descrição (Ex: Compra de Carne)" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <input type="number" step="0.01" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
-                                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name} {a.type === 'cartao' ? '(💳)' : ''}</option>)}</select>
                                                 </div>
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                                 <div className="flex gap-2">
@@ -424,7 +439,7 @@
                                         ) : (
                                             <div className="space-y-4 fade-in">
                                                 <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 mb-2">
-                                                    <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest text-center">Movimento de transferência entre contas internas</p>
+                                                    <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest text-center">Transferência entre contas internas</p>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div className="space-y-1">
@@ -444,8 +459,20 @@
                                         )}
 
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Movimento</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
-                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Movimento</label>
+                                                <input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">
+                                                    {selectedAccountIsCredit ? 'Mês da Fatura' : 'Compensação'}
+                                                </label>
+                                                {selectedAccountIsCredit ? (
+                                                    <input type="month" className="w-full p-3 bg-orange-50 border border-orange-100 rounded-xl text-xs font-bold text-orange-700" value={clearance.slice(0,7)} onChange={e => setClearance(e.target.value + "-01")} />
+                                                ) : (
+                                                    <input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} />
+                                                )}
+                                            </div>
                                         </div>
 
                                         <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">
@@ -454,9 +481,9 @@
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
-                                        <div className="p-5 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex justify-between tracking-widest"><span>Histórico Recente</span><span>{transactions.length} itens</span></div>
+                                        <div className="p-5 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex justify-between tracking-widest"><span>Histórico do Mês ({filterMonth})</span><span>{transactions.filter(t => t.date.startsWith(filterMonth)).length} itens</span></div>
                                         <div className="flex-1 overflow-y-auto divide-y no-scrollbar">
-                                            {transactions.map(t => (
+                                            {transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (
                                                 <div key={t.id} className="p-5 flex justify-between items-center group hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : t.type === 'transferencia' ? 'bg-orange-100 text-orange-600' : 'bg-red-50 text-red-600'}`}>
@@ -465,7 +492,7 @@
                                                         <div>
                                                             <p className="font-black text-sm text-[#1A202C] uppercase leading-tight">{t.description}</p>
                                                             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                                {t.date.split('-').reverse().join('/')} <span className="mx-1">•</span> {t.type === 'transferencia' ? 'Neutro' : t.account}
+                                                                {t.date.split('-').reverse().join('/')} <span className="mx-1">•</span> {t.account} {t.category ? `• ${t.category}` : ''}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -532,20 +559,13 @@
 
                         {activeTab === 'resultados' && (
                             <div className="space-y-10 animate-in zoom-in duration-500 py-10">
-                                {/* Seletor Global de Mês para Resultados */}
                                 <div className="flex justify-center">
                                     <div className="glass-card px-6 py-3 rounded-full flex items-center gap-4 shadow-md border-2 border-[#F8CC82]/30">
                                         <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mês em Análise:</span>
-                                        <input 
-                                            type="month" 
-                                            value={filterMonth} 
-                                            onChange={e => setFilterMonth(e.target.value)} 
-                                            className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer"
-                                        />
+                                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
                                     </div>
                                 </div>
 
-                                {/* KPIs Principais */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
                                     <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-green-500">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido</p>
@@ -604,12 +624,7 @@
                                         <div className="text-left"><h2 className="text-2xl font-black uppercase tracking-tighter">Relatório DRE</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tribo Burger</p></div>
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mês Fiscal:</span>
-                                            <input 
-                                                type="month" 
-                                                value={filterMonth} 
-                                                onChange={e => setFilterMonth(e.target.value)} 
-                                                className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#D97757] text-xs"
-                                            />
+                                            <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#D97757] text-xs" />
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl font-black border border-green-100"><span className="uppercase text-[10px] tracking-widest text-green-800">(=) RECEITA BRUTA</span><span className="text-green-700 text-xl">{formatMoney(stats.rb)}</span></div>
@@ -640,12 +655,7 @@
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Selecionar Período:</span>
-                                            <input 
-                                                type="month" 
-                                                value={filterMonth} 
-                                                onChange={e => setFilterMonth(e.target.value)} 
-                                                className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#1A202C] text-xs cursor-pointer"
-                                            />
+                                            <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#1A202C] text-xs cursor-pointer" />
                                         </div>
                                     </div>
 
@@ -684,28 +694,42 @@
                         {activeTab === 'ajustes' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg">
-                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Gerir Contas</h2>
-                                    <div className="flex gap-2 mb-6">
-                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Novo Banco" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
-                                        <button onClick={() => addItem('accounts')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Contas e Cartões</h2>
+                                    <div className="space-y-4 mb-6">
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Cartão C6 ou Banco X" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setNewItemType('corrente')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${newItemType === 'corrente' ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-slate-100 text-slate-400'}`}>Conta Corrente</button>
+                                            <button onClick={() => setNewItemType('cartao')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${newItemType === 'cartao' ? 'bg-[#D97757] text-white' : 'bg-slate-100 text-slate-400'}`}>Cartão Crédito</button>
+                                        </div>
+                                        <button onClick={() => addItem('accounts')} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">ADICIONAR <Icon name="plus" size={14}/></button>
                                     </div>
-                                    <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span>{a.name}</span><button onClick={() => removeItem('accounts', a.id)} className="text-red-300"><Icon name="trash-2" size={14} /></button></div>))}</div>
+                                    <div className="space-y-2">
+                                        {accounts.map(a => (
+                                            <div key={a.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl">
+                                                <div className="flex items-center gap-2">
+                                                    <Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={14} className={a.type === 'cartao' ? 'text-orange-500' : 'text-slate-400'} />
+                                                    <span className="text-xs font-bold uppercase">{a.name}</span>
+                                                </div>
+                                                <button onClick={() => removeItem('accounts', a.id)} className="text-red-300 hover:text-red-500"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg">
-                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias</h2>
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias de Gasto</h2>
                                     <div className="flex gap-2 mb-6">
-                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Carne" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Insumos" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                         <button onClick={() => addItem('categories')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
                                     </div>
-                                    <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span>{c.name}</span><button onClick={() => removeItem('categories', c.id)} className="text-red-300"><Icon name="trash-2" size={14} /></button></div>))}</div>
+                                    <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span className="text-xs font-bold uppercase">{c.name}</span><button onClick={() => removeItem('categories', c.id)} className="text-red-300 hover:text-red-500"><Icon name="trash-2" size={14} /></button></div>))}</div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    <footer className="py-12 text-center flex flex-col items-center gap-4">
+                    <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale hover:opacity-100 hover:grayscale-0 transition-all" alt="Logo" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.7</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.8</p>
                     </footer>
                 </div>
             );
