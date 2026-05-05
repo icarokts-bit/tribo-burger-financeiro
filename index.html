@@ -342,7 +342,9 @@
                 return invoices;
             }, [transactions, accounts]);
 
-            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+            const formatMoney = (v) => {
+                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+            };
 
             const askAiConsultant = async () => {
                 setAiLoading(true);
@@ -453,11 +455,11 @@
 
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-green-500 shadow-sm text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Bruta</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Bruta (R$)</p>
                                         <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3>
                                     </div>
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-red-500 shadow-sm text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais (R$)</p>
                                         <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.variableCosts + stats.totalOperating)}</h3>
                                     </div>
                                 </div>
@@ -482,7 +484,10 @@
                                             <div className="space-y-4">
                                                 <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <input type="text" placeholder="0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
+                                                    <div className="relative">
+                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">R$</span>
+                                                        <input type="text" placeholder="0,00" required className="w-full p-4 pl-10 bg-slate-50 border rounded-2xl font-black outline-none focus:border-[#D97757]" value={val} onChange={e => setVal(e.target.value)} />
+                                                    </div>
                                                     <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name} {a.type === 'cartao' ? '(💳)' : ''}</option>)}</select>
                                                 </div>
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
@@ -505,7 +510,10 @@
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Montante</label>
-                                                    <input type="text" placeholder="0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg" value={val} onChange={e => setVal(e.target.value)} />
+                                                    <div className="relative">
+                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300">R$</span>
+                                                        <input type="text" placeholder="0,00" required className="w-full p-4 pl-12 bg-slate-50 border rounded-2xl font-black text-center text-lg outline-none" value={val} onChange={e => setVal(e.target.value)} />
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
@@ -568,7 +576,7 @@
                         {activeTab === 'planilha' && (
                             <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden">
                                 <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Vendas Estilo Excel</h2>
+                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Vendas Estilo Excel (R$)</h2>
                                     <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border shadow-inner">
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2" />
                                         <div className="w-px h-6 bg-slate-100 mx-1"></div>
@@ -583,7 +591,7 @@
                                         <thead>
                                             <tr>
                                                 <th className="p-3 header-black sticky left-0 z-20">Dias / Datas</th>
-                                                <th className="p-3 header-black">Total Dia:</th>
+                                                <th className="p-3 header-black">Total Dia (R$)</th>
                                                 {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-3 header-green">{h}</th>)}
                                                 <th className="p-3 header-red">Motoboy Diária</th><th className="p-3 header-red">Taxa iFood</th><th className="p-3 header-black">Ações</th>
                                             </tr>
@@ -593,7 +601,6 @@
                                                 const r = dailyRecords[d] || {};
                                                 const totalIn = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + (parseFloat(r[f]) || 0), 0);
                                                 const update = (f, v) => {
-                                                    // Troca vírgula por ponto e limpa caracteres não numéricos exceto ponto decimal
                                                     const cleanValue = v.replace(',', '.').replace(/[^0-9.]/g, '');
                                                     db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: cleanValue }, { merge: true });
                                                 };
@@ -607,7 +614,7 @@
                                                                     className="table-input" 
                                                                     value={r[f] ? r[f].toString().replace('.', ',') : ''} 
                                                                     onChange={e => update(f, e.target.value)} 
-                                                                    placeholder="0,00"
+                                                                    placeholder="R$ 0,00"
                                                                 />
                                                             </td>
                                                         ))}
@@ -616,7 +623,7 @@
                                                                 className="table-input" 
                                                                 value={r.motoboy ? r.motoboy.toString().replace('.', ',') : ''} 
                                                                 onChange={e => update('motoboy', e.target.value)} 
-                                                                placeholder="0,00"
+                                                                placeholder="R$ 0,00"
                                                             />
                                                         </td>
                                                         <td className="p-0 cell-red">
@@ -624,7 +631,7 @@
                                                                 className="table-input" 
                                                                 value={r.taxaEntrega ? r.taxaEntrega.toString().replace('.', ',') : ''} 
                                                                 onChange={e => update('taxaEntrega', e.target.value)} 
-                                                                placeholder="0,00"
+                                                                placeholder="R$ 0,00"
                                                             />
                                                         </td>
                                                         <td className="p-3 cell-white"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
@@ -648,15 +655,15 @@
 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
                                     <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-green-500">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido (R$)</p>
                                         <h3 className={`text-3xl font-black ${stats.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3>
                                     </div>
                                     <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-[#D97757]">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Margem Real</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Margem Real (%)</p>
                                         <h3 className="text-3xl font-black text-[#1A202C]">{stats.rb > 0 ? ((stats.lucro / stats.rb) * 100).toFixed(1) : 0}%</h3>
                                     </div>
                                     <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-blue-400">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Ticket Médio / Dia</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Ticket Médio (R$)</p>
                                         <h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.dailyCounts > 0 ? stats.rb / stats.dailyCounts : 0)}</h3>
                                     </div>
                                     <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-purple-500">
@@ -672,8 +679,8 @@
                                 <div className="flex items-center gap-4 border-b pb-6">
                                     <div className="bg-orange-500 p-4 rounded-3xl text-white shadow-lg"><Icon name="credit-card" size={32}/></div>
                                     <div>
-                                        <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Controlo de Faturas</h2>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gastos agendados em cartões de crédito</p>
+                                        <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Faturas (R$)</h2>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Controlo de cartões de crédito em reais</p>
                                     </div>
                                 </div>
 
@@ -712,7 +719,7 @@
                             <div className="max-w-3xl mx-auto py-10 animate-in fade-in duration-500">
                                 <div className="glass-card rounded-[3rem] shadow-2xl overflow-hidden bg-white p-10 space-y-4 border-t-8 border-[#D97757]">
                                     <div className="text-center mb-8 border-b pb-6 flex justify-between items-center">
-                                        <div className="text-left"><h2 className="text-2xl font-black uppercase tracking-tighter text-center">Relatório DRE</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tribo Burger</p></div>
+                                        <div className="text-left"><h2 className="text-2xl font-black uppercase tracking-tighter text-center">Relatório DRE (R$)</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tribo Burger</p></div>
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mês Fiscal:</span>
                                             <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#D97757] text-xs" />
@@ -741,7 +748,7 @@
                                             <div className="bg-[#1A202C] p-4 rounded-3xl"><Icon name="sparkles" className="text-[#F8CC82]" size={32}/></div>
                                             <div>
                                                 <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Consultor IA</h2>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise do Mês: {filterMonth}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise em Reais (R$)</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
@@ -762,11 +769,11 @@
                                         <div className="text-center py-12 space-y-6">
                                             <div className="max-w-md mx-auto p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-center">
                                                 <p className="text-sm font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
-                                                    Vou analisar as vendas e custos de <strong>{new Date(filterMonth + "-02").toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</strong> para encontrar pontos de melhoria.
+                                                    Vou analisar as vendas de <strong>{new Date(filterMonth + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</strong> e sugerir melhorias baseadas em Reais (R$).
                                                 </p>
                                             </div>
                                             <button onClick={askAiConsultant} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center gap-3 mx-auto">
-                                                Analisar Financeiro <Icon name="chevron-right" size={16}/>
+                                                Analisar Agora <Icon name="chevron-right" size={16}/>
                                             </button>
                                         </div>
                                     )}
@@ -774,7 +781,7 @@
                                     {aiLoading && (
                                         <div className="text-center py-20 space-y-4">
                                             <div className="w-16 h-16 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">A analisar os dados da Tribo em {filterMonth}...</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Calculando em R$...</p>
                                         </div>
                                     )}
 
@@ -782,7 +789,7 @@
                                         <div className="prose-ia fade-in bg-slate-50/50 p-8 rounded-[2rem] border">
                                             <div dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/### (.*?)\n/g, '<h3>$1</h3>').replace(/(\r\n|\n|\r)/gm, '<br>') }} />
                                             <button onClick={askAiConsultant} className="mt-8 text-[10px] font-black text-[#D97757] uppercase tracking-widest flex items-center gap-2 hover:underline">
-                                                <Icon name="refresh-cw" size={12}/> Refazer Análise
+                                                <Icon name="refresh-cw" size={12}/> Atualizar Análise
                                             </button>
                                         </div>
                                     )}
