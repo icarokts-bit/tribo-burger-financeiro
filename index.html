@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v3.1</title>
+    <title>Tribo Burger | Gestão Total v4.1</title>
     
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -13,26 +13,28 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Chosen Palette: Midnight & Gold (Creme #FDFCF9, Escuro #1A202C, Laranja #D97757, Ouro #F8CC82) -->
-    <!-- Application Structure Plan: 
-         O sistema foi consolidado numa Single Page Application (SPA) robusta para garantir que, ao ser carregado pelo GitHub/Vercel, não existam erros de caminhos de ficheiros (404). 
-         A arquitetura divide-se em: 1. Dashboard de Performance (KPIs em tempo real), 2. Folha Diária (Tabela de fecho de caixa sincronizada), 3. BI Analytics (Gráficos de tendências) e 4. Agenda de Parceiros.
-         Esta estrutura permite ao utilizador transitar entre a operação (registo) e a estratégia (análise de lucro) sem latência, utilizando o Firebase para persistência total dos dados na nuvem.
-    -->
+    <!-- Estilos Customizados -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; }
-        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 320px; max-height: 400px; }
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Estilos Excel para Vendas */
+        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 700; font-size: 11px; outline: none; }
+        .table-input:focus { background-color: rgba(211, 226, 152, 0.3); }
+        .header-green { background-color: #92D050; color: #000; font-weight: 800; text-transform: uppercase; font-size: 10px; }
+        .header-red { background-color: #FF0000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; }
+        .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; }
+        .dre-row:nth-child(even) { background-color: rgba(0,0,0,0.02); }
     </style>
 </head>
 <body class="antialiased selection:bg-[#D97757] selection:text-white">
 
     <div id="root"></div>
 
-    <!-- Firebase SDKs via CDN - Usando Versão Compat para facilitar integração no script único -->
+    <!-- Firebase SDKs via CDN - Versão Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -40,7 +42,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Configuração Firebase (Suas Chaves Ativas)
         const firebaseConfig = {
             apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
             authDomain: "tribo-burger-app.firebaseapp.com",
@@ -50,17 +51,16 @@
             appId: "1:490245681469:web:189b1d2e35bd142cc31554"
         };
 
-        // Inicialização Firebase (Versão Compatível)
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
 
-        // Componente Icon para evitar erros de renderização
+        const ACCOUNTS = ['Mercado Pago', 'C6', 'Aplicação', 'Fundo Aluguel', 'Fundo C6', 'Fundo MP', 'Fundo Rico', 'iFood'];
+        const CATEGORIES = ['CMV (Insumos)', 'Pessoal (Salários)', 'Operacional (Aluguer/Luz)', 'Marketing', 'Impostos', 'Manutenção', 'Investimentos', 'Outros'];
+
         const Icon = ({ name, size = 20, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            }, [name]);
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
         };
 
@@ -71,248 +71,194 @@
             const [dailyRecords, setDailyRecords] = useState({});
             const [suppliers, setSuppliers] = useState([]);
             
-            // Estados dos Formulários
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida');
+            const [selectedAccount, setSelectedAccount] = useState(ACCOUNTS[0]);
+            const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [newDayDate, setNewDayDate] = useState(new Date().toISOString().split('T')[0]);
 
-            const mixChartRef = useRef(null);
-            const trendChartRef = useRef(null);
-
-            // Autenticação
             useEffect(() => {
                 auth.signInAnonymously().catch(console.error);
                 return auth.onAuthStateChanged(setUser);
             }, []);
 
-            // Carregamento de Dados em Tempo Real
             useEffect(() => {
                 if (!user) return;
                 const userPath = `artifacts/${appId}/users/${user.uid}`;
-
-                const unsubTx = db.collection(`${userPath}/transactions`)
-                    .onSnapshot((snap) => {
-                        const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                        setTransactions(txs.sort((a, b) => new Date(b.date) - new Date(a.date)));
-                    });
-
-                const unsubDaily = db.collection(`${userPath}/dailyRecords`)
-                    .onSnapshot((snap) => {
-                        const recs = {};
-                        snap.docs.forEach(d => recs[d.id] = d.data());
-                        setDailyRecords(recs);
-                    });
-
-                const unsubSup = db.collection(`${userPath}/suppliers`)
-                    .onSnapshot((snap) => {
-                        setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    });
-
+                const unsubTx = db.collection(`${userPath}/transactions`).onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
+                const unsubDaily = db.collection(`${userPath}/dailyRecords`).onSnapshot(snap => {
+                    const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
+                    setDailyRecords(recs);
+                });
+                const unsubSup = db.collection(`${userPath}/suppliers`).onSnapshot(snap => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 return () => { unsubTx(); unsubDaily(); unsubSup(); };
             }, [user]);
 
-            // Gráficos
-            useEffect(() => {
-                if (activeTab === 'analise') {
-                    renderCharts();
-                }
-            }, [activeTab, transactions, dailyRecords]);
+            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            const renderCharts = () => {
-                const ctxMix = document.getElementById('mixChart')?.getContext('2d');
-                const ctxTrend = document.getElementById('trendChart')?.getContext('2d');
-
-                if (ctxMix) {
-                    if (mixChartRef.current) mixChartRef.current.destroy();
-                    mixChartRef.current = new Chart(ctxMix, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Pix/Online', 'iFood', 'Dinheiro/Cartão'],
-                            datasets: [{
-                                data: [50, 25, 25],
-                                backgroundColor: ['#1A202C', '#D97757', '#F8CC82'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom' } } }
-                    });
-                }
-
-                if (ctxTrend) {
-                    if (trendChartRef.current) trendChartRef.current.destroy();
-                    trendChartRef.current = new Chart(ctxTrend, {
-                        type: 'line',
-                        data: {
-                            labels: transactions.slice(0, 7).reverse().map(t => t.date.split('-')[2]),
-                            datasets: [{
-                                label: 'Receita',
-                                data: transactions.slice(0, 7).reverse().map(t => t.type === 'entrada' ? t.amount : 0),
-                                borderColor: '#1A202C',
-                                tension: 0.4,
-                                fill: true,
-                                backgroundColor: 'rgba(26, 32, 44, 0.05)'
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { display: false }, x: { grid: { display: false } } } }
-                    });
-                }
-            };
-
-            // Handlers de Ação
+            // Adicionado: Função para salvar transações manuais
             const handleSaveTransaction = async (e) => {
                 e.preventDefault();
                 if (!user || !desc || !val) return;
                 const id = Date.now().toString();
                 await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${id}`).set({
-                    description: desc, amount: parseFloat(val), type, date
+                    description: desc, 
+                    amount: parseFloat(val), 
+                    type, 
+                    date,
+                    account: selectedAccount,
+                    category: selectedCategory
                 });
                 setDesc(''); setVal('');
             };
 
-            const handleSaveDailyValue = async (date, field, v) => {
-                const clean = v.replace(/[^0-9.]/g, '');
-                await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${date}`).set({ [field]: clean }, { merge: true });
+            const calculateSales = (r) => {
+                const p = (v) => parseFloat(v) || 0;
+                const totalDia = p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
+                const totalEntregas = p(r.motoboy) + p(r.taxaEntrega);
+                return { totalDia, totalEntregas };
             };
 
-            const handleDeleteTransaction = async (id) => {
-                if (confirm("Deseja apagar este lançamento?")) {
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${id}`).delete();
-                }
+            const getMonthStats = (month) => {
+                const p = (v) => parseFloat(v) || 0;
+                let receitaBruta = 0; let custosOperacionais = 0; let ifoodRevenue = 0; let diretoRevenue = 0;
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(month)) {
+                        const r = dailyRecords[day];
+                        const { totalDia, totalEntregas } = calculateSales(r);
+                        receitaBruta += totalDia; ifoodRevenue += p(r.ifood); diretoRevenue += (totalDia - p(r.ifood));
+                        custosOperacionais += totalEntregas;
+                    }
+                });
+                transactions.forEach(t => {
+                    if (t.date.startsWith(month)) {
+                        if (t.type === 'saida') custosOperacionais += p(t.amount);
+                        else receitaBruta += p(t.amount);
+                    }
+                });
+                const lucroLiquido = receitaBruta - custosOperacionais;
+                const margem = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
+                return { receitaBruta, custosOperacionais, lucroLiquido, margem, ifoodRevenue, diretoRevenue };
             };
 
-            const handleAddSupplier = async () => {
-                const name = prompt("Nome do Parceiro:");
-                if (!name) return;
-                const phone = prompt("Contacto:");
-                const id = Date.now().toString();
-                await db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${id}`).set({ name, phone });
-            };
+            const results = useMemo(() => {
+                const currentMonth = filterMonth;
+                const prevDate = new Date(currentMonth + '-01'); prevDate.setMonth(prevDate.getMonth() - 1);
+                const prevMonth = prevDate.toISOString().slice(0, 7);
+                const current = getMonthStats(currentMonth);
+                const prev = getMonthStats(prevMonth);
+                const growth = prev.receitaBruta > 0 ? ((current.receitaBruta - prev.receitaBruta) / prev.receitaBruta) * 100 : 0;
+                return { current, prev, growth };
+            }, [transactions, dailyRecords, filterMonth]);
 
-            const handleDeleteSupplier = async (id) => {
-                if (confirm("Remover este parceiro?")) {
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${id}`).delete();
-                }
-            };
+            const dreData = useMemo(() => {
+                const p = (v) => parseFloat(v) || 0;
+                let receitaBruta = 0; let taxasDeducoes = 0;
+                let categoriasCusto = CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat]: 0 }), {});
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(filterMonth)) {
+                        const r = dailyRecords[day];
+                        const { totalDia, totalEntregas } = calculateSales(r);
+                        receitaBruta += totalDia; taxasDeducoes += totalEntregas;
+                    }
+                });
+                transactions.forEach(t => {
+                    if (t.date.startsWith(filterMonth)) {
+                        const amount = p(t.amount);
+                        if (t.type === 'saida') categoriasCusto[t.category || 'Outros'] += amount;
+                        else receitaBruta += amount;
+                    }
+                });
+                const totalCustos = Object.values(categoriasCusto).reduce((a, b) => a + b, 0);
+                const receitaLiquida = receitaBruta - taxasDeducoes;
+                const lucroLiquido = receitaLiquida - totalCustos;
+                return { receitaBruta, taxasDeducoes, receitaLiquida, categoriasCusto, totalCustos, lucroLiquido };
+            }, [transactions, dailyRecords, filterMonth]);
 
-            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
-            const totals = useMemo(() => {
+            const finances = useMemo(() => {
+                const initialBalances = ACCOUNTS.reduce((acc, name) => ({ ...acc, [name]: 0 }), {});
                 return transactions.reduce((acc, t) => {
-                    if (t.type === 'entrada') acc.in += t.amount;
-                    else acc.out += t.amount;
+                    const amount = parseFloat(t.amount) || 0;
+                    const accName = t.account || ACCOUNTS[0];
+                    if (t.type === 'entrada') { acc.in += amount; acc.balances[accName] += amount; }
+                    else { acc.out += amount; acc.balances[accName] -= amount; }
                     return acc;
-                }, { in: 0, out: 0 });
+                }, { in: 0, out: 0, balances: initialBalances });
             }, [transactions]);
 
-            if (!user) return (
-                <div className="h-screen flex items-center justify-center bg-[#FDFCF9]">
-                    <div className="text-center">
-                        <Icon name="loader-2" className="animate-spin text-[#31392A] mb-4" size={48} />
-                        <p className="font-bold text-slate-400 uppercase text-xs tracking-widest">A ligar à Tribo Burger...</p>
-                    </div>
-                </div>
-            );
+            const activeSalesDays = useMemo(() => Object.keys(dailyRecords).filter(day => day.startsWith(filterMonth)).sort((a, b) => new Date(b) - new Date(a)), [dailyRecords, filterMonth]);
+
+            if (!user) return <div className="h-screen flex items-center justify-center font-bold text-slate-400">A carregar Tribo Burger...</div>;
 
             return (
                 <div className="min-h-screen flex flex-col">
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-2xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
-                                <div className="bg-white p-1 rounded-xl w-14 h-14 flex items-center justify-center overflow-hidden border-2 border-[#D97757] shadow-inner">
+                                <div className="bg-white p-1 rounded-xl w-14 h-14 flex items-center justify-center border-2 border-[#D97757]">
                                     <img src="logo.png" alt="TB" className="h-full w-auto object-contain" onerror="this.src='https://via.placeholder.com/100?text=TRIBO'" />
                                 </div>
                                 <div>
                                     <h1 className="text-xl font-black uppercase text-[#F8CC82] tracking-tighter">Tribo Burger</h1>
-                                    <p className="text-[10px] font-extrabold opacity-50 uppercase tracking-[0.2em]">Financeiro & BI</p>
+                                    <p className="text-[10px] font-extrabold opacity-50 uppercase tracking-[0.2em]">Gestão Total</p>
                                 </div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar w-full md:w-auto">
-                                <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'tab-active' : ''}`}>Painel</button>
-                                <button onClick={() => setActiveTab('planilha')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'planilha' ? 'tab-active' : ''}`}>Folha</button>
-                                <button onClick={() => setActiveTab('analise')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'analise' ? 'tab-active' : ''}`}>Análise</button>
-                                <button onClick={() => setActiveTab('parceiros')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'parceiros' ? 'tab-active' : ''}`}>Parceiros</button>
+                                {['dashboard', 'planilha', 'resultados', 'dre', 'parceiros'].map(tab => (
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'tab-active' : ''}`}>
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'resultados' ? 'BI' : tab}
+                                    </button>
+                                ))}
                             </nav>
                         </div>
                     </header>
 
-                    <main className="max-w-6xl mx-auto px-4 py-8 w-full flex-1">
-                        
+                    <main className="max-w-full mx-auto px-4 py-8 w-full flex-1">
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-10">
-                                <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between h-48 relative overflow-hidden">
-                                        <div className="absolute -right-6 -top-6 w-24 h-24 bg-green-100 rounded-full opacity-20"></div>
-                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em]">Saldo em Conta</span>
-                                        <h3 className="text-4xl font-black text-[#1A202C]">{formatMoney(totals.in - totals.out)}</h3>
-                                        <div className="text-[10px] font-bold text-green-700 bg-green-100/50 px-3 py-1 rounded-full w-fit flex items-center gap-1">
-                                            <Icon name="check-circle" size={12} /> Sincronizado
+                            <div className="max-w-6xl mx-auto space-y-8">
+                                <section className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+                                    {ACCOUNTS.map(acc => (
+                                        <div key={acc} className="glass-card p-3 rounded-2xl text-center">
+                                            <p className="text-[8px] font-black uppercase text-slate-400 truncate">{acc}</p>
+                                            <p className={`text-[10px] font-black ${finances.balances[acc] >= 0 ? 'text-slate-700' : 'text-red-500'}`}>{formatMoney(finances.balances[acc])}</p>
                                         </div>
-                                    </div>
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-sm border-l-8 border-l-red-500 h-48 flex flex-col justify-between">
-                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em]">Despesas Registadas</span>
-                                        <h3 className="text-4xl font-black text-red-600">{formatMoney(totals.out)}</h3>
-                                        <p className="text-[10px] text-slate-400 font-medium italic">Soma de todos os custos</p>
-                                    </div>
-                                    <div className="bg-[#1A202C] p-8 rounded-[2.5rem] shadow-2xl flex flex-col justify-between h-48 text-white">
-                                        <span className="text-[10px] font-black uppercase text-[#F8CC82] tracking-[0.15em]">Lucro Operacional</span>
-                                        <h3 className="text-4xl font-black">{formatMoney(totals.in - totals.out)}</h3>
-                                        <p className="text-[10px] text-white/40">Faturação Bruta - Despesas</p>
-                                    </div>
+                                    ))}
                                 </section>
-
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                                    <div className="lg:col-span-1">
-                                        <div className="glass-card p-8 rounded-[3rem] shadow-sm border-2 border-slate-50">
-                                            <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2 text-[#1A202C]">
-                                                <Icon name="edit-3" size={16} className="text-[#D97757]" /> Novo Lançamento
-                                            </h4>
-                                            <form onSubmit={handleSaveTransaction} className="space-y-5">
-                                                <input type="text" placeholder="O que comprou?" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-[#D97757] transition-all text-sm font-semibold" value={desc} onChange={e => setDesc(e.target.value)} />
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
-                                                    <input type="date" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none text-[10px] font-bold" value={date} onChange={e => setDate(e.target.value)} />
-                                                </div>
-                                                <select className="w-full px-5 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none text-xs font-bold appearance-none" value={type} onChange={e => setType(e.target.value)}>
-                                                    <option value="saida">Saída (-)</option>
-                                                    <option value="entrada">Entrada (+)</option>
-                                                </select>
-                                                <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-5 rounded-2xl shadow-xl hover:shadow-[#D97757]/20 active:scale-95 transition-all text-xs uppercase tracking-[0.2em] mt-4">Guardar Lançamento</button>
-                                            </form>
-                                        </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm h-fit">
+                                        <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2"><Icon name="plus-circle" size={16} className="text-[#D97757]" /> Lançamento</h4>
+                                        <form onSubmit={handleSaveTransaction} className="space-y-4">
+                                            <input type="text" placeholder="Descrição" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
+                                                <input type="date" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={date} onChange={e => setDate(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Conta</label>
+                                                <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Categoria</label>
+                                                <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                            </div>
+                                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs">Guardar</button>
+                                        </form>
                                     </div>
-
-                                    <div className="lg:col-span-2">
-                                        <div className="glass-card rounded-[3rem] shadow-sm overflow-hidden flex flex-col h-[600px]">
-                                            <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center font-black text-[10px] uppercase text-slate-400 tracking-widest">
-                                                <span>Histórico de Movimentos</span>
-                                                <span className="bg-white px-3 py-1 rounded-full border shadow-sm">{transactions.length} itens</span>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
-                                                {transactions.length === 0 ? (
-                                                    <div className="p-20 text-center text-slate-300 font-bold uppercase tracking-[0.2em] text-xs">Sem registos na nuvem</div>
-                                                ) : (
-                                                    transactions.map(t => (
-                                                        <div key={t.id} className="flex items-center justify-between p-5 bg-white border-2 border-slate-50 rounded-[1.8rem] hover:border-[#D97757]/30 hover:shadow-lg transition-all group">
-                                                            <div className="flex items-center gap-5">
-                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-black ${t.type === 'entrada' ? 'bg-[#D3E298]/40 text-[#4c5836]' : 'bg-red-50 text-red-600'}`}>
-                                                                    <Icon name={t.type === 'entrada' ? 'arrow-up-right' : 'arrow-down-left'} size={16} />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-bold text-[#1A202C] text-sm tracking-tight uppercase">{t.description}</p>
-                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{t.date}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-6">
-                                                                <span className={`text-sm font-black ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</span>
-                                                                <button onClick={() => handleDeleteTransaction(t.id)} className="text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <Icon name="trash-2" size={18} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
+                                    <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
+                                        <div className="p-6 bg-slate-50 font-black text-[10px] text-slate-400 uppercase flex justify-between"><span>Histórico</span><span>{transactions.length} itens</span></div>
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+                                            {transactions.map(t => (
+                                                <div key={t.id} className="flex items-center justify-between p-4 bg-white border rounded-2xl group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>{t.type === 'entrada' ? '+' : '-'}</div>
+                                                        <div><p className="font-bold text-sm text-[#1A202C] uppercase">{t.description}</p><p className="text-[9px] font-bold text-slate-300">{t.date} • {t.account}</p></div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="opacity-0 group-hover:opacity-100 text-red-300"><Icon name="trash-2" size={14}/></button></div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -320,39 +266,38 @@
                         )}
 
                         {activeTab === 'planilha' && (
-                            <div className="glass-card rounded-[3rem] shadow-sm overflow-hidden animate-in slide-in-from-bottom duration-500">
-                                <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
-                                    <h2 className="font-black text-[#1A202C] uppercase tracking-widest text-xs">Folha Diária de Vendas</h2>
-                                    <span className="text-[10px] font-bold text-slate-400">Maio 2026</span>
+                            <div className="glass-card rounded-3xl shadow-sm overflow-hidden">
+                                <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <h2 className="font-black text-[#1A202C] uppercase text-sm">Vendas Diárias</h2>
+                                    <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border">
+                                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="font-black text-xs outline-none px-2" />
+                                        <div className="h-6 w-px bg-slate-200"></div>
+                                        <input type="date" value={newDayDate} onChange={e => setNewDayDate(e.target.value)} className="text-xs font-bold border-0 outline-none" />
+                                        <button onClick={async () => { if(!dailyRecords[newDayDate]) await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1 rounded-xl font-black text-[10px]">ABRIR DIA</button>
+                                    </div>
                                 </div>
                                 <div className="overflow-x-auto no-scrollbar">
-                                    <table className="w-full text-center text-[10px] border-collapse min-w-[900px]">
-                                        <thead className="bg-[#1A202C] text-white uppercase tracking-widest">
+                                    <table className="w-full text-center text-[11px] border-collapse min-w-[1400px]">
+                                        <thead>
                                             <tr>
-                                                <th className="p-5 text-left border-r border-slate-700 sticky left-0 bg-[#1A202C] z-20">Data</th>
-                                                <th className="p-5 bg-[#D97757] text-[#1A202C] font-black italic">Receita Dia</th>
-                                                <th className="p-5 opacity-60">Pix</th>
-                                                <th className="p-5 opacity-60">Dinheiro</th>
-                                                <th className="p-5 opacity-60">iFood</th>
-                                                <th className="p-5 bg-red-600/30 text-red-200">Motoboy</th>
+                                                <th className="p-3 header-black sticky left-0 z-20">Dias</th>
+                                                <th className="p-3 header-black">Total Dia:</th>
+                                                {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-3 header-green">{h}</th>)}
+                                                <th className="p-3 header-red">Entregador</th><th className="p-3 header-red">Taxa</th><th className="p-3 header-red">Ações</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-slate-100 font-bold">
-                                            {Array.from({length: 10}, (_, i) => {
-                                                const d = `2026-05-${String(i+1).padStart(2, '0')}`;
-                                                const r = dailyRecords[d] || {};
+                                        <tbody className="divide-y">
+                                            {activeSalesDays.map(d => {
+                                                const r = dailyRecords[d] || {}; const { totalDia } = calculateSales(r);
+                                                const update = (f, v) => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v.replace(/[^0-9.]/g, '') }, { merge: true });
                                                 return (
-                                                    <tr key={d} className="hover:bg-slate-50 transition-colors">
-                                                        <td className="p-5 text-left border-r border-slate-50 sticky left-0 bg-white font-black text-slate-400">{d.split('-').reverse().slice(0,2).join('/')}</td>
-                                                        <td className="p-5 bg-green-50/50 text-green-700 font-black">---</td>
-                                                        {['pix','dinheiro','ifood'].map(f => (
-                                                            <td key={f} className="p-0 border-r border-slate-50">
-                                                                <input type="text" value={r[f]||''} onChange={e => handleSaveDailyValue(d, f, e.target.value)} className="w-full h-14 text-center bg-transparent border-0 outline-none focus:bg-[#D3E298]/30 font-bold" placeholder="0" />
-                                                            </td>
-                                                        ))}
-                                                        <td className="p-0 bg-red-50/20">
-                                                            <input type="text" value={r.motoboy||''} onChange={e => handleSaveDailyValue(d, 'motoboy', e.target.value)} className="w-full h-14 text-center bg-transparent border-0 outline-none text-red-600" placeholder="0" />
-                                                        </td>
+                                                    <tr key={d} className="h-12">
+                                                        <td className="p-2 text-left sticky left-0 bg-white border-r font-black text-[10px] z-10 w-48 uppercase">{d.split('-').reverse().join('/')}</td>
+                                                        <td className="p-2 bg-slate-50 font-black border-r">{formatMoney(totalDia)}</td>
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => <td key={f} className="p-0 border-r"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>)}
+                                                        <td className="p-0 border-r bg-red-50/20"><input className="table-input text-red-600" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)}/></td>
+                                                        <td className="p-0 border-r bg-red-50/20"><input className="table-input text-red-600" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)}/></td>
+                                                        <td className="p-2"><button onClick={() => { if(confirm("Apagar dia?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete(); }} className="text-red-300"><Icon name="trash-2" size={14}/></button></td>
                                                     </tr>
                                                 );
                                             })}
@@ -362,43 +307,80 @@
                             </div>
                         )}
 
-                        {activeTab === 'analise' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-in zoom-in duration-500">
-                                <div className="glass-card p-10 rounded-[3.5rem] shadow-sm">
-                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-10 text-center">Distribuição de Receitas (Mix)</h4>
-                                    <div className="chart-container"><canvas id="mixChart"></canvas></div>
+                        {activeTab === 'resultados' && (
+                            <div className="max-w-6xl mx-auto space-y-8 animate-in zoom-in duration-500">
+                                <div className="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
+                                    <div><h2 className="text-xl font-black text-[#1A202C] uppercase tracking-tight">Relatório de Resultados</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">BI • Desempenho Mensal</p></div>
+                                    <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
                                 </div>
-                                <div className="glass-card p-10 rounded-[3.5rem] shadow-sm">
-                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-10 text-center">Tendência de Receita Diária</h4>
-                                    <div className="chart-container"><canvas id="trendChart"></canvas></div>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Venda Bruta</span><h3 className="text-2xl font-black">{formatMoney(results.current.receitaBruta)}</h3><p className={`text-[9px] font-bold mt-2 ${results.growth >= 0 ? 'text-green-600' : 'text-red-500'}`}>{results.growth.toFixed(1)}% vs anterior</p></div>
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custos</span><h3 className="text-2xl font-black text-red-600">{formatMoney(results.current.custosOperacionais)}</h3></div>
+                                    <div className="bg-[#1A202C] p-6 rounded-[2.5rem] text-white shadow-xl"><span className="text-[10px] font-black text-[#F8CC82] uppercase tracking-widest">Lucro Líquido</span><h3 className="text-2xl font-black">{formatMoney(results.current.lucroLiquido)}</h3></div>
+                                    <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margem</span><h3 className="text-2xl font-black text-[#D97757]">{results.current.margem.toFixed(1)}%</h3></div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="glass-card p-8 rounded-[3rem]">
+                                        <h4 className="text-xs font-black uppercase text-[#1A202C] mb-6 border-b pb-4 tracking-widest">Canais de Venda</h4>
+                                        <div className="space-y-4">
+                                            {[{l: 'Direto', v: results.current.diretoRevenue, c: '#1A202C'}, {l: 'iFood', v: results.current.ifoodRevenue, c: '#D97757'}].map(item => (
+                                                <div key={item.l}>
+                                                    <div className="flex justify-between text-[10px] font-black uppercase mb-1"><span>{item.l}</span><span>{((item.v / (results.current.receitaBruta || 1)) * 100).toFixed(0)}%</span></div>
+                                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="h-full" style={{ width: `${(item.v / (results.current.receitaBruta || 1)) * 100}%`, backgroundColor: item.c }}></div></div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="glass-card p-8 rounded-[3rem] flex flex-col justify-center text-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Performance Global</p>
+                                        <h4 className="text-4xl font-black my-2">{results.current.lucroLiquido >= 0 ? 'POSITIVO' : 'NEGATIVO'}</h4>
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">O seu lucro líquido real este mês é de {formatMoney(results.current.lucroLiquido)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+                                <div className="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
+                                    <h2 className="text-xl font-black text-[#1A202C] uppercase">DRE Automatizado</h2>
+                                    <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
+                                </div>
+                                <div className="glass-card rounded-[3rem] shadow-xl overflow-hidden bg-white p-8 space-y-4">
+                                    <div className="flex justify-between items-center p-4 bg-green-50 rounded-2xl border border-green-100"><span className="font-black uppercase text-sm">RECEITA BRUTA</span><span className="font-black text-green-700 text-lg">{formatMoney(dreData.receitaBruta)}</span></div>
+                                    <div className="flex justify-between items-center px-6 py-3 dre-row"><span className="font-bold text-red-500 uppercase text-xs">(-) Deduções e Taxas</span><span className="font-bold text-red-600">{formatMoney(dreData.taxasDeducoes)}</span></div>
+                                    <div className="flex justify-between items-center p-4 bg-slate-100 rounded-2xl border"><span className="font-black text-slate-700 uppercase text-sm">RECEITA LÍQUIDA</span><span className="font-black text-slate-800 text-lg">{formatMoney(dreData.receitaLiquida)}</span></div>
+                                    <div className="py-4 space-y-2">
+                                        {CATEGORIES.map(cat => (
+                                            <div key={cat} className="flex justify-between items-center px-6 py-2 dre-row"><span className="text-xs font-medium text-slate-600">{cat}</span><span className="font-bold text-red-400">{formatMoney(dreData.categoriasCusto[cat])}</span></div>
+                                        ))}
+                                    </div>
+                                    <div className={`flex justify-between items-center p-6 rounded-[2.5rem] ${dreData.lucroLiquido >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-lg font-black uppercase">LUCRO LÍQUIDO</h3><span className="text-3xl font-black">{formatMoney(dreData.lucroLiquido)}</span></div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'parceiros' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
-                                {suppliers.map(s => (
-                                    <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group border-2 border-slate-50 hover:border-[#D97757]/40 h-56 flex flex-col justify-center">
-                                        <button onClick={() => handleDeleteSupplier(s.id)} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Icon name="trash-2" size={18} />
-                                        </button>
-                                        <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner">
-                                            <Icon name="truck" size={24} />
+                            <div className="max-w-6xl mx-auto space-y-8">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    {suppliers.map(s => (
+                                        <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group h-56 flex flex-col justify-center">
+                                            <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={18} /></button>
+                                            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner"><Icon name="truck" size={24} /></div>
+                                            <p className="font-black text-sm text-[#1A202C] uppercase truncate px-2">{s.name}</p>
+                                            <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest">{s.phone || 'S/ CONTACTO'}</p>
                                         </div>
-                                        <p className="font-black text-sm text-[#1A202C] uppercase tracking-tight truncate px-2">{s.name}</p>
-                                        <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest">{s.phone || 'S/ CONTACTO'}</p>
-                                    </div>
-                                ))}
-                                <button onClick={handleAddSupplier} className="border-4 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-[#D97757] transition-all bg-white/50 h-56 group">
-                                    <Icon name="plus-square" size={40} className="group-hover:scale-110 transition-transform" />
-                                    <span className="text-[10px] font-black uppercase mt-4 tracking-widest">Novo Parceiro</span>
-                                </button>
+                                    ))}
+                                    <button onClick={() => { const n = prompt("Nome:"); if(n) db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${Date.now().toString()}`).set({ name: n, phone: prompt("Contacto:") }); }} className="border-4 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-[#D97757] h-56 group bg-white/50">
+                                        <Icon name="plus-square" size={40} className="group-hover:scale-110" /><span className="text-[10px] font-black uppercase mt-4 tracking-widest">Novo Parceiro</span>
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </main>
 
-                    <footer className="py-16 text-center">
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v3.1</p>
+                    <footer className="py-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">
+                        Tribo Burger • Business Intelligence v4.1
                     </footer>
                 </div>
             );
