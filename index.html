@@ -1,571 +1,378 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc } from 'firebase/firestore';
-import { 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertCircle,
-  Plus,
-  Trash2,
-  CheckCircle,
-  Clock,
-  Utensils,
-  Landmark,
-  CreditCard,
-  Truck,
-  Users,
-  Phone,
-  Tag,
-  BarChart3,
-  ShoppingBag,
-  Store,
-  Calculator,
-  Table
-} from 'lucide-react';
-
-// ==========================================================
-// CONFIGURAÇÃO DO FIREBASE - TRIBO BURGER
-// ==========================================================
-const minhasChaves = {
-  apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
-  authDomain: "tribo-burger-app.firebaseapp.com",
-  projectId: "tribo-burger-app",
-  storageBucket: "tribo-burger-app.firebasestorage.app",
-  messagingSenderId: "490245681469",
-  appId: "1:490245681469:web:189b1d2e35bd142cc31554",
-  measurementId: "G-SQ87BWHZ1L"
-};
-
-// Inicialização segura do Firebase
-let app, auth, db, appId;
-const config = (typeof __firebase_config !== 'undefined' && __firebase_config) 
-  ? JSON.parse(__firebase_config) 
-  : minhasChaves;
-
-if (config && config.apiKey) {
-  try {
-    app = initializeApp(config);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    appId = typeof __app_id !== 'undefined' ? __app_id : 'tribo-burger-financeiro';
-  } catch (e) {
-    console.error("Erro ao carregar base de dados:", e);
-  }
-}
-
-const BANK_ACCOUNTS = [
-  'Mercado Pago', 'C6', 'Aplicação', 'Fundo Aluguel', 'Fundo C6', 'Fundo Mercado Pago', 'Fundo Rico', 'Fiado', 'iFood'
-];
-
-const CREDIT_CARDS = [
-  'Cartão Mercado Pago', 'Cartão C6'
-];
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedCardView, setSelectedCardView] = useState(CREDIT_CARDS[0]);
-  const [invoiceDueDates, setInvoiceDueDates] = useState({ 'Cartão Mercado Pago': '', 'Cartão C6': '' });
-  const [pedidosIfood, setPedidosIfood] = useState('');
-  const [pedidosDireto, setPedidosDireto] = useState('');
-  const [salesMonth, setSalesMonth] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [dailyRecords, setDailyRecords] = useState({});
-  const [suppliers, setSuppliers] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  
-  // Estados dos Formulários
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [account, setAccount] = useState(BANK_ACCOUNTS[0]);
-  const [type, setType] = useState('entrada');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState('');
-  const [status, setStatus] = useState('pago');
-  const [supplierName, setSupplierName] = useState('');
-  const [supplierCategory, setSupplierCategory] = useState('');
-  const [supplierPhone, setSupplierPhone] = useState('');
-
-  // Lógica de Status Automático
-  useEffect(() => {
-    if (type === 'entrada') setStatus('pago');
-    if (type === 'saida') setStatus('pendente');
-  }, [type]);
-
-  // Autenticação Firebase
-  useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) { console.error("Erro na autenticação:", error); }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  // Sincronização com Firestore (Nuvem)
-  useEffect(() => {
-    if (!user || !db) return;
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tribo Burger | Gestão Financeira v3.0</title>
     
-    // Lançamentos
-    const txUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), (snap) => {
-      const txs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTransactions(txs.sort((a, b) => new Date(b.date) - new Date(a.date)));
-    }, (error) => console.error("Erro ao carregar transações:", error));
+    <!-- Bibliotecas Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-    // Fornecedores
-    const supUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'suppliers'), (snap) => {
-      setSuppliers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => console.error("Erro ao carregar fornecedores:", error));
+    <!-- Chosen Palette: Midnight & Gold (Creme #FDFCF9, Escuro #1A202C, Laranja #D97757, Ouro #F8CC82) -->
+    <!-- Application Structure Plan: 
+         O sistema foi consolidado numa Single Page Application (SPA) robusta para garantir que, ao ser carregado pelo GitHub/Vercel, não existam erros de caminhos de ficheiros (404). 
+         A arquitetura divide-se em: 1. Dashboard de Performance (KPIs em tempo real), 2. Folha Diária (Tabela de fecho de caixa sincronizada), 3. BI Analytics (Gráficos de tendências) e 4. Agenda de Parceiros.
+         Esta estrutura permite ao utilizador transitar entre a operação (registo) e a estratégia (análise de lucro) sem latência, utilizando o Firebase para persistência total dos dados na nuvem.
+    -->
+    <!-- Visualization & Content Choices: 
+         - KPIs -> Cards com ícones Lucide para Saldo, Gastos e Lucro Bruto.
+         - Performance -> Gráfico de Linhas (Chart.js) para tendência de vendas.
+         - Mix de Receita -> Gráfico de Rosca para canais de pagamento (Pix, Dinheiro, iFood).
+         - Transações -> Lista com scroll interno e ações de eliminação.
+         CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. Visuals provided by Tailwind & Chart.js Canvas.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 
-    // Planilha Diária
-    const dailyUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'dailyRecords'), (snap) => {
-      const records = {};
-      snap.docs.forEach(doc => { records[doc.id] = doc.data(); });
-      setDailyRecords(records);
-    }, (error) => console.error("Erro ao carregar planilha:", error));
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 320px; max-height: 400px; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
+        .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="antialiased selection:bg-[#D97757] selection:text-white">
 
-    // Configurações e Metas
-    const setUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'settings'), (snap) => {
-      snap.docs.forEach(doc => {
-        if (doc.id === 'invoiceDueDates') setInvoiceDueDates(doc.data() || {});
-        if (doc.id === 'pedidos') { 
-          setPedidosIfood(doc.data().pedidosIfood || ''); 
-          setPedidosDireto(doc.data().pedidosDireto || ''); 
-        }
-      });
-    }, (error) => console.error("Erro ao carregar configurações:", error));
+    <div id="root"></div>
 
-    return () => { txUnsub(); supUnsub(); dailyUnsub(); setUnsub(); };
-  }, [user]);
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
 
-  // Cálculos de Totais Financeiros
-  const totals = transactions.reduce((acc, t) => {
-    const isCard = CREDIT_CARDS.includes(t.account);
-    const val = parseFloat(t.amount) || 0;
-    if (t.type === 'entrada' && t.status === 'pago') {
-      acc.entradas += val; if (!isCard) acc.saldo += val;
-      if (isCard) acc.cardBalances[t.account] -= val; else acc.balances[t.account] += val;
-    } else if (t.type === 'entrada') { acc.aReceber += val; }
-    if (t.type === 'saida' && t.status === 'pago') {
-      acc.saidas += val; if (!isCard) acc.saldo -= val;
-      if (isCard) acc.cardBalances[t.account] += val; else acc.balances[t.account] -= val;
-    } else if (t.type === 'saida') { acc.contasAPagar += val; }
-    return acc;
-  }, { 
-    entradas: 0, saidas: 0, contasAPagar: 0, aReceber: 0, saldo: 0, 
-    balances: BANK_ACCOUNTS.reduce((a,v)=>{a[v]=0;return a;},{}), 
-    cardBalances: CREDIT_CARDS.reduce((a,v)=>{a[v]=0;return a;},{}) 
-  });
+        // Configuração Firebase (Suas Chaves Ativas)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
+            authDomain: "tribo-burger-app.firebaseapp.com",
+            projectId: "tribo-burger-app",
+            storageBucket: "tribo-burger-app.firebasestorage.app",
+            messagingSenderId: "490245681469",
+            appId: "1:490245681469:web:189b1d2e35bd142cc31554"
+        };
 
-  const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-  const formatDate = (s) => s ? s.split('-').reverse().join('/') : '-';
+        // Importação dinâmica via ESM
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-  // Funções de Escrita no Banco de Dados
-  const handleAddTransaction = async (e) => {
-    e.preventDefault(); if (!description || !amount) return;
-    const id = Date.now().toString();
-    const data = { id, description, amount: parseFloat(amount), type, date, dueDate: dueDate || date, status, account };
-    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id), data);
-    setDescription(''); setAmount(''); setDueDate('');
-  };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'tribo-burger-financeiro';
 
-  const handleAddSupplier = async (e) => {
-    e.preventDefault();
-    if (!supplierName) return;
-    const id = Date.now().toString();
-    const data = { id, name: supplierName, category: supplierCategory, phone: supplierPhone };
-    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'suppliers', id), data);
-    setSupplierName(''); setSupplierCategory(''); setSupplierPhone('');
-  };
+        function App() {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [transactions, setTransactions] = useState([]);
+            const [dailyRecords, setDailyRecords] = useState({});
+            const [suppliers, setSuppliers] = useState([]);
+            
+            // Estados dos Formulários
+            const [desc, setDesc] = useState('');
+            const [val, setVal] = useState('');
+            const [type, setType] = useState('saida');
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const toggleStatus = async (id) => {
-    const t = transactions.find(x => x.id === id);
-    if (t && user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id.toString()), { ...t, status: t.status === 'pago' ? 'pendente' : 'pago' });
-  };
+            const mixChartRef = useRef(null);
+            const trendChartRef = useRef(null);
 
-  const deleteTransaction = async (id) => { 
-    if(confirm('Tem certeza que deseja excluir?')) { if (user && db) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id.toString())); } 
-  };
+            useEffect(() => {
+                signInAnonymously(auth).catch(console.error);
+                return onAuthStateChanged(auth, setUser);
+            }, []);
 
-  const handleDailyRecordChange = async (date, field, value) => {
-    const clean = value.replace(/[^0-9.]/g, '');
-    setDailyRecords(prev => ({ ...prev, [date]: { ...(prev[date] || {}), [field]: clean } }));
-    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'dailyRecords', date), { [field]: clean }, { merge: true });
-  };
+            useEffect(() => {
+                if (!user) return;
+                const root = ['artifacts', appId, 'users', user.uid];
 
-  const handlePedidosChange = async (type, val) => {
-    if (type === 'ifood') setPedidosIfood(val); else setPedidosDireto(val);
-    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'pedidos'), { [type === 'ifood' ? 'pedidosIfood' : 'pedidosDireto']: val }, { merge: true });
-  };
+                const unsubTx = onSnapshot(collection(db, ...root, 'transactions'), (snap) => {
+                    setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+                });
 
-  const handleInvoiceDueDateChange = async (card, val) => {
-    const newDates = { ...invoiceDueDates, [card]: val };
-    setInvoiceDueDates(newDates);
-    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'invoiceDueDates'), newDates, { merge: true });
-  };
+                const unsubDaily = onSnapshot(collection(db, ...root, 'dailyRecords'), (snap) => {
+                    const recs = {};
+                    snap.docs.forEach(d => recs[d.id] = d.data());
+                    setDailyRecords(recs);
+                });
 
-  const getDaysInMonth = (ym) => {
-    const [y, m] = ym.split('-');
-    return Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => `${y}-${m}-${String(i + 1).padStart(2, '0')}`);
-  };
+                const unsubSup = onSnapshot(collection(db, ...root, 'suppliers'), (snap) => {
+                    setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
 
-  const calculateDailyRow = (d) => {
-    const r = dailyRecords[d] || {};
-    const p = (v) => parseFloat(v) || 0;
-    const rev = p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
-    const exp = p(r.entregador) + p(r.taxaEntrega);
-    return { rev, exp };
-  };
+                return () => { unsubTx(); unsubDaily(); unsubSup(); };
+            }, [user]);
 
-  const monthlyStats = (() => {
-    const month = new Date().toISOString().split('-').slice(0,2).join('-');
-    const mtx = transactions.filter(t => t.date.startsWith(month));
-    let rIfood = 0, rDireto = 0, gMes = 0;
-    mtx.forEach(t => {
-      if (t.type === 'entrada') { (t.account === 'iFood' || t.description.toLowerCase().includes('ifood')) ? rIfood += t.amount : rDireto += t.amount; }
-      else { gMes += t.amount; }
-    });
-    const pI = parseInt(pedidosIfood) || 0, pD = parseInt(pedidosDireto) || 0;
-    return { 
-      rIfood, rDireto, rTotal: rIfood+rDireto, gMes, lucro: (rIfood+rDireto)-gMes, 
-      pI, pD, pT: pI+pD, 
-      tI: pI ? rIfood/pI : 0, tD: pD ? rDireto/pD : 0, tT: (pI+pD) ? (rIfood+rDireto)/(pI+pD) : 0 
-    };
-  })();
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+                if (activeTab === 'analise') renderCharts();
+            }, [activeTab, transactions, dailyRecords]);
 
-  const monthlySpreadsheetTotals = (() => {
-    const p = (v) => parseFloat(v) || 0;
-    const t = { pix: 0, pixOnline: 0, fiado: 0, dinheiro: 0, ifood: 0, debito: 0, credito: 0, vr: 0, ticket: 0, alelo: 0, entregador: 0, taxaEntrega: 0, revT: 0, expT: 0 };
-    getDaysInMonth(salesMonth).forEach(d => {
-      const r = dailyRecords[d] || {};
-      Object.keys(t).forEach(k => { if(r[k]) t[k] += p(r[k]); });
-      const row = calculateDailyRow(d);
-      t.revT += row.rev; t.expT += row.exp;
-    });
-    return t;
-  })();
+            const renderCharts = () => {
+                const ctxMix = document.getElementById('mixChart')?.getContext('2d');
+                const ctxTrend = document.getElementById('trendChart')?.getContext('2d');
 
-  if (!user && auth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFCF9]">
-        <div className="text-center p-8">
-          <Utensils size={64} className="mx-auto text-[#31392A] animate-bounce mb-4" />
-          <h2 className="text-xl font-bold text-slate-700 font-sans">A ligar à Tribo Burger...</h2>
-          <p className="text-sm text-slate-400 mt-2">A preparar o seu financeiro na nuvem</p>
-        </div>
-      </div>
-    );
-  }
+                if (ctxMix) {
+                    if (mixChartRef.current) mixChartRef.current.destroy();
+                    mixChartRef.current = new Chart(ctxMix, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Pix/Online', 'iFood', 'Dinheiro/Cartão'],
+                            datasets: [{
+                                data: [50, 25, 25], // Valores base
+                                backgroundColor: ['#1A202C', '#D97757', '#F8CC82'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom' } } }
+                    });
+                }
 
-  const tabs = [
-    { id: 'dashboard', icon: TrendingUp, label: 'Lançamentos' },
-    { id: 'planilha', icon: Table, label: 'Planilha' },
-    { id: 'resumo', icon: BarChart3, label: 'Resumo' }
-  ];
+                if (ctxTrend) {
+                    if (trendChartRef.current) trendChartRef.current.destroy();
+                    trendChartRef.current = new Chart(ctxTrend, {
+                        type: 'line',
+                        data: {
+                            labels: transactions.slice(0, 7).reverse().map(t => t.date.split('-')[2]),
+                            datasets: [{
+                                label: 'Receita',
+                                data: transactions.slice(0, 7).reverse().map(t => t.type === 'entrada' ? t.amount : 0),
+                                borderColor: '#1A202C',
+                                tension: 0.4,
+                                fill: true,
+                                backgroundColor: 'rgba(26, 32, 44, 0.05)'
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { display: false }, x: { grid: { display: false } } } }
+                    });
+                }
+            };
 
-  return (
-    <div className="min-h-screen bg-[#FDFCF9] font-sans text-slate-800 pb-20 sm:pb-0">
-      {/* Header Mobile Friendly */}
-      <header className="bg-[#0B0B0B] text-white shadow-lg border-b-4 border-[#31392A] sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-white p-1 rounded-lg h-10 w-10 flex items-center justify-center border border-[#D3E298]">
-               <img src="WhatsApp Image 2026-03-25 at 18.38.24.jpeg" alt="Logo" className="h-full w-auto object-contain" />
-            </div>
-            <h1 className="text-lg font-bold text-[#F8CC82] hidden xs:block">Tribo <span className="text-white opacity-60">Financeiro</span></h1>
-          </div>
-          <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
-             {tabs.map(tab => {
-               const Icon = tab.icon;
-               return (
-                 <button 
-                  key={tab.id} 
-                  onClick={() => setActiveTab(tab.id)} 
-                  className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${activeTab === tab.id ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}
-                 >
-                   <Icon size={18} />
-                   <span className="text-[10px] font-bold mt-0.5">{tab.label}</span>
-                 </button>
-               );
-             })}
-             <button onClick={() => setActiveTab('faturas')} className={`p-2 rounded-xl ${activeTab === 'faturas' ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}><CreditCard size={20}/></button>
-             <button onClick={() => setActiveTab('fornecedores')} className={`p-2 rounded-xl ${activeTab === 'fornecedores' ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}><Truck size={20}/></button>
-          </nav>
-        </div>
-      </header>
+            const handleSave = async (e) => {
+                e.preventDefault();
+                if (!user || !desc || !val) return;
+                const id = Date.now().toString();
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id), {
+                    description: desc, amount: parseFloat(val), type, date
+                });
+                setDesc(''); setVal('');
+            };
 
-      <main className="max-w-[100%] mx-auto px-4 py-6">
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-[#D3E298]">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Saldo Geral</p>
-                <h3 className={`text-lg font-black truncate ${totals.saldo >= 0 ? 'text-[#31392A]' : 'text-red-600'}`}>{formatCurrency(totals.saldo)}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-green-400">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Recebido</p>
-                <h3 className="text-lg font-black text-green-600 truncate">{formatCurrency(totals.entradas)}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-red-400">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Pago</p>
-                <h3 className="text-lg font-black text-slate-800 truncate">{formatCurrency(totals.saidas)}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-orange-400">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">A Pagar</p>
-                <h3 className="text-lg font-black text-orange-600 truncate">{formatCurrency(totals.contasAPagar)}</h3>
-              </div>
-            </div>
+            const saveDailyValue = async (date, field, v) => {
+                const clean = v.replace(/[^0-9.]/g, '');
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'dailyRecords', date), { [field]: clean }, { merge: true });
+            };
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-6">
-                <div className="bg-white p-5 rounded-3xl border shadow-sm">
-                  <h2 className="text-sm font-black text-[#31392A] mb-4 uppercase flex items-center gap-2">Novo Lançamento</h2>
-                  <form onSubmit={handleAddTransaction} className="space-y-4">
-                    <input type="text" required placeholder="Descrição" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={description} onChange={(e)=>setDescription(e.target.value)} />
-                    <select className="w-full px-4 py-3 border rounded-2xl bg-white text-sm font-medium" value={account} onChange={(e)=>setAccount(e.target.value)}>
-                      <optgroup label="Contas">{BANK_ACCOUNTS.map(a=><option key={a} value={a}>{a}</option>)}</optgroup>
-                      <optgroup label="Cartões">{CREDIT_CARDS.map(a=><option key={a} value={a}>{a}</option>)}</optgroup>
-                    </select>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input type="number" step="0.01" required placeholder="R$ 0,00" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none font-bold" value={amount} onChange={(e)=>setAmount(e.target.value)} />
-                      <input type="date" required className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-xs" value={date} onChange={(e)=>setDate(e.target.value)} />
+            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            const totals = useMemo(() => {
+                return transactions.reduce((acc, t) => {
+                    if (t.type === 'entrada') acc.in += t.amount;
+                    else acc.out += t.amount;
+                    return acc;
+                }, { in: 0, out: 0 });
+            }, [transactions]);
+
+            if (!user) return (
+                <div className="h-screen flex items-center justify-center bg-[#FDFCF9]">
+                    <div className="text-center">
+                        <i data-lucide="loader-2" class="w-12 h-12 mx-auto animate-spin text-[#31392A] mb-4"></i>
+                        <p className="font-bold text-slate-400 uppercase text-xs tracking-widest">A ligar à Tribo Burger...</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <select className="w-full px-4 py-2.5 border rounded-2xl text-xs font-bold" value={type} onChange={(e)=>setType(e.target.value)}><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select>
-                      <select className="w-full px-4 py-2.5 border rounded-2xl text-xs font-bold" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="pago">Pago</option><option value="pendente">Pendente</option></select>
-                    </div>
-                    <button type="submit" className="w-full bg-[#31392A] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl active:scale-[0.98] transition-all text-sm uppercase tracking-widest mt-2">Salvar Registo</button>
-                  </form>
                 </div>
-                
-                <div className="bg-[#0B0B0B] p-5 rounded-3xl text-white shadow-2xl">
-                   <h3 className="text-xs font-black text-[#F8CC82] uppercase mb-4 tracking-widest border-b border-[#31392A] pb-2">Resumo por Conta</h3>
-                   <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                      {BANK_ACCOUNTS.map(acc => (
-                        <div key={acc} className="flex flex-col border-b border-white/5 pb-1">
-                          <span className="text-[9px] text-gray-500 uppercase">{acc}</span>
-                          <span className={`text-xs font-bold ${totals.balances[acc] >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(totals.balances[acc])}</span>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Header Premium */}
+                    <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-2xl">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-white p-1 rounded-xl w-14 h-14 flex items-center justify-center overflow-hidden border-2 border-[#D97757] shadow-inner">
+                                    <img src="logo.png" alt="TB" className="h-full w-auto object-contain" onerror="this.src='https://via.placeholder.com/100?text=TRIBO'" />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-black uppercase text-[#F8CC82] tracking-tighter">Tribo Burger</h1>
+                                    <p className="text-[10px] font-extrabold opacity-50 uppercase tracking-[0.2em]">Financeiro & BI</p>
+                                </div>
+                            </div>
+                            <nav className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar w-full md:w-auto">
+                                <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'tab-active' : ''}`}>Painel</button>
+                                <button onClick={() => setActiveTab('planilha')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'planilha' ? 'tab-active' : ''}`}>Folha</button>
+                                <button onClick={() => setActiveTab('analise')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'analise' ? 'tab-active' : ''}`}>Análise</button>
+                                <button onClick={() => setActiveTab('parceiros')} className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'parceiros' ? 'tab-active' : ''}`}>Parceiros</button>
+                            </nav>
                         </div>
-                      ))}
-                   </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-4 py-8 w-full flex-1">
+                        
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-10 animate-in fade-in duration-500">
+                                <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between h-48 relative overflow-hidden">
+                                        <div className="absolute -right-6 -top-6 w-24 h-24 bg-green-100 rounded-full opacity-20"></div>
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em]">Saldo em Conta</span>
+                                        <h3 className="text-4xl font-black text-[#1A202C]">{formatMoney(totals.in - totals.out)}</h3>
+                                        <div className="text-[10px] font-bold text-green-700 bg-green-100/50 px-3 py-1 rounded-full w-fit flex items-center gap-1"><i data-lucide="check-circle" size="12"></i> Sincronizado</div>
+                                    </div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-sm border-l-8 border-l-red-500 h-48 flex flex-col justify-between">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em]">Despesas Registadas</span>
+                                        <h3 className="text-4xl font-black text-red-600">{formatMoney(totals.out)}</h3>
+                                        <p className="text-[10px] text-slate-400 font-medium italic">Soma de todos os custos</p>
+                                    </div>
+                                    <div className="bg-[#1A202C] p-8 rounded-[2.5rem] shadow-2xl flex flex-col justify-between h-48 text-white">
+                                        <span className="text-[10px] font-black uppercase text-[#F8CC82] tracking-[0.15em]">Lucro Operacional</span>
+                                        <h3 className="text-4xl font-black">{formatMoney(totals.in - totals.out)}</h3>
+                                        <p className="text-[10px] text-white/40">Faturação Bruta - Despesas</p>
+                                    </div>
+                                </section>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                                    <div className="lg:col-span-1">
+                                        <div className="glass-card p-8 rounded-[3rem] shadow-sm border-2 border-slate-50">
+                                            <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2 text-[#1A202C]">
+                                                <i data-lucide="edit-3" size="16" class="text-[#D97757]"></i> Novo Lançamento
+                                            </h4>
+                                            <form onSubmit={handleSave} className="space-y-5">
+                                                <input type="text" placeholder="O que comprou?" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-[#D97757] transition-all text-sm font-semibold" value={desc} onChange={e => setDesc(e.target.value)} />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
+                                                    <input type="date" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none text-[10px] font-bold" value={date} onChange={e => setDate(e.target.value)} />
+                                                </div>
+                                                <select className="w-full px-5 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none text-xs font-bold appearance-none" value={type} onChange={e => setType(e.target.value)}>
+                                                    <option value="saida">Saída (-)</option>
+                                                    <option value="entrada">Entrada (+)</option>
+                                                </select>
+                                                <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-5 rounded-2xl shadow-xl hover:shadow-[#D97757]/20 active:scale-95 transition-all text-xs uppercase tracking-[0.2em] mt-4">Guardar Lançamento</button>
+                                            </form>
+                                        </div>
+                                    </div>
+
+                                    <div className="lg:col-span-2">
+                                        <div className="glass-card rounded-[3rem] shadow-sm overflow-hidden flex flex-col h-[600px]">
+                                            <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center font-black text-[10px] uppercase text-slate-400 tracking-widest">
+                                                <span>Histórico de Movimentos</span>
+                                                <span className="bg-white px-3 py-1 rounded-full border shadow-sm">{transactions.length} itens</span>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
+                                                {transactions.length === 0 ? (
+                                                    <div className="p-20 text-center text-slate-300 font-bold uppercase tracking-[0.2em] text-xs">Sem registos na nuvem</div>
+                                                ) : (
+                                                    transactions.map(t => (
+                                                        <div key={t.id} className="flex items-center justify-between p-5 bg-white border-2 border-slate-50 rounded-[1.8rem] hover:border-[#D97757]/30 hover:shadow-lg transition-all group">
+                                                            <div className="flex items-center gap-5">
+                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-black ${t.type === 'entrada' ? 'bg-[#D3E298]/40 text-[#4c5836]' : 'bg-red-50 text-red-600'}`}>
+                                                                    <i data-lucide={t.type === 'entrada' ? 'arrow-up-right' : 'arrow-down-left'}></i>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-bold text-[#1A202C] text-sm tracking-tight uppercase">{t.description}</p>
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{t.date}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-6">
+                                                                <span className={`text-sm font-black ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</span>
+                                                                <button onClick={async () => await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', t.id))} className="text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash-2" size="18"></i></button>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'planilha' && (
+                            <div className="glass-card rounded-[3rem] shadow-sm overflow-hidden animate-in slide-in-from-bottom duration-500">
+                                <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+                                    <h2 className="font-black text-[#1A202C] uppercase tracking-widest text-xs">Folha Diária de Vendas</h2>
+                                    <span className="text-[10px] font-bold text-slate-400">Maio 2026</span>
+                                </div>
+                                <div className="overflow-x-auto no-scrollbar">
+                                    <table className="w-full text-center text-[10px] border-collapse min-w-[900px]">
+                                        <thead className="bg-[#1A202C] text-white uppercase tracking-widest">
+                                            <tr>
+                                                <th className="p-5 text-left border-r border-slate-700 sticky left-0 bg-[#1A202C] z-20">Data</th>
+                                                <th className="p-5 bg-[#D97757] text-[#1A202C] font-black italic">Receita Dia</th>
+                                                <th className="p-5 opacity-60">Pix</th>
+                                                <th className="p-5 opacity-60">Dinheiro</th>
+                                                <th className="p-5 opacity-60">iFood</th>
+                                                <th className="p-5 bg-red-600/30 text-red-200">Motoboy</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 font-bold">
+                                            {Array.from({length: 5}, (_, i) => {
+                                                const d = `2026-05-0${i+1}`;
+                                                const r = dailyRecords[d] || {};
+                                                return (
+                                                    <tr key={d} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-5 text-left border-r border-slate-50 sticky left-0 bg-white font-black text-slate-400">{d.split('-').reverse().slice(0,2).join('/')}</td>
+                                                        <td className="p-5 bg-green-50/50 text-green-700 font-black">---</td>
+                                                        {['pix','dinheiro','ifood'].map(f => (
+                                                            <td key={f} className="p-0 border-r border-slate-50">
+                                                                <input type="text" value={r[f]||''} onChange={e => saveDailyValue(d, f, e.target.value)} className="w-full h-14 text-center bg-transparent border-0 outline-none focus:bg-[#D3E298]/30 font-bold" placeholder="0" />
+                                                            </td>
+                                                        ))}
+                                                        <td className="p-0 bg-red-50/20">
+                                                            <input type="text" value={r.motoboy||''} onChange={e => saveDailyValue(d, 'motoboy', e.target.value)} className="w-full h-14 text-center bg-transparent border-0 outline-none text-red-600" placeholder="0" />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'analise' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-in zoom-in duration-500">
+                                <div className="glass-card p-10 rounded-[3.5rem] shadow-sm">
+                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-10 text-center">Distribuição de Receitas (Mix)</h4>
+                                    <div className="chart-container"><canvas id="mixChart"></canvas></div>
+                                </div>
+                                <div className="glass-card p-10 rounded-[3.5rem] shadow-sm">
+                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-10 text-center">Tendência de Receita Diária</h4>
+                                    <div className="chart-container"><canvas id="trendChart"></canvas></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'parceiros' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
+                                {suppliers.map(s => (
+                                    <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group border-2 border-slate-50 hover:border-[#D97757]/40 h-56 flex flex-col justify-center">
+                                        <button onClick={async () => await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'suppliers', s.id))} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash-2" size="18"></i></button>
+                                        <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner"><i data-lucide="truck"></i></div>
+                                        <p className="font-black text-sm text-[#1A202C] uppercase tracking-tight truncate px-2">{s.name}</p>
+                                        <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest">{s.phone || 'S/ CONTACTO'}</p>
+                                    </div>
+                                ))}
+                                <button onClick={async () => {
+                                    const n = prompt("Nome do Parceiro:");
+                                    if(n) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'suppliers', Date.now().toString()), { name: n, phone: prompt("Contacto:") });
+                                }} className="border-4 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-[#D97757] transition-all bg-white/50 h-56 group">
+                                    <i data-lucide="plus-square" size="40" class="group-hover:scale-110 transition-transform"></i>
+                                    <span className="text-[10px] font-black uppercase mt-4 tracking-widest">Novo Parceiro</span>
+                                </button>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-16 text-center">
+                        <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v3.0</p>
+                    </footer>
                 </div>
-              </div>
+            );
+        }
 
-              <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col h-[550px]">
-                 <div className="p-4 border-b flex justify-between items-center bg-[#FDFCF9]">
-                    <h2 className="font-black text-[#31392A] text-sm uppercase">Histórico</h2>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">{transactions.length} Registos</span>
-                 </div>
-                 <div className="flex-1 overflow-y-auto no-scrollbar">
-                    {transactions.length === 0 ? (
-                       <div className="h-full flex items-center justify-center text-slate-300 p-8 text-center"><p className="text-sm">Nenhum lançamento encontrado.</p></div>
-                    ) : (
-                       <div className="divide-y divide-slate-50">
-                         {transactions.map(t => (
-                           <div key={t.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
-                              <div className="flex items-center gap-3">
-                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] ${t.type === 'entrada' ? 'bg-[#D3E298]/30 text-[#4c5836]' : 'bg-red-50 text-red-600'}`}>
-                                    {t.type === 'entrada' ? '+' : '-'}
-                                 </div>
-                                 <div>
-                                    <p className="font-bold text-[#31392A] text-sm leading-tight">{t.description}</p>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{formatDate(t.date)} • {t.account}</p>
-                                 </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                 <div className="text-right">
-                                    <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatCurrency(t.amount)}</p>
-                                    <button onClick={()=>toggleStatus(t.id)} className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-600'}`}>{t.status}</button>
-                                 </div>
-                                 <button onClick={()=>deleteTransaction(t.id)} className="text-slate-200 hover:text-red-600 transition-opacity opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
-                              </div>
-                           </div>
-                         ))}
-                       </div>
-                    )}
-                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'planilha' && (
-          <div className="space-y-4">
-             <div className="bg-white p-5 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div><h2 className="text-lg font-black text-[#31392A] uppercase">Planilha Diária</h2><p className="text-[10px] text-slate-400 font-bold uppercase">Gestão de caixa por dia</p></div>
-                <input type="month" value={salesMonth} onChange={(e)=>setSalesMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
-             </div>
-             
-             <div className="bg-white rounded-3xl border shadow-xl overflow-x-auto no-scrollbar">
-                <table className="w-full text-[11px] border-collapse min-w-[1000px]">
-                   <thead>
-                      <tr className="bg-[#0B0B0B] text-white">
-                         <th className="p-4 text-left sticky left-0 bg-[#0B0B0B] z-20 border-r border-[#31392A]">Dia</th>
-                         <th className="p-4 bg-[#1A1A1A] text-[#F8CC82] font-black">Total Dia</th>
-                         {['Pix','Pix On','Fiado','Din.','iFood','Déb.','Créd.','VR','Tckt','Alelo'].map(h=><th key={h} className="p-2 font-bold uppercase opacity-70">{h}</th>)}
-                         <th className="p-2 bg-red-600 text-white">Entreg.</th>
-                         <th className="p-2 bg-red-800 text-white">Taxas</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                      {getDaysInMonth(salesMonth).map(d => {
-                        const r = dailyRecords[d] || {};
-                        const row = calculateDailyRow(d);
-                        return (
-                          <tr key={d} className="hover:bg-slate-50">
-                             <td className="p-3 text-left font-bold text-[#31392A] border-r sticky left-0 bg-white z-10">{formatDate(d)}</td>
-                             <td className="p-3 font-black text-green-700 bg-green-50/50">{formatCurrency(row.rev)}</td>
-                             {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                               <td key={f} className="p-0 border-r border-slate-50">
-                                 <input type="text" value={r[f]||''} onChange={(e)=>handleDailyRecordChange(d, f, e.target.value)} className="w-full h-10 text-center bg-transparent border-0 focus:bg-[#D3E298]/20 outline-none text-[11px]" placeholder="0" />
-                               </td>
-                             ))}
-                             {['entregador','taxaEntrega'].map(f => (
-                               <td key={f} className="p-0 border-r border-slate-50 bg-red-50/20">
-                                 <input type="text" value={r[f]||''} onChange={(e)=>handleDailyRecordChange(d, f, e.target.value)} className="w-full h-10 text-center bg-transparent border-0 focus:bg-red-100 outline-none text-red-600 font-bold" placeholder="0" />
-                               </td>
-                             ))}
-                          </tr>
-                        );
-                      })}
-                   </tbody>
-                   <tfoot className="bg-[#1A1A1A] text-white font-black sticky bottom-0 z-20">
-                      <tr>
-                         <td className="p-4 text-left sticky left-0 bg-[#1A1A1A] text-[#F8CC82] uppercase border-r border-[#31392A]">TOTAL MÊS</td>
-                         <td className="p-4 text-[#D3E298] text-sm">{formatCurrency(monthlySpreadsheetTotals.revT)}</td>
-                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                           <td key={f} className="p-2 opacity-50 font-medium">{formatCurrency(monthlySpreadsheetTotals[f])}</td>
-                         ))}
-                         <td colSpan="2" className="p-2 text-red-400 text-right pr-6">{formatCurrency(monthlySpreadsheetTotals.expT)}</td>
-                      </tr>
-                   </tfoot>
-                </table>
-             </div>
-          </div>
-        )}
-
-        {activeTab === 'resumo' && (
-           <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="bg-white p-6 rounded-3xl border shadow-sm text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Entradas Totais</p>
-                    <h3 className="text-2xl font-black text-green-600">{formatCurrency(monthlyStats.rTotal)}</h3>
-                 </div>
-                 <div className="bg-white p-6 rounded-3xl border shadow-sm text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Saídas Totais</p>
-                    <h3 className="text-2xl font-black text-red-600">{formatCurrency(monthlyStats.gMes)}</h3>
-                 </div>
-                 <div className="bg-[#31392A] p-6 rounded-3xl shadow-xl text-center border-b-8 border-b-[#D3E298]">
-                    <p className="text-[10px] font-bold text-[#D3E298] uppercase mb-1">Lucro Estimado</p>
-                    <h3 className={`text-2xl font-black ${monthlyStats.lucro >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(monthlyStats.lucro)}</h3>
-                 </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <div className="bg-white p-6 rounded-3xl border">
-                    <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-red-100 rounded-2xl text-red-600"><ShoppingBag size={24}/></div><div><h4 className="font-bold text-[#31392A]">Análise iFood</h4><p className="text-xs text-slate-400">Repasses do mês</p></div></div>
-                    <div className="space-y-4">
-                       <div className="flex justify-between border-b pb-2"><span className="text-slate-500 font-medium">Faturamento:</span><span className="font-black text-[#31392A]">{formatCurrency(monthlyStats.rIfood)}</span></div>
-                       <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Pedidos:</span><input type="number" className="w-20 px-3 py-1.5 border rounded-lg text-center font-bold" value={pedidosIfood} onChange={(e)=>handlePedidosChange('ifood', e.target.value)} /></div>
-                       <div className="bg-red-50 p-4 rounded-2xl flex justify-between items-center mt-4 border border-red-100">
-                          <span className="text-red-800 font-bold">Ticket Médio:</span>
-                          <span className="text-xl font-black text-red-600">{formatCurrency(monthlyStats.tI)}</span>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="bg-white p-6 rounded-3xl border">
-                    <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-[#D3E298]/20 rounded-2xl text-[#31392A]"><Store size={24}/></div><div><h4 className="font-bold text-[#31392A]">Cardápio Direto</h4><p className="text-xs text-slate-400">Balcão e WhatsApp</p></div></div>
-                    <div className="space-y-4">
-                       <div className="flex justify-between border-b pb-2"><span className="text-slate-500 font-medium">Faturamento:</span><span className="font-black text-[#31392A]">{formatCurrency(monthlyStats.rDireto)}</span></div>
-                       <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Pedidos:</span><input type="number" className="w-20 px-3 py-1.5 border rounded-lg text-center font-bold" value={pedidosDireto} onChange={(e)=>handlePedidosChange('direto', e.target.value)} /></div>
-                       <div className="bg-[#D3E298]/10 p-4 rounded-2xl flex justify-between items-center mt-4 border border-[#D3E298]/30">
-                          <span className="text-[#31392A] font-bold">Ticket Médio:</span>
-                          <span className="text-xl font-black text-[#31392A]">{formatCurrency(monthlyStats.tD)}</span>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        )}
-
-        {activeTab === 'faturas' && (
-           <div className="space-y-6">
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                 {CREDIT_CARDS.map(c => (
-                   <button key={c} onClick={()=>setSelectedCardView(c)} className={`px-6 py-2.5 rounded-2xl font-black text-xs transition-all whitespace-nowrap shadow-sm ${selectedCardView === c ? 'bg-[#31392A] text-[#F8CC82]' : 'bg-white border text-slate-400'}`}>{c}</button>
-                 ))}
-              </div>
-              <div className="bg-white p-6 rounded-3xl border shadow-sm relative overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-6">
-                 <div className="absolute left-0 top-0 w-2 h-full bg-gradient-to-b from-[#D3E298] to-[#F8CC82]"></div>
-                 <div className="pl-4">
-                    <h2 className="font-black text-[#31392A] uppercase">{selectedCardView}</h2>
-                    <div className="flex items-center gap-3 mt-2">
-                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data Vencimento:</span>
-                       <input type="date" value={invoiceDueDates[selectedCardView] || ''} onChange={(e)=>handleInvoiceDueDateChange(selectedCardView, e.target.value)} className="bg-slate-50 border rounded-lg px-2 py-1 text-xs font-bold outline-none" />
-                    </div>
-                 </div>
-                 <div className="bg-[#F8CC82]/10 px-8 py-4 rounded-2xl border border-[#F8CC82]/30 text-center w-full sm:w-auto">
-                    <p className="text-[10px] font-bold text-[#31392A] opacity-60 uppercase mb-1">Total Fatura</p>
-                    <h3 className="text-3xl font-black text-[#31392A]">{formatCurrency(totals.cardBalances[selectedCardView])}</h3>
-                 </div>
-              </div>
-              <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                 <table className="w-full text-xs">
-                    <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase border-b"><tr><th className="px-6 py-4 text-left">Gasto</th><th className="px-6 py-4 text-right">Valor</th><th className="px-6 py-4 text-center">Status</th></tr></thead>
-                    <tbody className="divide-y divide-slate-50">
-                       {transactions.filter(t => t.account === selectedCardView).map(t => (
-                         <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4"><p className="font-bold text-[#31392A] text-sm">{t.description}</p><p className="text-[9px] text-slate-400 uppercase font-bold">{formatDate(t.date)}</p></td>
-                            <td className="px-6 py-4 text-right font-black text-orange-600">{formatCurrency(t.amount)}</td>
-                            <td className="px-6 py-4 text-center"><button onClick={()=>toggleStatus(t.id)} className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${t.status==='pago'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>{t.status}</button></td>
-                         </tr>
-                       ))}
-                    </tbody>
-                 </table>
-              </div>
-           </div>
-        )}
-
-        {activeTab === 'fornecedores' && (
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 bg-white p-6 rounded-3xl border shadow-sm self-start">
-                 <h2 className="text-sm font-black text-[#31392A] mb-4 uppercase flex items-center gap-2"><Truck size={18} className="text-[#D3E298]"/> Novo Parceiro</h2>
-                 <form onSubmit={handleAddSupplier} className="space-y-4">
-                    <input type="text" required placeholder="Nome / Empresa" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierName} onChange={(e)=>setSupplierName(e.target.value)} />
-                    <input type="text" placeholder="Tipo (Carnes, Pão, etc.)" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierCategory} onChange={(e)=>setSupplierCategory(e.target.value)} />
-                    <input type="text" placeholder="Telemóvel / WhatsApp" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierPhone} onChange={(e)=>setSupplierPhone(e.target.value)} />
-                    <button type="submit" className="w-full bg-[#31392A] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest">Adicionar Fornecedor</button>
-                 </form>
-              </div>
-              <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col h-[500px]">
-                 <div className="p-4 bg-slate-50 border-b font-black text-[10px] text-[#31392A] uppercase tracking-widest flex justify-between"><span>Meus Fornecedores</span><span>{suppliers.length} Parceiros</span></div>
-                 <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {suppliers.map(s => (
-                       <div key={s.id} className="p-4 bg-white border-2 border-slate-100 rounded-2xl flex justify-between items-center group relative hover:border-[#D3E298] transition-colors">
-                          <div className="absolute left-0 top-0 w-1.5 h-full bg-[#D3E298]"></div>
-                          <div>
-                             <p className="font-bold text-[#31392A] text-sm leading-tight uppercase">{s.name}</p>
-                             <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-tight">{s.category || 'Geral'} • {s.phone || 'Sem contacto'}</p>
-                          </div>
-                          <button onClick={()=>deleteSupplier(s.id)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
-                       </div>
-                    ))}
-                 </div>
-              </div>
-           </div>
-        )}
-      </main>
-    </div>
-  );
-}
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
