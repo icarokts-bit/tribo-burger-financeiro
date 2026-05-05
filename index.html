@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v4.1</title>
+    <title>Tribo Burger | Gestão Total v4.2</title>
     
     <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -76,7 +76,11 @@
             const [type, setType] = useState('saida');
             const [selectedAccount, setSelectedAccount] = useState(ACCOUNTS[0]);
             const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
+            
+            // Datas separadas: Emissão e Compensação
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [clearanceDate, setClearanceDate] = useState(new Date().toISOString().split('T')[0]);
+            
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [newDayDate, setNewDayDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -99,7 +103,6 @@
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // Adicionado: Função para salvar transações manuais
             const handleSaveTransaction = async (e) => {
                 e.preventDefault();
                 if (!user || !desc || !val) return;
@@ -108,11 +111,16 @@
                     description: desc, 
                     amount: parseFloat(val), 
                     type, 
-                    date,
+                    date, // Data de lançamento (competência)
+                    clearanceDate, // Data de compensação (caixa)
                     account: selectedAccount,
                     category: selectedCategory
                 });
                 setDesc(''); setVal('');
+                // Reset das datas para hoje após salvar
+                const today = new Date().toISOString().split('T')[0];
+                setDate(today);
+                setClearanceDate(today);
             };
 
             const calculateSales = (r) => {
@@ -229,34 +237,57 @@
                                 </section>
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <div className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm h-fit">
-                                        <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2"><Icon name="plus-circle" size={16} className="text-[#D97757]" /> Lançamento</h4>
+                                        <h4 className="text-xs font-black uppercase tracking-widest mb-8 border-b pb-4 flex items-center gap-2 text-[#1A202C]"><Icon name="plus-circle" size={16} className="text-[#D97757]" /> Lançamento</h4>
                                         <form onSubmit={handleSaveTransaction} className="space-y-4">
                                             <input type="text" placeholder="Descrição" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
+                                            
                                             <div className="grid grid-cols-2 gap-4">
-                                                <input type="number" step="0.01" placeholder="Valor" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" value={val} onChange={e => setVal(e.target.value)} />
-                                                <input type="date" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={date} onChange={e => setDate(e.target.value)} />
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Data do Gasto</label>
+                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={date} onChange={e => setDate(e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Compensação</label>
+                                                    <input type="date" className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[10px]" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} />
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Conta</label>
-                                                <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Conta</label>
+                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Categoria</label>
+                                                    <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Categoria</label>
-                                                <select className="w-full px-5 py-3 bg-white border-2 border-slate-100 rounded-2xl text-xs font-bold" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl text-[10px] font-black ${type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>ENTRADA</button>
+                                                <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl text-[10px] font-black ${type === 'saida' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'}`}>SAÍDA</button>
                                             </div>
-                                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs">Guardar</button>
+
+                                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs tracking-widest mt-2">Guardar Registo</button>
                                         </form>
                                     </div>
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
-                                        <div className="p-6 bg-slate-50 font-black text-[10px] text-slate-400 uppercase flex justify-between"><span>Histórico</span><span>{transactions.length} itens</span></div>
+                                        <div className="p-6 bg-slate-50 font-black text-[10px] text-slate-400 uppercase flex justify-between tracking-widest"><span>Histórico</span><span>{transactions.length} itens</span></div>
                                         <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
                                             {transactions.map(t => (
-                                                <div key={t.id} className="flex items-center justify-between p-4 bg-white border rounded-2xl group">
+                                                <div key={t.id} className="flex items-center justify-between p-4 bg-white border rounded-2xl group hover:shadow-md transition-all">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>{t.type === 'entrada' ? '+' : '-'}</div>
-                                                        <div><p className="font-bold text-sm text-[#1A202C] uppercase">{t.description}</p><p className="text-[9px] font-bold text-slate-300">{t.date} • {t.account}</p></div>
+                                                        <div>
+                                                            <p className="font-bold text-sm text-[#1A202C] uppercase leading-tight">{t.description}</p>
+                                                            <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">
+                                                                Reg: {t.date.split('-').reverse().join('/')} • Cai em: {t.clearanceDate ? t.clearanceDate.split('-').reverse().join('/') : t.date.split('-').reverse().join('/')}
+                                                            </p>
+                                                            <p className="text-[8px] font-black text-[#D97757] uppercase tracking-tighter">{t.account}</p>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="opacity-0 group-hover:opacity-100 text-red-300"><Icon name="trash-2" size={14}/></button></div>
+                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="opacity-0 group-hover:opacity-100 text-red-300 transition-opacity"><Icon name="trash-2" size={14}/></button></div>
                                                 </div>
                                             ))}
                                         </div>
@@ -268,12 +299,12 @@
                         {activeTab === 'planilha' && (
                             <div className="glass-card rounded-3xl shadow-sm overflow-hidden">
                                 <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black text-[#1A202C] uppercase text-sm">Vendas Diárias</h2>
-                                    <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border">
+                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Vendas Diárias</h2>
+                                    <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border shadow-sm">
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="font-black text-xs outline-none px-2" />
-                                        <div className="h-6 w-px bg-slate-200"></div>
+                                        <div className="h-6 w-px bg-slate-200 mx-1"></div>
                                         <input type="date" value={newDayDate} onChange={e => setNewDayDate(e.target.value)} className="text-xs font-bold border-0 outline-none" />
-                                        <button onClick={async () => { if(!dailyRecords[newDayDate]) await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1 rounded-xl font-black text-[10px]">ABRIR DIA</button>
+                                        <button onClick={async () => { if(!dailyRecords[newDayDate]) await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-tighter">ABRIR DIA</button>
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto no-scrollbar">
@@ -291,13 +322,13 @@
                                                 const r = dailyRecords[d] || {}; const { totalDia } = calculateSales(r);
                                                 const update = (f, v) => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v.replace(/[^0-9.]/g, '') }, { merge: true });
                                                 return (
-                                                    <tr key={d} className="h-12">
-                                                        <td className="p-2 text-left sticky left-0 bg-white border-r font-black text-[10px] z-10 w-48 uppercase">{d.split('-').reverse().join('/')}</td>
-                                                        <td className="p-2 bg-slate-50 font-black border-r">{formatMoney(totalDia)}</td>
-                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => <td key={f} className="p-0 border-r"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>)}
-                                                        <td className="p-0 border-r bg-red-50/20"><input className="table-input text-red-600" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)}/></td>
-                                                        <td className="p-0 border-r bg-red-50/20"><input className="table-input text-red-600" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)}/></td>
-                                                        <td className="p-2"><button onClick={() => { if(confirm("Apagar dia?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete(); }} className="text-red-300"><Icon name="trash-2" size={14}/></button></td>
+                                                    <tr key={d} className="h-12 hover:bg-slate-50 transition-colors">
+                                                        <td className="p-2 text-left sticky left-0 bg-white border-r font-black text-[10px] z-10 w-48 uppercase text-slate-500 tracking-tighter">{d.split('-').reverse().join('/')}</td>
+                                                        <td className="p-2 bg-slate-50 font-black border-r text-[#1A202C]">{formatMoney(totalDia)}</td>
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => <td key={f} className="p-0 border-r min-w-[80px]"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>)}
+                                                        <td className="p-0 border-r bg-red-50/20 min-w-[100px]"><input className="table-input text-red-600" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)}/></td>
+                                                        <td className="p-0 border-r bg-red-50/20 min-w-[100px]"><input className="table-input text-red-600" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)}/></td>
+                                                        <td className="p-2"><button onClick={() => { if(confirm("Apagar dia?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete(); }} className="text-red-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button></td>
                                                     </tr>
                                                 );
                                             })}
@@ -320,7 +351,7 @@
                                     <div className="glass-card p-6 rounded-[2.5rem]"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Margem</span><h3 className="text-2xl font-black text-[#D97757]">{results.current.margem.toFixed(1)}%</h3></div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="glass-card p-8 rounded-[3rem]">
+                                    <div className="glass-card p-8 rounded-[3rem] shadow-sm">
                                         <h4 className="text-xs font-black uppercase text-[#1A202C] mb-6 border-b pb-4 tracking-widest">Canais de Venda</h4>
                                         <div className="space-y-4">
                                             {[{l: 'Direto', v: results.current.diretoRevenue, c: '#1A202C'}, {l: 'iFood', v: results.current.ifoodRevenue, c: '#D97757'}].map(item => (
@@ -331,10 +362,10 @@
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="glass-card p-8 rounded-[3rem] flex flex-col justify-center text-center">
+                                    <div className="glass-card p-8 rounded-[3rem] flex flex-col justify-center text-center shadow-sm">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Performance Global</p>
                                         <h4 className="text-4xl font-black my-2">{results.current.lucroLiquido >= 0 ? 'POSITIVO' : 'NEGATIVO'}</h4>
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">O seu lucro líquido real este mês é de {formatMoney(results.current.lucroLiquido)}</p>
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">O lucro real este mês é de {formatMoney(results.current.lucroLiquido)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -343,7 +374,7 @@
                         {activeTab === 'dre' && (
                             <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
                                 <div className="flex justify-between items-center bg-white p-6 rounded-3xl border shadow-sm">
-                                    <h2 className="text-xl font-black text-[#1A202C] uppercase">DRE Automatizado</h2>
+                                    <h2 className="text-xl font-black text-[#1A202C] uppercase tracking-tight">DRE Automatizado</h2>
                                     <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
                                 </div>
                                 <div className="glass-card rounded-[3rem] shadow-xl overflow-hidden bg-white p-8 space-y-4">
@@ -355,24 +386,24 @@
                                             <div key={cat} className="flex justify-between items-center px-6 py-2 dre-row"><span className="text-xs font-medium text-slate-600">{cat}</span><span className="font-bold text-red-400">{formatMoney(dreData.categoriasCusto[cat])}</span></div>
                                         ))}
                                     </div>
-                                    <div className={`flex justify-between items-center p-6 rounded-[2.5rem] ${dreData.lucroLiquido >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-lg font-black uppercase">LUCRO LÍQUIDO</h3><span className="text-3xl font-black">{formatMoney(dreData.lucroLiquido)}</span></div>
+                                    <div className={`flex justify-between items-center p-6 rounded-[2.5rem] shadow-inner ${dreData.lucroLiquido >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-lg font-black uppercase tracking-widest">LUCRO LÍQUIDO</h3><span className="text-3xl font-black">{formatMoney(dreData.lucroLiquido)}</span></div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'parceiros' && (
-                            <div className="max-w-6xl mx-auto space-y-8">
+                            <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                     {suppliers.map(s => (
-                                        <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group h-56 flex flex-col justify-center">
-                                            <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={18} /></button>
+                                        <div key={s.id} className="glass-card p-8 rounded-[2.5rem] text-center relative group h-56 flex flex-col justify-center border-2 border-slate-50 hover:border-[#D97757]/40 transition-all shadow-sm">
+                                            <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={18} /></button>
                                             <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 mx-auto text-[#1A202C] shadow-inner"><Icon name="truck" size={24} /></div>
                                             <p className="font-black text-sm text-[#1A202C] uppercase truncate px-2">{s.name}</p>
-                                            <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest">{s.phone || 'S/ CONTACTO'}</p>
+                                            <p className="text-[10px] font-black text-[#D97757] mt-1 tracking-widest uppercase">{s.phone || 'S/ CONTACTO'}</p>
                                         </div>
                                     ))}
-                                    <button onClick={() => { const n = prompt("Nome:"); if(n) db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${Date.now().toString()}`).set({ name: n, phone: prompt("Contacto:") }); }} className="border-4 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-[#D97757] h-56 group bg-white/50">
-                                        <Icon name="plus-square" size={40} className="group-hover:scale-110" /><span className="text-[10px] font-black uppercase mt-4 tracking-widest">Novo Parceiro</span>
+                                    <button onClick={() => { const n = prompt("Nome do Parceiro:"); if(n) db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${Date.now().toString()}`).set({ name: n, phone: prompt("Contacto:") }); }} className="border-4 border-dashed border-slate-200 rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-[#D97757] hover:text-[#D97757] h-56 group bg-white/50 transition-all">
+                                        <Icon name="plus-square" size={40} className="group-hover:scale-110 transition-transform" /><span className="text-[10px] font-black uppercase mt-4 tracking-widest">Novo Parceiro</span>
                                     </button>
                                 </div>
                             </div>
@@ -380,7 +411,7 @@
                     </main>
 
                     <footer className="py-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">
-                        Tribo Burger • Business Intelligence v4.1
+                        Tribo Burger • Business Intelligence v4.2
                     </footer>
                 </div>
             );
