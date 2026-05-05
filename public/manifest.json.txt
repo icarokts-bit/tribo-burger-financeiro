@@ -1,0 +1,15 @@
+{
+  "short_name": "Tribo Finan",
+  "name": "Tribo Burger - Gestão Financeira",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0B0B0B",
+  "background_color": "#FDFCF9"
+}
