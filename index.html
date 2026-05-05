@@ -1,0 +1,571 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { 
+  Wallet, 
+  TrendingUp, 
+  TrendingDown, 
+  AlertCircle,
+  Plus,
+  Trash2,
+  CheckCircle,
+  Clock,
+  Utensils,
+  Landmark,
+  CreditCard,
+  Truck,
+  Users,
+  Phone,
+  Tag,
+  BarChart3,
+  ShoppingBag,
+  Store,
+  Calculator,
+  Table
+} from 'lucide-react';
+
+// ==========================================================
+// CONFIGURAÇÃO DO FIREBASE - TRIBO BURGER
+// ==========================================================
+const minhasChaves = {
+  apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
+  authDomain: "tribo-burger-app.firebaseapp.com",
+  projectId: "tribo-burger-app",
+  storageBucket: "tribo-burger-app.firebasestorage.app",
+  messagingSenderId: "490245681469",
+  appId: "1:490245681469:web:189b1d2e35bd142cc31554",
+  measurementId: "G-SQ87BWHZ1L"
+};
+
+// Inicialização segura do Firebase
+let app, auth, db, appId;
+const config = (typeof __firebase_config !== 'undefined' && __firebase_config) 
+  ? JSON.parse(__firebase_config) 
+  : minhasChaves;
+
+if (config && config.apiKey) {
+  try {
+    app = initializeApp(config);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    appId = typeof __app_id !== 'undefined' ? __app_id : 'tribo-burger-financeiro';
+  } catch (e) {
+    console.error("Erro ao carregar base de dados:", e);
+  }
+}
+
+const BANK_ACCOUNTS = [
+  'Mercado Pago', 'C6', 'Aplicação', 'Fundo Aluguel', 'Fundo C6', 'Fundo Mercado Pago', 'Fundo Rico', 'Fiado', 'iFood'
+];
+
+const CREDIT_CARDS = [
+  'Cartão Mercado Pago', 'Cartão C6'
+];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedCardView, setSelectedCardView] = useState(CREDIT_CARDS[0]);
+  const [invoiceDueDates, setInvoiceDueDates] = useState({ 'Cartão Mercado Pago': '', 'Cartão C6': '' });
+  const [pedidosIfood, setPedidosIfood] = useState('');
+  const [pedidosDireto, setPedidosDireto] = useState('');
+  const [salesMonth, setSalesMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [dailyRecords, setDailyRecords] = useState({});
+  const [suppliers, setSuppliers] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  
+  // Estados dos Formulários
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [account, setAccount] = useState(BANK_ACCOUNTS[0]);
+  const [type, setType] = useState('entrada');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState('');
+  const [status, setStatus] = useState('pago');
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierCategory, setSupplierCategory] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+
+  // Lógica de Status Automático
+  useEffect(() => {
+    if (type === 'entrada') setStatus('pago');
+    if (type === 'saida') setStatus('pendente');
+  }, [type]);
+
+  // Autenticação Firebase
+  useEffect(() => {
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) { console.error("Erro na autenticação:", error); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // Sincronização com Firestore (Nuvem)
+  useEffect(() => {
+    if (!user || !db) return;
+    
+    // Lançamentos
+    const txUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), (snap) => {
+      const txs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTransactions(txs.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    }, (error) => console.error("Erro ao carregar transações:", error));
+
+    // Fornecedores
+    const supUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'suppliers'), (snap) => {
+      setSuppliers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => console.error("Erro ao carregar fornecedores:", error));
+
+    // Planilha Diária
+    const dailyUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'dailyRecords'), (snap) => {
+      const records = {};
+      snap.docs.forEach(doc => { records[doc.id] = doc.data(); });
+      setDailyRecords(records);
+    }, (error) => console.error("Erro ao carregar planilha:", error));
+
+    // Configurações e Metas
+    const setUnsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'settings'), (snap) => {
+      snap.docs.forEach(doc => {
+        if (doc.id === 'invoiceDueDates') setInvoiceDueDates(doc.data() || {});
+        if (doc.id === 'pedidos') { 
+          setPedidosIfood(doc.data().pedidosIfood || ''); 
+          setPedidosDireto(doc.data().pedidosDireto || ''); 
+        }
+      });
+    }, (error) => console.error("Erro ao carregar configurações:", error));
+
+    return () => { txUnsub(); supUnsub(); dailyUnsub(); setUnsub(); };
+  }, [user]);
+
+  // Cálculos de Totais Financeiros
+  const totals = transactions.reduce((acc, t) => {
+    const isCard = CREDIT_CARDS.includes(t.account);
+    const val = parseFloat(t.amount) || 0;
+    if (t.type === 'entrada' && t.status === 'pago') {
+      acc.entradas += val; if (!isCard) acc.saldo += val;
+      if (isCard) acc.cardBalances[t.account] -= val; else acc.balances[t.account] += val;
+    } else if (t.type === 'entrada') { acc.aReceber += val; }
+    if (t.type === 'saida' && t.status === 'pago') {
+      acc.saidas += val; if (!isCard) acc.saldo -= val;
+      if (isCard) acc.cardBalances[t.account] += val; else acc.balances[t.account] -= val;
+    } else if (t.type === 'saida') { acc.contasAPagar += val; }
+    return acc;
+  }, { 
+    entradas: 0, saidas: 0, contasAPagar: 0, aReceber: 0, saldo: 0, 
+    balances: BANK_ACCOUNTS.reduce((a,v)=>{a[v]=0;return a;},{}), 
+    cardBalances: CREDIT_CARDS.reduce((a,v)=>{a[v]=0;return a;},{}) 
+  });
+
+  const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+  const formatDate = (s) => s ? s.split('-').reverse().join('/') : '-';
+
+  // Funções de Escrita no Banco de Dados
+  const handleAddTransaction = async (e) => {
+    e.preventDefault(); if (!description || !amount) return;
+    const id = Date.now().toString();
+    const data = { id, description, amount: parseFloat(amount), type, date, dueDate: dueDate || date, status, account };
+    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id), data);
+    setDescription(''); setAmount(''); setDueDate('');
+  };
+
+  const handleAddSupplier = async (e) => {
+    e.preventDefault();
+    if (!supplierName) return;
+    const id = Date.now().toString();
+    const data = { id, name: supplierName, category: supplierCategory, phone: supplierPhone };
+    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'suppliers', id), data);
+    setSupplierName(''); setSupplierCategory(''); setSupplierPhone('');
+  };
+
+  const toggleStatus = async (id) => {
+    const t = transactions.find(x => x.id === id);
+    if (t && user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id.toString()), { ...t, status: t.status === 'pago' ? 'pendente' : 'pago' });
+  };
+
+  const deleteTransaction = async (id) => { 
+    if(confirm('Tem certeza que deseja excluir?')) { if (user && db) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id.toString())); } 
+  };
+
+  const handleDailyRecordChange = async (date, field, value) => {
+    const clean = value.replace(/[^0-9.]/g, '');
+    setDailyRecords(prev => ({ ...prev, [date]: { ...(prev[date] || {}), [field]: clean } }));
+    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'dailyRecords', date), { [field]: clean }, { merge: true });
+  };
+
+  const handlePedidosChange = async (type, val) => {
+    if (type === 'ifood') setPedidosIfood(val); else setPedidosDireto(val);
+    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'pedidos'), { [type === 'ifood' ? 'pedidosIfood' : 'pedidosDireto']: val }, { merge: true });
+  };
+
+  const handleInvoiceDueDateChange = async (card, val) => {
+    const newDates = { ...invoiceDueDates, [card]: val };
+    setInvoiceDueDates(newDates);
+    if (user && db) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'invoiceDueDates'), newDates, { merge: true });
+  };
+
+  const getDaysInMonth = (ym) => {
+    const [y, m] = ym.split('-');
+    return Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => `${y}-${m}-${String(i + 1).padStart(2, '0')}`);
+  };
+
+  const calculateDailyRow = (d) => {
+    const r = dailyRecords[d] || {};
+    const p = (v) => parseFloat(v) || 0;
+    const rev = p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
+    const exp = p(r.entregador) + p(r.taxaEntrega);
+    return { rev, exp };
+  };
+
+  const monthlyStats = (() => {
+    const month = new Date().toISOString().split('-').slice(0,2).join('-');
+    const mtx = transactions.filter(t => t.date.startsWith(month));
+    let rIfood = 0, rDireto = 0, gMes = 0;
+    mtx.forEach(t => {
+      if (t.type === 'entrada') { (t.account === 'iFood' || t.description.toLowerCase().includes('ifood')) ? rIfood += t.amount : rDireto += t.amount; }
+      else { gMes += t.amount; }
+    });
+    const pI = parseInt(pedidosIfood) || 0, pD = parseInt(pedidosDireto) || 0;
+    return { 
+      rIfood, rDireto, rTotal: rIfood+rDireto, gMes, lucro: (rIfood+rDireto)-gMes, 
+      pI, pD, pT: pI+pD, 
+      tI: pI ? rIfood/pI : 0, tD: pD ? rDireto/pD : 0, tT: (pI+pD) ? (rIfood+rDireto)/(pI+pD) : 0 
+    };
+  })();
+
+  const monthlySpreadsheetTotals = (() => {
+    const p = (v) => parseFloat(v) || 0;
+    const t = { pix: 0, pixOnline: 0, fiado: 0, dinheiro: 0, ifood: 0, debito: 0, credito: 0, vr: 0, ticket: 0, alelo: 0, entregador: 0, taxaEntrega: 0, revT: 0, expT: 0 };
+    getDaysInMonth(salesMonth).forEach(d => {
+      const r = dailyRecords[d] || {};
+      Object.keys(t).forEach(k => { if(r[k]) t[k] += p(r[k]); });
+      const row = calculateDailyRow(d);
+      t.revT += row.rev; t.expT += row.exp;
+    });
+    return t;
+  })();
+
+  if (!user && auth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FDFCF9]">
+        <div className="text-center p-8">
+          <Utensils size={64} className="mx-auto text-[#31392A] animate-bounce mb-4" />
+          <h2 className="text-xl font-bold text-slate-700 font-sans">A ligar à Tribo Burger...</h2>
+          <p className="text-sm text-slate-400 mt-2">A preparar o seu financeiro na nuvem</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs = [
+    { id: 'dashboard', icon: TrendingUp, label: 'Lançamentos' },
+    { id: 'planilha', icon: Table, label: 'Planilha' },
+    { id: 'resumo', icon: BarChart3, label: 'Resumo' }
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#FDFCF9] font-sans text-slate-800 pb-20 sm:pb-0">
+      {/* Header Mobile Friendly */}
+      <header className="bg-[#0B0B0B] text-white shadow-lg border-b-4 border-[#31392A] sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="bg-white p-1 rounded-lg h-10 w-10 flex items-center justify-center border border-[#D3E298]">
+               <img src="WhatsApp Image 2026-03-25 at 18.38.24.jpeg" alt="Logo" className="h-full w-auto object-contain" />
+            </div>
+            <h1 className="text-lg font-bold text-[#F8CC82] hidden xs:block">Tribo <span className="text-white opacity-60">Financeiro</span></h1>
+          </div>
+          <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
+             {tabs.map(tab => {
+               const Icon = tab.icon;
+               return (
+                 <button 
+                  key={tab.id} 
+                  onClick={() => setActiveTab(tab.id)} 
+                  className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all ${activeTab === tab.id ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}
+                 >
+                   <Icon size={18} />
+                   <span className="text-[10px] font-bold mt-0.5">{tab.label}</span>
+                 </button>
+               );
+             })}
+             <button onClick={() => setActiveTab('faturas')} className={`p-2 rounded-xl ${activeTab === 'faturas' ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}><CreditCard size={20}/></button>
+             <button onClick={() => setActiveTab('fornecedores')} className={`p-2 rounded-xl ${activeTab === 'fornecedores' ? 'bg-[#31392A] text-[#F8CC82]' : 'text-gray-400'}`}><Truck size={20}/></button>
+          </nav>
+        </div>
+      </header>
+
+      <main className="max-w-[100%] mx-auto px-4 py-6">
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-[#D3E298]">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Saldo Geral</p>
+                <h3 className={`text-lg font-black truncate ${totals.saldo >= 0 ? 'text-[#31392A]' : 'text-red-600'}`}>{formatCurrency(totals.saldo)}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-green-400">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Recebido</p>
+                <h3 className="text-lg font-black text-green-600 truncate">{formatCurrency(totals.entradas)}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-red-400">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Pago</p>
+                <h3 className="text-lg font-black text-slate-800 truncate">{formatCurrency(totals.saidas)}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border shadow-sm border-l-4 border-l-orange-400">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">A Pagar</p>
+                <h3 className="text-lg font-black text-orange-600 truncate">{formatCurrency(totals.contasAPagar)}</h3>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-white p-5 rounded-3xl border shadow-sm">
+                  <h2 className="text-sm font-black text-[#31392A] mb-4 uppercase flex items-center gap-2">Novo Lançamento</h2>
+                  <form onSubmit={handleAddTransaction} className="space-y-4">
+                    <input type="text" required placeholder="Descrição" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={description} onChange={(e)=>setDescription(e.target.value)} />
+                    <select className="w-full px-4 py-3 border rounded-2xl bg-white text-sm font-medium" value={account} onChange={(e)=>setAccount(e.target.value)}>
+                      <optgroup label="Contas">{BANK_ACCOUNTS.map(a=><option key={a} value={a}>{a}</option>)}</optgroup>
+                      <optgroup label="Cartões">{CREDIT_CARDS.map(a=><option key={a} value={a}>{a}</option>)}</optgroup>
+                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="number" step="0.01" required placeholder="R$ 0,00" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none font-bold" value={amount} onChange={(e)=>setAmount(e.target.value)} />
+                      <input type="date" required className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-xs" value={date} onChange={(e)=>setDate(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <select className="w-full px-4 py-2.5 border rounded-2xl text-xs font-bold" value={type} onChange={(e)=>setType(e.target.value)}><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select>
+                      <select className="w-full px-4 py-2.5 border rounded-2xl text-xs font-bold" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="pago">Pago</option><option value="pendente">Pendente</option></select>
+                    </div>
+                    <button type="submit" className="w-full bg-[#31392A] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl active:scale-[0.98] transition-all text-sm uppercase tracking-widest mt-2">Salvar Registo</button>
+                  </form>
+                </div>
+                
+                <div className="bg-[#0B0B0B] p-5 rounded-3xl text-white shadow-2xl">
+                   <h3 className="text-xs font-black text-[#F8CC82] uppercase mb-4 tracking-widest border-b border-[#31392A] pb-2">Resumo por Conta</h3>
+                   <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      {BANK_ACCOUNTS.map(acc => (
+                        <div key={acc} className="flex flex-col border-b border-white/5 pb-1">
+                          <span className="text-[9px] text-gray-500 uppercase">{acc}</span>
+                          <span className={`text-xs font-bold ${totals.balances[acc] >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(totals.balances[acc])}</span>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col h-[550px]">
+                 <div className="p-4 border-b flex justify-between items-center bg-[#FDFCF9]">
+                    <h2 className="font-black text-[#31392A] text-sm uppercase">Histórico</h2>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{transactions.length} Registos</span>
+                 </div>
+                 <div className="flex-1 overflow-y-auto no-scrollbar">
+                    {transactions.length === 0 ? (
+                       <div className="h-full flex items-center justify-center text-slate-300 p-8 text-center"><p className="text-sm">Nenhum lançamento encontrado.</p></div>
+                    ) : (
+                       <div className="divide-y divide-slate-50">
+                         {transactions.map(t => (
+                           <div key={t.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] ${t.type === 'entrada' ? 'bg-[#D3E298]/30 text-[#4c5836]' : 'bg-red-50 text-red-600'}`}>
+                                    {t.type === 'entrada' ? '+' : '-'}
+                                 </div>
+                                 <div>
+                                    <p className="font-bold text-[#31392A] text-sm leading-tight">{t.description}</p>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{formatDate(t.date)} • {t.account}</p>
+                                 </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                 <div className="text-right">
+                                    <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatCurrency(t.amount)}</p>
+                                    <button onClick={()=>toggleStatus(t.id)} className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-600'}`}>{t.status}</button>
+                                 </div>
+                                 <button onClick={()=>deleteTransaction(t.id)} className="text-slate-200 hover:text-red-600 transition-opacity opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
+                              </div>
+                           </div>
+                         ))}
+                       </div>
+                    )}
+                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'planilha' && (
+          <div className="space-y-4">
+             <div className="bg-white p-5 rounded-3xl border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div><h2 className="text-lg font-black text-[#31392A] uppercase">Planilha Diária</h2><p className="text-[10px] text-slate-400 font-bold uppercase">Gestão de caixa por dia</p></div>
+                <input type="month" value={salesMonth} onChange={(e)=>setSalesMonth(e.target.value)} className="border-2 border-[#D3E298] rounded-xl px-4 py-2 font-black text-sm outline-none" />
+             </div>
+             
+             <div className="bg-white rounded-3xl border shadow-xl overflow-x-auto no-scrollbar">
+                <table className="w-full text-[11px] border-collapse min-w-[1000px]">
+                   <thead>
+                      <tr className="bg-[#0B0B0B] text-white">
+                         <th className="p-4 text-left sticky left-0 bg-[#0B0B0B] z-20 border-r border-[#31392A]">Dia</th>
+                         <th className="p-4 bg-[#1A1A1A] text-[#F8CC82] font-black">Total Dia</th>
+                         {['Pix','Pix On','Fiado','Din.','iFood','Déb.','Créd.','VR','Tckt','Alelo'].map(h=><th key={h} className="p-2 font-bold uppercase opacity-70">{h}</th>)}
+                         <th className="p-2 bg-red-600 text-white">Entreg.</th>
+                         <th className="p-2 bg-red-800 text-white">Taxas</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {getDaysInMonth(salesMonth).map(d => {
+                        const r = dailyRecords[d] || {};
+                        const row = calculateDailyRow(d);
+                        return (
+                          <tr key={d} className="hover:bg-slate-50">
+                             <td className="p-3 text-left font-bold text-[#31392A] border-r sticky left-0 bg-white z-10">{formatDate(d)}</td>
+                             <td className="p-3 font-black text-green-700 bg-green-50/50">{formatCurrency(row.rev)}</td>
+                             {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
+                               <td key={f} className="p-0 border-r border-slate-50">
+                                 <input type="text" value={r[f]||''} onChange={(e)=>handleDailyRecordChange(d, f, e.target.value)} className="w-full h-10 text-center bg-transparent border-0 focus:bg-[#D3E298]/20 outline-none text-[11px]" placeholder="0" />
+                               </td>
+                             ))}
+                             {['entregador','taxaEntrega'].map(f => (
+                               <td key={f} className="p-0 border-r border-slate-50 bg-red-50/20">
+                                 <input type="text" value={r[f]||''} onChange={(e)=>handleDailyRecordChange(d, f, e.target.value)} className="w-full h-10 text-center bg-transparent border-0 focus:bg-red-100 outline-none text-red-600 font-bold" placeholder="0" />
+                               </td>
+                             ))}
+                          </tr>
+                        );
+                      })}
+                   </tbody>
+                   <tfoot className="bg-[#1A1A1A] text-white font-black sticky bottom-0 z-20">
+                      <tr>
+                         <td className="p-4 text-left sticky left-0 bg-[#1A1A1A] text-[#F8CC82] uppercase border-r border-[#31392A]">TOTAL MÊS</td>
+                         <td className="p-4 text-[#D3E298] text-sm">{formatCurrency(monthlySpreadsheetTotals.revT)}</td>
+                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
+                           <td key={f} className="p-2 opacity-50 font-medium">{formatCurrency(monthlySpreadsheetTotals[f])}</td>
+                         ))}
+                         <td colSpan="2" className="p-2 text-red-400 text-right pr-6">{formatCurrency(monthlySpreadsheetTotals.expT)}</td>
+                      </tr>
+                   </tfoot>
+                </table>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'resumo' && (
+           <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div className="bg-white p-6 rounded-3xl border shadow-sm text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Entradas Totais</p>
+                    <h3 className="text-2xl font-black text-green-600">{formatCurrency(monthlyStats.rTotal)}</h3>
+                 </div>
+                 <div className="bg-white p-6 rounded-3xl border shadow-sm text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Saídas Totais</p>
+                    <h3 className="text-2xl font-black text-red-600">{formatCurrency(monthlyStats.gMes)}</h3>
+                 </div>
+                 <div className="bg-[#31392A] p-6 rounded-3xl shadow-xl text-center border-b-8 border-b-[#D3E298]">
+                    <p className="text-[10px] font-bold text-[#D3E298] uppercase mb-1">Lucro Estimado</p>
+                    <h3 className={`text-2xl font-black ${monthlyStats.lucro >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(monthlyStats.lucro)}</h3>
+                 </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                 <div className="bg-white p-6 rounded-3xl border">
+                    <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-red-100 rounded-2xl text-red-600"><ShoppingBag size={24}/></div><div><h4 className="font-bold text-[#31392A]">Análise iFood</h4><p className="text-xs text-slate-400">Repasses do mês</p></div></div>
+                    <div className="space-y-4">
+                       <div className="flex justify-between border-b pb-2"><span className="text-slate-500 font-medium">Faturamento:</span><span className="font-black text-[#31392A]">{formatCurrency(monthlyStats.rIfood)}</span></div>
+                       <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Pedidos:</span><input type="number" className="w-20 px-3 py-1.5 border rounded-lg text-center font-bold" value={pedidosIfood} onChange={(e)=>handlePedidosChange('ifood', e.target.value)} /></div>
+                       <div className="bg-red-50 p-4 rounded-2xl flex justify-between items-center mt-4 border border-red-100">
+                          <span className="text-red-800 font-bold">Ticket Médio:</span>
+                          <span className="text-xl font-black text-red-600">{formatCurrency(monthlyStats.tI)}</span>
+                       </div>
+                    </div>
+                 </div>
+                 <div className="bg-white p-6 rounded-3xl border">
+                    <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-[#D3E298]/20 rounded-2xl text-[#31392A]"><Store size={24}/></div><div><h4 className="font-bold text-[#31392A]">Cardápio Direto</h4><p className="text-xs text-slate-400">Balcão e WhatsApp</p></div></div>
+                    <div className="space-y-4">
+                       <div className="flex justify-between border-b pb-2"><span className="text-slate-500 font-medium">Faturamento:</span><span className="font-black text-[#31392A]">{formatCurrency(monthlyStats.rDireto)}</span></div>
+                       <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Pedidos:</span><input type="number" className="w-20 px-3 py-1.5 border rounded-lg text-center font-bold" value={pedidosDireto} onChange={(e)=>handlePedidosChange('direto', e.target.value)} /></div>
+                       <div className="bg-[#D3E298]/10 p-4 rounded-2xl flex justify-between items-center mt-4 border border-[#D3E298]/30">
+                          <span className="text-[#31392A] font-bold">Ticket Médio:</span>
+                          <span className="text-xl font-black text-[#31392A]">{formatCurrency(monthlyStats.tD)}</span>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'faturas' && (
+           <div className="space-y-6">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                 {CREDIT_CARDS.map(c => (
+                   <button key={c} onClick={()=>setSelectedCardView(c)} className={`px-6 py-2.5 rounded-2xl font-black text-xs transition-all whitespace-nowrap shadow-sm ${selectedCardView === c ? 'bg-[#31392A] text-[#F8CC82]' : 'bg-white border text-slate-400'}`}>{c}</button>
+                 ))}
+              </div>
+              <div className="bg-white p-6 rounded-3xl border shadow-sm relative overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-6">
+                 <div className="absolute left-0 top-0 w-2 h-full bg-gradient-to-b from-[#D3E298] to-[#F8CC82]"></div>
+                 <div className="pl-4">
+                    <h2 className="font-black text-[#31392A] uppercase">{selectedCardView}</h2>
+                    <div className="flex items-center gap-3 mt-2">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data Vencimento:</span>
+                       <input type="date" value={invoiceDueDates[selectedCardView] || ''} onChange={(e)=>handleInvoiceDueDateChange(selectedCardView, e.target.value)} className="bg-slate-50 border rounded-lg px-2 py-1 text-xs font-bold outline-none" />
+                    </div>
+                 </div>
+                 <div className="bg-[#F8CC82]/10 px-8 py-4 rounded-2xl border border-[#F8CC82]/30 text-center w-full sm:w-auto">
+                    <p className="text-[10px] font-bold text-[#31392A] opacity-60 uppercase mb-1">Total Fatura</p>
+                    <h3 className="text-3xl font-black text-[#31392A]">{formatCurrency(totals.cardBalances[selectedCardView])}</h3>
+                 </div>
+              </div>
+              <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                 <table className="w-full text-xs">
+                    <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase border-b"><tr><th className="px-6 py-4 text-left">Gasto</th><th className="px-6 py-4 text-right">Valor</th><th className="px-6 py-4 text-center">Status</th></tr></thead>
+                    <tbody className="divide-y divide-slate-50">
+                       {transactions.filter(t => t.account === selectedCardView).map(t => (
+                         <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4"><p className="font-bold text-[#31392A] text-sm">{t.description}</p><p className="text-[9px] text-slate-400 uppercase font-bold">{formatDate(t.date)}</p></td>
+                            <td className="px-6 py-4 text-right font-black text-orange-600">{formatCurrency(t.amount)}</td>
+                            <td className="px-6 py-4 text-center"><button onClick={()=>toggleStatus(t.id)} className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${t.status==='pago'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>{t.status}</button></td>
+                         </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'fornecedores' && (
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 bg-white p-6 rounded-3xl border shadow-sm self-start">
+                 <h2 className="text-sm font-black text-[#31392A] mb-4 uppercase flex items-center gap-2"><Truck size={18} className="text-[#D3E298]"/> Novo Parceiro</h2>
+                 <form onSubmit={handleAddSupplier} className="space-y-4">
+                    <input type="text" required placeholder="Nome / Empresa" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierName} onChange={(e)=>setSupplierName(e.target.value)} />
+                    <input type="text" placeholder="Tipo (Carnes, Pão, etc.)" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierCategory} onChange={(e)=>setSupplierCategory(e.target.value)} />
+                    <input type="text" placeholder="Telemóvel / WhatsApp" className="w-full px-4 py-3 border rounded-2xl bg-slate-50 outline-none text-sm" value={supplierPhone} onChange={(e)=>setSupplierPhone(e.target.value)} />
+                    <button type="submit" className="w-full bg-[#31392A] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest">Adicionar Fornecedor</button>
+                 </form>
+              </div>
+              <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col h-[500px]">
+                 <div className="p-4 bg-slate-50 border-b font-black text-[10px] text-[#31392A] uppercase tracking-widest flex justify-between"><span>Meus Fornecedores</span><span>{suppliers.length} Parceiros</span></div>
+                 <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {suppliers.map(s => (
+                       <div key={s.id} className="p-4 bg-white border-2 border-slate-100 rounded-2xl flex justify-between items-center group relative hover:border-[#D3E298] transition-colors">
+                          <div className="absolute left-0 top-0 w-1.5 h-full bg-[#D3E298]"></div>
+                          <div>
+                             <p className="font-bold text-[#31392A] text-sm leading-tight uppercase">{s.name}</p>
+                             <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-tight">{s.category || 'Geral'} • {s.phone || 'Sem contacto'}</p>
+                          </div>
+                          <button onClick={()=>deleteSupplier(s.id)} className="text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+           </div>
+        )}
+      </main>
+    </div>
+  );
+}
