@@ -654,4 +654,32 @@
                                     <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Gerir Contas</h2>
                                     <div className="flex gap-2 mb-6">
                                         <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Novo Banco" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
-                                        <button onClick={() => addItem('accounts')} className="bg-[#1A202C] text-[#F8CC82] p
+                                        <button onClick={() => addItem('accounts')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    </div>
+                                    <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span>{a.name}</span><button onClick={() => removeItem('accounts', a.id)} className="text-red-300"><Icon name="trash-2" size={14} /></button></div>))}</div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias</h2>
+                                    <div className="flex gap-2 mb-6">
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Carne" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <button onClick={() => addItem('categories')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    </div>
+                                    <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span>{c.name}</span><button onClick={() => removeItem('categories', c.id)} className="text-red-300"><Icon name="trash-2" size={14} /></button></div>))}</div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-12 text-center flex flex-col items-center gap-4">
+                        <img src="logo.png" className="h-10 opacity-30 grayscale hover:opacity-100 hover:grayscale-0 transition-all" alt="Logo" />
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.6</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
