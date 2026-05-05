@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v5.0</title>
+    <title>Tribo Burger | Gestão Total v5.1</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -25,7 +25,7 @@
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* Estilos Excel para Planilha de Vendas (Conforme imagem) */
+        /* Estilos Excel para Planilha de Vendas */
         .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
         .table-input:focus { background-color: rgba(255, 255, 255, 0.8); }
         
@@ -48,7 +48,7 @@
 
     <div id="root"></div>
 
-    <!-- Firebase Compat SDKs (Necessários para HTML único) -->
+    <!-- Firebase Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -74,8 +74,9 @@
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
 
-        const ACCOUNTS = ['Mercado Pago', 'C6 Bank', 'Caixa Loja', 'Fundo Aluguer', 'Fundo C6', 'iFood'];
-        const CATEGORIES = ['CMV Insumos', 'CMV Bebidas', 'Salários', 'Aluguer/Luz', 'Marketing', 'Manutenção', 'Outros'];
+        // Padrões iniciais caso o usuário não tenha nada cadastrado
+        const DEFAULT_ACCOUNTS = ['Mercado Pago', 'C6 Bank', 'Caixa Loja'];
+        const DEFAULT_CATEGORIES = ['CMV Insumos', 'CMV Bebidas', 'Salários', 'Aluguer/Luz', 'Marketing', 'Outros'];
 
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
@@ -96,17 +97,22 @@
             // Data
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
+            const [accounts, setAccounts] = useState([]);
+            const [categories, setCategories] = useState([]);
             
             // Form
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida');
-            const [account, setAccount] = useState(ACCOUNTS[0]);
-            const [cat, setCat] = useState(CATEGORIES[0]);
+            const [account, setAccount] = useState('');
+            const [cat, setCat] = useState('');
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [clearance, setClearance] = useState(new Date().toISOString().split('T')[0]);
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [newDay, setNewDay] = useState(new Date().toISOString().split('T')[0]);
+
+            // Form Ajustes
+            const [newItemName, setNewItemName] = useState('');
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged((u) => {
@@ -120,9 +126,11 @@
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
 
+                // Sincronizar Transações
                 const unsubTx = db.collection(`${path}/transactions`)
                     .onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
                 
+                // Sincronizar Vendas Diárias
                 const unsubDaily = db.collection(`${path}/dailyRecords`)
                     .onSnapshot(snap => {
                         const recs = {}; 
@@ -130,7 +138,31 @@
                         setDailyRecords(recs);
                     });
 
-                return () => { unsubTx(); unsubDaily(); };
+                // Sincronizar Contas
+                const unsubAccounts = db.collection(`${path}/accounts`)
+                    .onSnapshot(snap => {
+                        if (snap.empty) {
+                            DEFAULT_ACCOUNTS.forEach(name => db.collection(`${path}/accounts`).add({ name }));
+                        } else {
+                            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                            setAccounts(list);
+                            if (!account && list.length > 0) setAccount(list[0].name);
+                        }
+                    });
+
+                // Sincronizar Categorias
+                const unsubCategories = db.collection(`${path}/categories`)
+                    .onSnapshot(snap => {
+                        if (snap.empty) {
+                            DEFAULT_CATEGORIES.forEach(name => db.collection(`${path}/categories`).add({ name }));
+                        } else {
+                            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                            setCategories(list);
+                            if (!cat && list.length > 0) setCat(list[0].name);
+                        }
+                    });
+
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); };
             }, [user]);
 
             const handleAuth = async (e) => {
@@ -162,10 +194,23 @@
                 await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true });
             };
 
+            const addItem = async (collectionName) => {
+                if (!newItemName) return;
+                const path = `artifacts/${appId}/users/${user.uid}/${collectionName}`;
+                await db.collection(path).add({ name: newItemName });
+                setNewItemName('');
+            };
+
+            const removeItem = async (collectionName, id) => {
+                if (!confirm("Tem certeza que deseja remover este item?")) return;
+                const path = `artifacts/${appId}/users/${user.uid}/${collectionName}`;
+                await db.doc(`${path}/${id}`).delete();
+            };
+
             const exportCSV = () => {
                 if (transactions.length === 0) return;
-                const headers = ["Data", "Descricao", "Valor", "Tipo", "Conta", "Compensacao"];
-                const rows = transactions.map(t => [t.date, t.description.replace(/,/g, ' '), t.amount, t.type, t.account, t.clearanceDate]);
+                const headers = ["Data", "Descricao", "Valor", "Tipo", "Conta", "Categoria", "Compensacao"];
+                const rows = transactions.map(t => [t.date, t.description.replace(/,/g, ' '), t.amount, t.type, t.account, t.category, t.clearanceDate]);
                 const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
@@ -198,7 +243,7 @@
                 <div className="h-screen flex items-center justify-center bg-[#1A202C]">
                     <div className="text-center">
                         <div className="w-12 h-12 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-[#F8CC82] font-black uppercase text-[10px] tracking-widest">A carregar Tribo Burger...</p>
+                        <p className="text-[#F8CC82] font-black uppercase text-[10px] tracking-widest">Tribo Burger...</p>
                     </div>
                 </div>
             );
@@ -209,18 +254,17 @@
                         <div className="text-center mb-8">
                             <img src="logo.png" className="w-24 mx-auto mb-4 drop-shadow-lg" alt="Logo" onerror="this.src='https://via.placeholder.com/150?text=TRIBO'" />
                             <h2 className="text-2xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Financeiro</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Administração</p>
                         </div>
                         <form onSubmit={handleAuth} className="space-y-4">
-                            <input type="email" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm outline-none focus:border-[#D97757]" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-                            <input type="password" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm outline-none focus:border-[#D97757]" placeholder="Palavra-passe" value={password} onChange={e => setPassword(e.target.value)} />
+                            <input type="email" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm outline-none" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+                            <input type="password" required className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm outline-none" placeholder="Palavra-passe" value={password} onChange={e => setPassword(e.target.value)} />
                             {authError && <p className="text-red-500 text-[10px] font-bold text-center uppercase">{authError}</p>}
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs tracking-widest transition-transform active:scale-95">
-                                {isRegistering ? 'Criar Conta' : 'Entrar'}
+                            <button className="w-full bg-[#1A202C] text-[#F8CC82] font-black py-4 rounded-2xl shadow-xl uppercase text-xs">
+                                {isRegistering ? 'Registar' : 'Entrar'}
                             </button>
                         </form>
-                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-[10px] font-black text-[#D97757] uppercase tracking-widest">
-                            {isRegistering ? 'Já tenho conta' : 'Novo Utilizador'}
+                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-[10px] font-black text-[#D97757] uppercase">
+                            {isRegistering ? 'Voltar ao Login' : 'Novo Utilizador'}
                         </button>
                     </div>
                 </div>
@@ -236,8 +280,10 @@
                                 <div><h1 className="text-xl font-black text-[#F8CC82] uppercase leading-none tracking-tighter">Tribo Burger</h1><p className="text-[9px] opacity-50 uppercase mt-1">{user.email}</p></div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar w-full md:w-auto">
-                                {['dashboard', 'planilha', 'resultados', 'dre'].map(tab => (
-                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'tab-active' : ''}`}>{tab}</button>
+                                {['dashboard', 'planilha', 'resultados', 'dre', 'ajustes'].map(tab => (
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'tab-active' : ''}`}>
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'resultados' ? 'BI' : tab}
+                                    </button>
                                 ))}
                                 <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black uppercase text-red-400">Sair</button>
                             </nav>
@@ -249,44 +295,45 @@
                             <div className="space-y-6">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-green-500 shadow-sm text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">Receita Bruta</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Mês</p>
                                         <h3 className="text-xl font-black text-slate-800">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.rb)}</h3>
                                     </div>
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-red-500 shadow-sm text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">Custos Totais</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custos Mês</p>
                                         <h3 className="text-xl font-black text-slate-800">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.custos)}</h3>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4">
-                                        <div className="flex justify-between items-center border-b pb-3"><h2 className="text-xs font-black uppercase text-[#1A202C]">Registo Manual</h2><button type="button" onClick={exportCSV} className="text-slate-300 hover:text-green-600"><Icon name="download" size={16} /></button></div>
-                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-[#D97757] rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        <div className="flex justify-between items-center border-b pb-3"><h2 className="text-xs font-black uppercase text-[#1A202C]">Novo Lançamento</h2><button type="button" onClick={exportCSV} className="text-slate-300 hover:text-green-600"><Icon name="download" size={16} /></button></div>
+                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-[#D97757] rounded-2xl text-sm font-bold outline-none transition-all" value={desc} onChange={e => setDesc(e.target.value)} />
                                         <div className="grid grid-cols-2 gap-3">
                                             <input type="number" step="0.01" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none" value={account} onChange={e => setAccount(e.target.value)}>{ACCOUNTS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400">Data Gasto</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
                                         </div>
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                         <div className="flex gap-2">
                                             <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[10px] ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>ENTRADA</button>
                                             <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl font-black text-[10px] ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>SAÍDA</button>
                                         </div>
-                                        <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Gravar no Sistema</button>
+                                        <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-transform active:scale-95">Gravar no Sistema</button>
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
-                                        <div className="p-5 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex justify-between"><span>Histórico Recente</span><span>{transactions.length} itens</span></div>
+                                        <div className="p-5 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex justify-between tracking-widest"><span>Histórico Recente</span><span>{transactions.length} itens</span></div>
                                         <div className="flex-1 overflow-y-auto divide-y no-scrollbar">
                                             {transactions.map(t => (
-                                                <div key={t.id} className="p-5 flex justify-between items-center group hover:bg-slate-50">
+                                                <div key={t.id} className="p-5 flex justify-between items-center group hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600'}`}>{t.type === 'entrada' ? 'IN' : 'OUT'}</div>
                                                         <div><p className="font-black text-sm text-[#1A202C] uppercase leading-tight">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p></div>
                                                     </div>
-                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.amount)}</p><button onClick={() => {if(confirm("Eliminar?")) db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete();}} className="text-red-300 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={16}/></button></div>
+                                                    <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={16}/></button></div>
                                                 </div>
                                             ))}
                                         </div>
@@ -298,7 +345,7 @@
                         {activeTab === 'planilha' && (
                             <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden">
                                 <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest text-center">Planilha de Vendas Estilo Excel</h2>
+                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest">Planilha de Vendas Estilo Excel</h2>
                                     <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border shadow-inner">
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2" />
                                         <div className="w-px h-6 bg-slate-100 mx-1"></div>
@@ -315,7 +362,7 @@
                                                 <th className="p-3 header-black sticky left-0 z-20">Dias / Datas</th>
                                                 <th className="p-3 header-black">Total Dia:</th>
                                                 {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-3 header-green">{h}</th>)}
-                                                <th className="p-3 header-red">Entregador Diária</th><th className="p-3 header-red">Taxa Entregas</th><th className="p-3 header-black">Ações</th>
+                                                <th className="p-3 header-red">Motoboy Diária</th><th className="p-3 header-red">Taxa iFood</th><th className="p-3 header-black">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="font-bold divide-y divide-slate-200">
@@ -324,15 +371,15 @@
                                                 const totalIn = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + (parseFloat(r[f]) || 0), 0);
                                                 const update = (f, v) => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v.replace(/[^0-9.]/g, '') }, { merge: true });
                                                 return (
-                                                    <tr key={d} className="h-12">
+                                                    <tr key={d} className="h-12 hover:bg-slate-50 transition-colors">
                                                         <td className="p-3 text-left sticky left-0 bg-white font-black text-slate-500 border-r uppercase text-[10px] z-10 w-48">{new Date(d + 'T00:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'short' })}</td>
-                                                        <td className="p-3 bg-slate-50 border-r text-[#1A202C] text-xs">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalIn)}</td>
+                                                        <td className="p-3 bg-slate-50 border-r text-[#1A202C]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalIn)}</td>
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
                                                             <td key={f} className="p-0 cell-green"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>
                                                         ))}
                                                         <td className="p-0 cell-red"><input className="table-input" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)} placeholder="0,00"/></td>
                                                         <td className="p-0 cell-red"><input className="table-input" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)} placeholder="0,00"/></td>
-                                                        <td className="p-3 cell-white"><button onClick={() => {if(confirm("Apagar?")) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete();}} className="text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
+                                                        <td className="p-3 cell-white"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
                                                     </tr>
                                                 );
                                             })}
@@ -347,13 +394,13 @@
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-b-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Líquido Mensal</p><h3 className={`text-4xl font-black ${stats.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.lucro)}</h3></div>
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-b-8 border-[#D97757]"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Margem Bruta</p><h3 className="text-4xl font-black text-[#1A202C]">{stats.rb > 0 ? ((stats.lucro / stats.rb) * 100).toFixed(1) : 0}%</h3></div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-b-8 border-orange-400"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Venda iFood</p><h3 className="text-4xl font-black text-[#1A202C]">{stats.rb > 0 ? ((stats.ifood / stats.rb) * 100).toFixed(0) : 0}%</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-b-8 border-orange-400"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Dependência iFood</p><h3 className="text-4xl font-black text-[#1A202C]">{stats.rb > 0 ? ((stats.ifood / stats.rb) * 100).toFixed(0) : 0}%</h3></div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'dre' && (
-                            <div className="max-w-2xl mx-auto py-10">
+                            <div className="max-w-2xl mx-auto py-10 animate-in fade-in duration-500">
                                 <div className="glass-card rounded-[3rem] shadow-2xl overflow-hidden bg-white p-10 space-y-6 border-t-8 border-[#D97757]">
                                     <h2 className="text-2xl font-black uppercase text-center border-b pb-6">DRE Mensal</h2>
                                     <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl font-black border border-green-100"><span className="uppercase text-[10px] tracking-widest text-green-800">(=) RECEITA BRUTA</span><span className="text-green-700 text-2xl">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.rb)}</span></div>
@@ -362,11 +409,46 @@
                                 </div>
                             </div>
                         )}
+
+                        {activeTab === 'ajustes' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" /> Gerir Contas</h2>
+                                    <div className="flex gap-2 mb-6">
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome da Conta (ex: Banco X)" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <button onClick={() => addItem('accounts')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {accounts.map(a => (
+                                            <div key={a.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl">
+                                                <span className="text-xs font-bold uppercase">{a.name}</span>
+                                                <button onClick={() => removeItem('accounts', a.id)} className="text-red-300 hover:text-red-500"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" /> Gerir Categorias</h2>
+                                    <div className="flex gap-2 mb-6">
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nova Categoria" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <button onClick={() => addItem('categories')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {categories.map(c => (
+                                            <div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl">
+                                                <span className="text-xs font-bold uppercase">{c.name}</span>
+                                                <button onClick={() => removeItem('categories', c.id)} className="text-red-300 hover:text-red-500"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4">
                         <img src="logo.png" className="h-10 opacity-30 grayscale" alt="Logo" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.0</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.1</p>
                     </footer>
                 </div>
             );
