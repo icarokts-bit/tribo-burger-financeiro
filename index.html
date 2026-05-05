@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v5.9</title>
+    <title>Tribo Burger | Gestão Total v6.0</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -713,17 +713,30 @@
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise do Mês: {filterMonth}</p>
                                             </div>
                                         </div>
+                                        {/* NOVO SELETOR DE MÊS NA ABA DE CONSULTORIA */}
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês da Análise:</span>
+                                            <input 
+                                                type="month" 
+                                                value={filterMonth} 
+                                                onChange={e => {
+                                                    setFilterMonth(e.target.value);
+                                                    setAiResponse(''); // Reseta resposta ao mudar mês para evitar confusão
+                                                }} 
+                                                className="bg-[#FDFCF9] border border-slate-200 rounded-xl px-3 py-2 outline-none font-black text-[#D97757] text-xs shadow-inner cursor-pointer" 
+                                            />
+                                        </div>
                                     </div>
 
                                     {!aiResponse && !aiLoading && (
                                         <div className="text-center py-12 space-y-6">
                                             <div className="max-w-md mx-auto p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-center">
                                                 <p className="text-sm font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
-                                                    Analise as suas vendas e custos para encontrar pontos de melhoria.
+                                                    Vou analisar as vendas e custos de <strong>{new Date(filterMonth + "-02").toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</strong> para encontrar pontos de melhoria.
                                                 </p>
                                             </div>
                                             <button onClick={askAiConsultant} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center gap-3 mx-auto">
-                                                Analisar Agora <Icon name="chevron-right" size={16}/>
+                                                Analisar Financeiro <Icon name="chevron-right" size={16}/>
                                             </button>
                                         </div>
                                     )}
@@ -731,7 +744,7 @@
                                     {aiLoading && (
                                         <div className="text-center py-20 space-y-4">
                                             <div className="w-16 h-16 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">A analisar a Tribo...</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">A analisar os dados da Tribo em {filterMonth}...</p>
                                         </div>
                                     )}
 
@@ -785,7 +798,7 @@
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale hover:opacity-100 hover:grayscale-0 transition-all" alt="Logo" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v5.9</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.0</p>
                     </footer>
                 </div>
             );
