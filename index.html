@@ -188,6 +188,12 @@
                 }
             };
 
+            const parseMoney = (v) => {
+                if (typeof v !== 'string') return v;
+                // Troca vírgula por ponto para o parseFloat entender
+                return parseFloat(v.replace(',', '.')) || 0;
+            };
+
             const saveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
@@ -196,7 +202,7 @@
                 const id = editingId || Date.now().toString();
                 const payload = {
                     description: type === 'transferencia' ? `Transferência: ${account} → ${targetAccount}` : desc,
-                    amount: parseFloat(val),
+                    amount: parseMoney(val),
                     type,
                     date,
                     clearanceDate: clearance,
@@ -227,7 +233,7 @@
             const startEdit = (t) => {
                 setEditingId(t.id);
                 setDesc(t.description);
-                setVal(t.amount);
+                setVal(t.amount.toString().replace('.', ','));
                 setType(t.type);
                 setAccount(t.account);
                 setCat(t.category);
@@ -476,7 +482,7 @@
                                             <div className="space-y-4">
                                                 <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <input type="number" step="0.01" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
+                                                    <input type="text" placeholder="0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
                                                     <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name} {a.type === 'cartao' ? '(💳)' : ''}</option>)}</select>
                                                 </div>
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
@@ -499,7 +505,7 @@
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Montante</label>
-                                                    <input type="number" step="0.01" placeholder="0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg" value={val} onChange={e => setVal(e.target.value)} />
+                                                    <input type="text" placeholder="0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg" value={val} onChange={e => setVal(e.target.value)} />
                                                 </div>
                                             </div>
                                         )}
@@ -586,16 +592,41 @@
                                             {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => {
                                                 const r = dailyRecords[d] || {};
                                                 const totalIn = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + (parseFloat(r[f]) || 0), 0);
-                                                const update = (f, v) => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v.replace(/[^0-9.]/g, '') }, { merge: true });
+                                                const update = (f, v) => {
+                                                    // Troca vírgula por ponto e limpa caracteres não numéricos exceto ponto decimal
+                                                    const cleanValue = v.replace(',', '.').replace(/[^0-9.]/g, '');
+                                                    db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: cleanValue }, { merge: true });
+                                                };
                                                 return (
                                                     <tr key={d} className="h-12 hover:bg-slate-50 transition-colors">
                                                         <td className="p-3 text-left sticky left-0 bg-white font-black text-slate-500 border-r uppercase text-[10px] z-10 w-48">{new Date(d + 'T00:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'short' })}</td>
                                                         <td className="p-3 bg-slate-50 border-r text-[#1A202C]">{formatMoney(totalIn)}</td>
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                            <td key={f} className="p-0 cell-green"><input className="table-input" value={r[f]||''} onChange={e => update(f, e.target.value)} placeholder="0,00"/></td>
+                                                            <td key={f} className="p-0 cell-green">
+                                                                <input 
+                                                                    className="table-input" 
+                                                                    value={r[f] ? r[f].toString().replace('.', ',') : ''} 
+                                                                    onChange={e => update(f, e.target.value)} 
+                                                                    placeholder="0,00"
+                                                                />
+                                                            </td>
                                                         ))}
-                                                        <td className="p-0 cell-red"><input className="table-input" value={r.motoboy||''} onChange={e => update('motoboy', e.target.value)} placeholder="0,00"/></td>
-                                                        <td className="p-0 cell-red"><input className="table-input" value={r.taxaEntrega||''} onChange={e => update('taxaEntrega', e.target.value)} placeholder="0,00"/></td>
+                                                        <td className="p-0 cell-red">
+                                                            <input 
+                                                                className="table-input" 
+                                                                value={r.motoboy ? r.motoboy.toString().replace('.', ',') : ''} 
+                                                                onChange={e => update('motoboy', e.target.value)} 
+                                                                placeholder="0,00"
+                                                            />
+                                                        </td>
+                                                        <td className="p-0 cell-red">
+                                                            <input 
+                                                                className="table-input" 
+                                                                value={r.taxaEntrega ? r.taxaEntrega.toString().replace('.', ',') : ''} 
+                                                                onChange={e => update('taxaEntrega', e.target.value)} 
+                                                                placeholder="0,00"
+                                                            />
+                                                        </td>
                                                         <td className="p-3 cell-white"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
                                                     </tr>
                                                 );
@@ -713,7 +744,6 @@
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise do Mês: {filterMonth}</p>
                                             </div>
                                         </div>
-                                        {/* NOVO SELETOR DE MÊS NA ABA DE CONSULTORIA */}
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês da Análise:</span>
                                             <input 
@@ -721,7 +751,7 @@
                                                 value={filterMonth} 
                                                 onChange={e => {
                                                     setFilterMonth(e.target.value);
-                                                    setAiResponse(''); // Reseta resposta ao mudar mês para evitar confusão
+                                                    setAiResponse(''); 
                                                 }} 
                                                 className="bg-[#FDFCF9] border border-slate-200 rounded-xl px-3 py-2 outline-none font-black text-[#D97757] text-xs shadow-inner cursor-pointer" 
                                             />
