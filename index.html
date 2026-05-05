@@ -301,7 +301,7 @@
                 });
 
                 const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
-                return { rb, variableCosts, costsByCategory, totalOperating, lucro: rb - (variableCosts + totalOperating), dailyCounts };
+                return { rb, variableCosts, costsByCategory, totalOperating, lucro: rb - (variableCosts + totalOperating), dailyCounts, channelRevenue };
             }, [transactions, dailyRecords, filterMonth, categories]);
 
             const creditInvoices = useMemo(() => {
@@ -452,6 +452,121 @@
                             </div>
                         )}
 
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-10 animate-in zoom-in duration-500 py-10">
+                                <div className="flex justify-center">
+                                    <div className="glass-card px-6 py-3 rounded-full flex items-center gap-4 shadow-md border-2 border-[#F8CC82]/30">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mês em Análise:</span>
+                                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-green-500">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido</p>
+                                        <h3 className={`text-3xl font-black ${stats.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3>
+                                    </div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-[#D97757]">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Margem Real</p>
+                                        <h3 className="text-3xl font-black text-[#1A202C]">{stats.rb > 0 ? ((stats.lucro / stats.rb) * 100).toFixed(1) : 0}%</h3>
+                                    </div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-blue-400">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Ticket Médio / Dia</p>
+                                        <h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.dailyCounts > 0 ? stats.rb / stats.dailyCounts : 0)}</h3>
+                                    </div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-purple-500">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Dias Operados</p>
+                                        <h3 className="text-3xl font-black text-[#1A202C]">{stats.dailyCounts} <span className="text-xs text-slate-300">dias</span></h3>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                                    <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                        <h4 className="text-xs font-black uppercase text-[#1A202C] mb-8 flex items-center gap-2 border-b pb-4"><Icon name="pie-chart" className="text-[#D97757]"/> Mix de Canais</h4>
+                                        <div className="space-y-6">
+                                            {Object.entries(stats.channelRevenue).map(([name, val]) => {
+                                                const perc = stats.rb > 0 ? (val / stats.rb) * 100 : 0;
+                                                return (
+                                                    <div key={name} className="space-y-2">
+                                                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                                            <span>{name}</span>
+                                                            <span className="text-slate-400">{formatMoney(val)} ({perc.toFixed(0)}%)</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="h-full bg-[#1A202C]" style={{ width: `${perc}%` }}></div></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto py-10 animate-in fade-in duration-500">
+                                <div className="glass-card rounded-[3rem] shadow-2xl overflow-hidden bg-white p-10 space-y-4 border-t-8 border-[#D97757]">
+                                    <div className="text-center mb-8 border-b pb-6 flex justify-between items-center">
+                                        <div className="text-left"><h2 className="text-2xl font-black uppercase tracking-tighter">Relatório DRE</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tribo Burger</p></div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mês Fiscal:</span>
+                                            <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-[#FDFCF9] border border-slate-200 rounded-lg px-2 py-1 outline-none font-black text-[#D97757] text-xs" />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl font-black border border-green-100"><span className="uppercase text-[10px] tracking-widest text-green-800">(=) RECEITA BRUTA</span><span className="text-green-700 text-xl">{formatMoney(stats.rb)}</span></div>
+                                    <div className="flex justify-between items-center px-6 py-3 border-b border-dashed"><span className="text-[10px] font-black text-slate-500 uppercase">(-) Logística / Taxas</span><span className="text-sm font-black text-red-500">{formatMoney(stats.variableCosts)}</span></div>
+                                    <div className="flex justify-between items-center p-5 bg-slate-50 rounded-2xl font-black border"><span className="uppercase text-[10px] tracking-widest">(=) MARGEM DE CONTRIBUIÇÃO</span><span className="text-slate-800 text-lg">{formatMoney(stats.rb - stats.variableCosts)}</span></div>
+                                    <div className="py-4 space-y-1">
+                                        {categories.map(c => {
+                                            const val = stats.costsByCategory[c.name] || 0;
+                                            if (val === 0) return null;
+                                            return (<div key={c.id} className="flex justify-between items-center px-6 py-2 hover:bg-slate-50 rounded-xl transition-colors"><span className="text-[10px] font-bold text-slate-600 uppercase">{c.name}</span><span className="text-sm font-black text-red-400">{formatMoney(val)}</span></div>);
+                                        })}
+                                    </div>
+                                    <div className={`flex justify-between items-center p-8 rounded-[2.5rem] shadow-2xl mt-8 ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">RESULTADO LÍQUIDO</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'faturas' && (
+                            <div className="max-w-4xl mx-auto py-10 space-y-8 animate-in slide-in-from-bottom duration-500">
+                                <div className="flex items-center gap-4 border-b pb-6">
+                                    <div className="bg-orange-500 p-4 rounded-3xl text-white shadow-lg"><Icon name="credit-card" size={32}/></div>
+                                    <div>
+                                        <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Controlo de Faturas</h2>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gastos agendados em cartões de crédito</p>
+                                    </div>
+                                </div>
+
+                                {Object.keys(creditInvoices).length === 0 ? (
+                                    <div className="text-center py-20 glass-card rounded-[3rem]">
+                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum gasto em cartão de crédito registado.</p>
+                                    </div>
+                                ) : (
+                                    Object.keys(creditInvoices).sort((a,b) => b.localeCompare(a)).map(month => (
+                                        <div key={month} className="glass-card rounded-[3rem] overflow-hidden shadow-lg border-l-8 border-orange-400">
+                                            <div className="p-6 bg-slate-50 flex justify-between items-center border-b">
+                                                <h3 className="font-black text-slate-800 uppercase text-sm tracking-widest">Fatura: {new Date(month + "-02").toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</h3>
+                                                <span className="bg-orange-500 text-white px-4 py-1.5 rounded-full font-black text-xs">{formatMoney(creditInvoices[month].total)}</span>
+                                            </div>
+                                            <div className="divide-y divide-slate-100">
+                                                {creditInvoices[month].items.map(t => (
+                                                    <div key={t.id} className="p-5 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center"><Icon name="shopping-cart" size={14} className="text-orange-500"/></div>
+                                                            <div>
+                                                                <p className="font-bold text-sm text-[#1A202C] leading-tight uppercase">{t.description}</p>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase">{t.date.split('-').reverse().join('/')} • {t.account} • {t.category}</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="font-black text-slate-700">{formatMoney(t.amount)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'fornecedores' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg">
@@ -488,6 +603,63 @@
                             </div>
                         )}
 
+                        {activeTab === 'consultoria' && (
+                            <div className="max-w-3xl mx-auto py-10 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card rounded-[3rem] shadow-2xl overflow-hidden bg-white p-10 border-t-8 border-[#F8CC82]">
+                                    <div className="flex items-center justify-between gap-4 mb-8">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-[#1A202C] p-4 rounded-3xl"><Icon name="sparkles" className="text-[#F8CC82]" size={32}/></div>
+                                            <div>
+                                                <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Consultor IA</h2>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise do Mês: {filterMonth}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês da Análise:</span>
+                                            <input 
+                                                type="month" 
+                                                value={filterMonth} 
+                                                onChange={e => {
+                                                    setFilterMonth(e.target.value);
+                                                    setAiResponse(''); 
+                                                }} 
+                                                className="bg-[#FDFCF9] border border-slate-200 rounded-xl px-3 py-2 outline-none font-black text-[#D97757] text-xs shadow-inner cursor-pointer" 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {!aiResponse && !aiLoading && (
+                                        <div className="text-center py-12 space-y-6">
+                                            <div className="max-w-md mx-auto p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                                                <p className="text-sm font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
+                                                    Vou analisar as vendas e custos de <strong>{new Date(filterMonth + "-02").toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</strong> para encontrar pontos de melhoria.
+                                                </p>
+                                            </div>
+                                            <button onClick={askAiConsultant} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center gap-3 mx-auto">
+                                                Analisar Financeiro <Icon name="chevron-right" size={16}/>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {aiLoading && (
+                                        <div className="text-center py-20 space-y-4">
+                                            <div className="w-16 h-16 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">A analisar os dados da Tribo em {filterMonth}...</p>
+                                        </div>
+                                    )}
+
+                                    {aiResponse && (
+                                        <div className="prose-ia fade-in bg-slate-50/50 p-8 rounded-[2rem] border">
+                                            <div dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/### (.*?)\n/g, '<h3>$1</h3>').replace(/(\r\n|\n|\r)/gm, '<br>') }} />
+                                            <button onClick={askAiConsultant} className="mt-8 text-[10px] font-black text-[#D97757] uppercase tracking-widest flex items-center gap-2 hover:underline">
+                                                <Icon name="refresh-cw" size={12}/> Refazer Análise
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'ajustes' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg">
@@ -509,9 +681,6 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {/* Outras Abas omitidas para brevidade, mantidas no código final conforme contexto anterior */}
-                        {activeTab === 'resultados' && <div className="py-10 text-center font-black uppercase text-slate-400">Ver aba Resultados no Dashboard Principal</div>}
                     </main>
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
