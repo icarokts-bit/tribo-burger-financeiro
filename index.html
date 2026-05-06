@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v6.9</title>
+    <title>Tribo Burger | Gestão Total v7.0</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -232,7 +232,7 @@
                             description: `${desc} (${i}/${installments})`,
                             amount: installmentValue,
                             type: 'saida',
-                            status: i === 1 ? 'pago' : 'pendente', // Primeira paga, resto pendente por padrão
+                            status: i === 1 ? 'pago' : 'pendente', 
                             date: installmentDate,
                             clearanceDate: installmentDate,
                             account,
@@ -343,6 +343,7 @@
                 setEditingAccount(acc);
                 setNewItemClosingDay(acc.closingDay || '');
                 setNewItemDueDay(acc.dueDay || '');
+                setNewItemType(acc.type || 'corrente');
             };
 
             const removeItem = async (collectionName, id) => {
@@ -378,7 +379,6 @@
                 return balances;
             }, [transactions, accounts]);
 
-            // Memo para faturas de cartões de crédito
             const creditCardStats = useMemo(() => {
                 const stats = {};
                 const currentMonth = parseInt(filterMonth.split('-')[1]);
@@ -557,7 +557,6 @@
                                             </div>
                                         </div>
 
-                                        {/* Opção de Parcelamento - Apenas para Saída no Cartão */}
                                         {type === 'saida' && isCreditCardSelected && !editingId && (
                                             <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-center justify-between animate-in slide-in-from-top">
                                                 <div className="flex items-center gap-3">
@@ -579,7 +578,6 @@
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
                                         </div>
                                         <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82] hover:bg-black">{editingId ? 'Salvar Edição' : 'Lançar Movimento'}</button>
-                                        {editingId && <button type="button" onClick={resetForm} className="w-full text-[9px] font-black uppercase text-slate-400 text-center">Cancelar</button>}
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
@@ -591,7 +589,7 @@
                                                         <button disabled={t.type === 'transferencia'} onClick={() => togglePaid(t)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${t.type === 'transferencia' ? 'bg-blue-100 text-blue-600' : (t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-white border-2 border-orange-300 text-orange-500')}`}>
                                                             {t.type === 'transferencia' ? <Icon name="repeat" size={16}/> : (t.status === 'pago' ? <Icon name="check" size={16}/> : <Icon name="clock" size={16}/>)}
                                                         </button>
-                                                        <div><p className={`font-black text-sm uppercase leading-tight ${t.status === 'pendente' ? 'text-orange-700' : ''}`}>{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account} {t.destinationAccount && ` → ${t.destinationAccount}`} • {t.category} {t.status === 'pendente' && <span className="text-orange-500 font-black ml-1">• AGUARDANDO</span>}</p></div>
+                                                        <div><p className={`font-black text-sm uppercase leading-tight ${t.status === 'pendente' ? 'text-orange-700' : ''}`}>{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account} {t.destinationAccount && ` → ${t.destinationAccount}`} • {t.category}</p></div>
                                                     </div>
                                                     <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : (t.type === 'transferencia' ? 'text-blue-600' : 'text-slate-800')}`}>{formatMoney(t.amount)}</p><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => startEdit(t)} className="text-slate-300 hover:text-orange-400"><Icon name="edit-3" size={16}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-slate-300 hover:text-red-500"><Icon name="trash-2" size={16}/></button></div></div>
                                                 </div>
@@ -602,48 +600,15 @@
                             </div>
                         )}
 
-                        {activeTab === 'cartoes' && (
-                            <div className="space-y-8 animate-in fade-in duration-500 py-6">
-                                <h2 className="text-xl font-black uppercase tracking-tighter text-[#1A202C] text-center">Faturas dos Cartões de Crédito</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {Object.entries(creditCardStats).length === 0 ? (<div className="col-span-full py-20 text-center glass-card rounded-[3rem]"><Icon name="credit-card" size={48} className="text-slate-200 mb-4" /><p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão cadastrado nos ajustes.</p></div>) : Object.entries(creditCardStats).map(([name, data]) => (
-                                        <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
-                                            <div className="flex justify-between items-start mb-6"><div><h3 className="font-black uppercase text-lg leading-tight">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status: Aberta</p></div><Icon name="credit-card" className="text-slate-300" /></div>
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Fatura Atual (Até Dia {data.closingDay})</span><span className="text-xl font-black text-[#1A202C]">{formatMoney(data.openInvoice)}</span></div>
-                                                <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Lançamentos Futuros</span><span className="text-sm font-black text-slate-400">{formatMoney(data.nextInvoice)}</span></div>
-                                            </div>
-                                            <div className="mt-8 grid grid-cols-2 gap-4 border-t pt-6">
-                                                <div className="bg-slate-50 p-3 rounded-2xl text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fechamento</p><p className="font-black text-sm text-[#D97757]">Dia {data.closingDay}</p></div>
-                                                <div className="bg-slate-50 p-3 rounded-2xl text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Vencimento</p><p className="font-black text-sm text-red-500">Dia {data.dueDay}</p></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'resultados' && (
-                            <div className="space-y-10 animate-in zoom-in duration-500 py-10">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido</p><h3 className={`text-3xl font-black ${stats.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-orange-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pendentes Total</p><h3 className="text-3xl font-black text-orange-600">{formatMoney(stats.pendingTotal)}</h3></div>
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-[#1A202C]"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">CMV Total</p><h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.cmv)}</h3></div>
-                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-purple-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Receita Bruta</p><h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.rb)}</h3></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Abas Planilha, DRE, Fornecedores e Consultoria mantidas conforme v6.8... */}
                         {activeTab === 'planilha' && (
                             <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden">
                                 <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest flex items-center gap-2"><Icon name="table" size={16}/> Lançamento de Vendas Diárias</h2>
+                                    <h2 className="font-black text-[#1A202C] uppercase text-sm tracking-widest flex items-center gap-2"><Icon name="table" size={16}/> Vendas Diárias</h2>
                                     <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border">
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2" />
                                         <div className="flex items-center gap-2">
                                             <input type="date" className="text-xs font-black border-0 outline-none" value={newDay} onChange={e => setNewDay(e.target.value)} />
-                                            <button onClick={openDay} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1.5 rounded-xl text-[10px] font-black uppercase">Abrir Dia</button>
+                                            <button onClick={openDay} className="bg-[#1A202C] text-[#F8CC82] px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">Abrir Dia</button>
                                         </div>
                                     </div>
                                 </div>
@@ -671,53 +636,142 @@
                             </div>
                         )}
 
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-8 animate-in fade-in duration-500 py-6">
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-[#1A202C] text-center">Faturas dos Cartões</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {Object.entries(creditCardStats).length === 0 ? (<div className="col-span-full py-20 text-center glass-card rounded-[3rem]"><Icon name="credit-card" size={48} className="text-slate-200 mb-4" /><p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão cadastrado.</p></div>) : Object.entries(creditCardStats).map(([name, data]) => (
+                                        <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
+                                            <div className="flex justify-between items-start mb-6"><div><h3 className="font-black uppercase text-lg leading-tight">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status: Aberta</p></div><Icon name="credit-card" className="text-slate-300" /></div>
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Fatura Atual (Até {data.closingDay})</span><span className="text-xl font-black text-[#1A202C]">{formatMoney(data.openInvoice)}</span></div>
+                                                <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Lançamentos Futuros</span><span className="text-sm font-black text-slate-400">{formatMoney(data.nextInvoice)}</span></div>
+                                            </div>
+                                            <div className="mt-8 grid grid-cols-2 gap-4 border-t pt-6">
+                                                <div className="bg-slate-50 p-3 rounded-2xl text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fechamento</p><p className="font-black text-sm text-[#D97757]">Dia {data.closingDay}</p></div>
+                                                <div className="bg-slate-50 p-3 rounded-2xl text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Vencimento</p><p className="font-black text-sm text-red-500">Dia {data.dueDay}</p></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-10 animate-in zoom-in duration-500 py-10">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lucro Líquido</p><h3 className={`text-3xl font-black ${stats.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-orange-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pendentes Total</p><h3 className="text-3xl font-black text-orange-600">{formatMoney(stats.pendingTotal)}</h3></div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-[#1A202C]"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">CMV Total</p><h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.cmv)}</h3></div>
+                                    <div className="glass-card p-8 rounded-[2.5rem] shadow-xl border-b-8 border-purple-500"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Receita Bruta</p><h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.rb)}</h3></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto py-10 animate-in fade-in duration-500">
+                                <div className="glass-card rounded-[3rem] shadow-2xl bg-white p-10 border-t-8 border-[#D97757]">
+                                    <h2 className="text-xl font-black uppercase tracking-tighter mb-8 border-b pb-4">Demonstração de Resultados (Mês Selecionado)</h2>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between p-4 bg-green-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-green-800">(+) RECEITA BRUTA</span><span className="font-black text-green-700">{formatMoney(stats.rb)}</span></div>
+                                        <div className="flex justify-between p-4 bg-red-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-red-800">(-) CUSTOS LOGÍSTICOS (ENTREGA)</span><span className="font-black text-red-700">{formatMoney(stats.variableCostsPlanilha)}</span></div>
+                                        <div className="py-4 border-b">
+                                            {categories.map(c => {
+                                                const val = stats.costsByCategory[c.name] || 0;
+                                                return val > 0 ? (<div key={c.id} className="flex justify-between px-4 py-2 hover:bg-slate-50"><span className="text-[10px] font-bold text-slate-600 uppercase">(-) {c.name}</span><span className="text-sm font-black text-red-400">{formatMoney(val)}</span></div>) : null;
+                                            })}
+                                        </div>
+                                        <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">LUCRO/PREJUÍZO (CAIXA)</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'fornecedores' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Registar Fornecedor</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome da Empresa" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Contacto" value={newSupplierContact} onChange={e => setNewSupplierContact(e.target.value)} />
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={newSupplierCat} onChange={e => setNewSupplierCat(e.target.value)}>
+                                            <option value="">Tipo de Insumo</option>
+                                            <option value="Proteínas">Proteínas</option>
+                                            <option value="Hortifruti">Hortifruti</option>
+                                            <option value="Bebidas">Bebidas</option>
+                                            <option value="Embalagens">Embalagens</option>
+                                            <option value="Outros">Outros</option>
+                                        </select>
+                                        <button onClick={() => addItem('suppliers')} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Adicionar Fornecedor</button>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg flex flex-col max-h-[600px]">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6"><Icon name="users" className="text-[#D97757] inline mr-2"/> Meus Fornecedores</h2>
+                                    <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar">
+                                        {suppliers.map(s => (
+                                            <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group">
+                                                <div><p className="text-xs font-black uppercase text-[#1A202C]">{s.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase">{s.category || 'Geral'} • {s.contact || 'Sem contacto'}</p></div>
+                                                <button onClick={() => removeItem('suppliers', s.id)} className="text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'consultoria' && (
+                            <div className="max-w-3xl mx-auto py-10 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card rounded-[3rem] shadow-2xl bg-white p-10 border-t-8 border-[#F8CC82]">
+                                    <div className="flex items-center gap-4 mb-8"><div className="bg-[#1A202C] p-4 rounded-3xl"><Icon name="sparkles" className="text-[#F8CC82]" size={32}/></div><div><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Consultor IA</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise do mês de {filterMonth}</p></div></div>
+                                    {!aiResponse && !aiLoading && (<div className="text-center py-12"><button onClick={askAiConsultant} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl">Analisar Meu Fluxo Agora</button></div>)}
+                                    {aiLoading && <div className="text-center py-20 animate-pulse text-[10px] font-black uppercase text-slate-400 tracking-widest">Estou a calcular o teu lucro e a verificar as pendências...</div>}
+                                    {aiResponse && (<div className="prose-ia bg-slate-50 p-8 rounded-[2rem] border" dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/### (.*?)\n/g, '<h3>$1</h3>').replace(/(\r\n|\n|\r)/gm, '<br>') }} />)}
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'ajustes' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 py-10 animate-in slide-in-from-bottom duration-500">
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg h-fit">
-                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Gestão de Contas e Cartões</h2>
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Gestão de Contas</h2>
                                     
-                                    {/* Formulário de Adição/Edição de Conta */}
                                     <div className="space-y-4 mb-8 p-6 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2">{editingAccount ? `Editando: ${editingAccount.name}` : 'Cadastrar Nova Conta'}</h3>
+                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2">{editingAccount ? `A editar: ${editingAccount.name}` : 'Nova Conta'}</h3>
                                         {!editingAccount && (
                                             <>
                                                 <input type="text" className="w-full p-4 bg-white border rounded-2xl text-xs font-bold outline-none" placeholder="Nome da Conta ou Cartão" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => setNewItemType('corrente')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${newItemType === 'corrente' ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-white border text-slate-400'}`}>Corrente</button>
-                                                    <button onClick={() => setNewItemType('cartao')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${newItemType === 'cartao' ? 'bg-orange-500 text-white shadow-lg' : 'bg-white border text-slate-400'}`}>Cartão de Crédito</button>
+                                                    <button onClick={() => setNewItemType('corrente')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${newItemType === 'corrente' ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-white border text-slate-400'}`}>Corrente</button>
+                                                    <button onClick={() => setNewItemType('cartao')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white shadow-lg' : 'bg-white border text-slate-400'}`}>Cartão</button>
                                                 </div>
                                             </>
                                         )}
                                         
                                         {(newItemType === 'cartao' || editingAccount?.type === 'cartao') && (
                                             <div className="grid grid-cols-2 gap-3 animate-in zoom-in">
-                                                <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Fechamento</label><input type="number" min="1" max="31" className="w-full p-3 bg-white border rounded-xl text-xs font-bold" placeholder="Ex: 5" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /></div>
-                                                <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Vencimento</label><input type="number" min="1" max="31" className="w-full p-3 bg-white border rounded-xl text-xs font-bold" placeholder="Ex: 15" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>
+                                                <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Fechamento</label><input type="number" min="1" max="31" className="w-full p-3 bg-white border rounded-xl text-xs font-bold" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /></div>
+                                                <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Vencimento</label><input type="number" min="1" max="31" className="w-full p-3 bg-white border rounded-xl text-xs font-bold" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>
                                             </div>
                                         )}
 
                                         <div className="flex gap-2 pt-2">
                                             {editingAccount ? (
                                                 <>
-                                                    <button onClick={updateAccountData} className="flex-1 bg-green-600 text-white p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar Alterações</button>
+                                                    <button onClick={updateAccountData} className="flex-1 bg-green-600 text-white p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar</button>
                                                     <button onClick={() => { setEditingAccount(null); setNewItemClosingDay(''); setNewItemDueDay(''); }} className="bg-slate-200 text-slate-600 p-4 rounded-2xl font-black uppercase text-[10px]">X</button>
                                                 </>
                                             ) : (
-                                                <button onClick={() => addItem('accounts')} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg">Adicionar à Lista <Icon name="plus" size={14}/></button>
+                                                <button onClick={() => addItem('accounts')} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Adicionar</button>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* Lista de Contas */}
                                     <div className="space-y-2">
                                         {accounts.map(a => (
-                                            <div key={a.id} className={`flex justify-between items-center p-4 bg-white border rounded-2xl group transition-all ${editingAccount?.id === a.id ? 'ring-2 ring-orange-400' : ''}`}>
+                                            <div key={a.id} className={`flex justify-between items-center p-4 bg-white border rounded-2xl group ${editingAccount?.id === a.id ? 'ring-2 ring-orange-400' : ''}`}>
                                                 <div className="flex items-center gap-3">
                                                     <Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={14} className={a.type === 'cartao' ? 'text-orange-500' : 'text-slate-400'} />
-                                                    <div>
-                                                        <span className="text-xs font-black uppercase text-[#1A202C]">{a.name}</span>
-                                                        {a.type === 'cartao' && <p className="text-[8px] font-bold text-slate-400 uppercase">F: {a.closingDay} | V: {a.dueDay}</p>}
-                                                    </div>
+                                                    <div><span className="text-xs font-black uppercase">{a.name}</span>{a.type === 'cartao' && <p className="text-[8px] font-bold text-slate-400 uppercase">F: {a.closingDay} | V: {a.dueDay}</p>}</div>
                                                 </div>
                                                 <div className="flex gap-3">
                                                     {a.type === 'cartao' && <button onClick={() => startEditAccount(a)} className="text-slate-300 hover:text-orange-500"><Icon name="edit-3" size={14} /></button>}
@@ -729,18 +783,17 @@
                                 </div>
 
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg h-fit">
-                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias de Gasto</h2>
-                                    <div className="flex gap-2 mb-6"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nova Categoria" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><button onClick={() => addItem('categories')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl shadow-lg"><Icon name="plus" /></button></div>
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias</h2>
+                                    <div className="flex gap-2 mb-6"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nova Categoria" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><button onClick={() => addItem('categories')} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button></div>
                                     <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span className="text-xs font-bold uppercase">{c.name}</span><button onClick={() => removeItem('categories', c.id)} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14} /></button></div>))}</div>
                                 </div>
                             </div>
                         )}
-                        {/* Outras abas seguem o padrão de design... */}
                     </main>
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Gestão Estratégica v6.9</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Gestão Estratégica v7.0</p>
                     </footer>
                 </div>
             );
