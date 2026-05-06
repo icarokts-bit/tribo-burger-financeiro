@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v6.6</title>
+    <title>Tribo Burger | Gestão Total v6.7</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -111,9 +111,10 @@
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
+            const [destAccount, setDestAccount] = useState(''); // Para transferências
             const [cat, setCat] = useState('');
             const [supplier, setSupplier] = useState(''); 
-            const [status, setStatus] = useState('pago'); // Novo estado: pago ou pendente
+            const [status, setStatus] = useState('pago'); 
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [clearance, setClearance] = useState(new Date().toISOString().split('T')[0]);
             const [editingId, setEditingId] = useState(null);
@@ -208,14 +209,15 @@
 
                 const id = editingId || Date.now().toString();
                 const payload = {
-                    description: desc,
+                    description: type === 'transferencia' ? `Transf: ${account} para ${destAccount}` : desc,
                     amount: parseMoney(val),
                     type,
-                    status, // Salva se está pago ou pendente
+                    status: type === 'transferencia' ? 'pago' : status, 
                     date,
                     clearanceDate: clearance,
                     account,
-                    category: cat,
+                    destinationAccount: type === 'transferencia' ? destAccount : '',
+                    category: type === 'transferencia' ? 'Transferência Interna' : cat,
                     supplier: supplier || '', 
                     timestamp: new Date().toISOString()
                 };
@@ -228,6 +230,7 @@
                 setDesc(''); setVal(''); setEditingId(null);
                 const defaultAcc = accounts.find(a => a.name === 'Mercado Pago') || accounts[0];
                 setAccount(defaultAcc?.name || ''); 
+                setDestAccount('');
                 setCat(categories[0]?.name || '');
                 setSupplier('');
                 setStatus('pago');
@@ -242,6 +245,7 @@
                 setType(t.type);
                 setStatus(t.status || 'pago');
                 setAccount(t.account);
+                setDestAccount(t.destinationAccount || '');
                 setCat(t.category);
                 setSupplier(t.supplier || '');
                 setDate(t.date);
@@ -284,33 +288,38 @@
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // Memo para histórico de descrições (Auto-complete)
             const uniqueDescriptions = useMemo(() => {
                 const set = new Set(transactions.map(t => t.description));
                 return Array.from(set).filter(d => d && d.length > 1);
             }, [transactions]);
 
-            // Memo para saldos por conta bancária (Apenas itens pagos)
             const accountBalances = useMemo(() => {
                 const balances = {};
                 accounts.forEach(acc => balances[acc.name] = 0);
                 
                 transactions.forEach(t => {
-                    if (t.status !== 'pago') return; // Só afeta o saldo se estiver pago
+                    if (t.status !== 'pago' && t.type !== 'transferencia') return; 
                     const amt = parseFloat(t.amount) || 0;
                     if (t.type === 'entrada') {
                         balances[t.account] = (balances[t.account] || 0) + amt;
                     } else if (t.type === 'saida') {
                         balances[t.account] = (balances[t.account] || 0) - amt;
+                    } else if (t.type === 'transferencia') {
+                        balances[t.account] = (balances[t.account] || 0) - amt;
+                        if (t.destinationAccount) {
+                            balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt;
+                        }
                     }
                 });
                 return balances;
             }, [transactions, accounts]);
 
-            // Memo para lembretes de vencimento
+            // Memo para lembretes de vencimento (Hoje, Atrasados ou AMANHÃ)
             const reminders = useMemo(() => {
-                const today = new Date().toISOString().split('T')[0];
-                return transactions.filter(t => t.type === 'saida' && t.status === 'pendente' && t.date <= today);
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                return transactions.filter(t => t.type === 'saida' && t.status === 'pendente' && t.date <= tomorrowStr);
             }, [transactions]);
 
             const stats = useMemo(() => {
@@ -335,7 +344,7 @@
                         const amount = p(t.amount);
                         if (t.type === 'entrada') {
                             if (t.status === 'pago') rb += amount;
-                        } else {
+                        } else if (t.type === 'saida') {
                             if (t.status === 'pendente') {
                                 pendingTotal += amount;
                             } else {
@@ -418,12 +427,14 @@
                                     <div className="bg-red-50 border-2 border-red-200 p-6 rounded-[2.5rem] shadow-sm animate-in zoom-in duration-300">
                                         <div className="flex items-center gap-3 mb-4">
                                             <Icon name="bell" className="text-red-600 animate-bounce" />
-                                            <h3 className="text-xs font-black uppercase text-red-800 tracking-widest">Atenção: Contas a Vencer / Atrasadas ({reminders.length})</h3>
+                                            <h3 className="text-xs font-black uppercase text-red-800 tracking-widest">Lembrete: Vencendo entre hoje e amanhã ({reminders.length})</h3>
                                         </div>
                                         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
                                             {reminders.map(r => (
                                                 <div key={r.id} className="min-w-[250px] bg-white p-4 rounded-2xl border border-red-100 shadow-sm">
-                                                    <p className="text-[10px] font-black uppercase text-red-600 mb-1">Venceu em {r.date.split('-').reverse().join('/')}</p>
+                                                    <p className={`text-[10px] font-black uppercase mb-1 ${r.date === new Date().toISOString().split('T')[0] ? 'text-orange-500' : 'text-red-600'}`}>
+                                                        {r.date === new Date().toISOString().split('T')[0] ? 'Vence Hoje' : `Vence em ${r.date.split('-').reverse().join('/')}`}
+                                                    </p>
                                                     <p className="font-black text-sm uppercase text-slate-800 truncate">{r.description}</p>
                                                     <div className="flex justify-between items-center mt-3">
                                                         <span className="font-black text-slate-800">{formatMoney(r.amount)}</span>
@@ -435,10 +446,10 @@
                                     </div>
                                 )}
 
-                                {/* Painel de Saldos Bancários (Apenas Dinheiro em Caixa/Pago) */}
+                                {/* Painel de Saldos Bancários */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500">
-                                        <p className="text-[8px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-1">Saldo Líquido Real (Mês)</p>
+                                        <p className="text-[8px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-1">Saldo Realizado (Mês)</p>
                                         <h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3>
                                         <p className="text-[8px] text-slate-400 uppercase mt-2">Pendente: {formatMoney(stats.pendingTotal)}</p>
                                     </div>
@@ -457,35 +468,64 @@
                                     <form onSubmit={saveTx} className={`lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit border-2 transition-all ${editingId ? 'border-orange-400 bg-orange-50/20' : 'border-transparent'}`}>
                                         <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">{editingId ? 'Editar Movimento' : 'Novo Movimento'}</h2>
                                         
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Descrição</label>
-                                            <input type="text" list="desc-history" placeholder="Ex: Carne, Limpeza" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
-                                            <datalist id="desc-history">{uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}</datalist>
+                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl mb-4">
+                                            <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
+                                            <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-sm' : 'text-slate-400'}`}>Saída</button>
+                                            <button type="button" onClick={() => { setType('transferencia'); setStatus('pago'); }} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === 'transferencia' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-400'}`}>Transf.</button>
                                         </div>
+
+                                        {type !== 'transferencia' ? (
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Descrição</label>
+                                                <input type="text" list="desc-history" placeholder="Ex: Carne, Limpeza" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                                <datalist id="desc-history">{uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}</datalist>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest text-center">Transferência entre contas</p>
+                                            </div>
+                                        )}
                                         
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">R$</span><input type="text" placeholder="0,00" required className="w-full p-4 pl-10 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} /></div>
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">{type === 'transferencia' ? 'Origem' : 'Conta'}</label>
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-3">
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={status} onChange={e => setStatus(e.target.value)}>
-                                                <option value="pago">✅ Já Pago</option>
-                                                <option value="pendente">⏳ Pendente / A Vencer</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[10px] ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>ENTRADA</button>
-                                            <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl font-black text-[10px] ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-inner' : 'bg-slate-100 text-slate-400'}`}>SAÍDA</button>
+                                            {type === 'transferencia' ? (
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Destino</label>
+                                                    <select className="w-full p-4 bg-blue-50 border border-blue-200 rounded-2xl font-black text-[10px] outline-none uppercase" value={destAccount} onChange={e => setDestAccount(e.target.value)}>
+                                                        <option value="">Selecionar...</option>
+                                                        {accounts.filter(a => a.name !== account).map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Categoria</label>
+                                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Status</label>
+                                                <select disabled={type === 'transferencia'} className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={status} onChange={e => setStatus(e.target.value)}>
+                                                    <option value="pago">✅ Pago</option>
+                                                    <option value="pendente">⏳ Pendente</option>
+                                                </select>
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Vencimento / Data</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
+                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">{type === 'transferencia' ? 'Data Transf.' : 'Vencimento'}</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
                                         </div>
-                                        <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82] hover:bg-black">{editingId ? 'Confirmar Edição' : 'Gravar Registo'}</button>
+
+                                        <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82] hover:bg-black">{editingId ? 'Confirmar Edição' : 'Gravar Movimento'}</button>
+                                        {editingId && <button type="button" onClick={resetForm} className="w-full text-[9px] font-black uppercase text-slate-400">Cancelar</button>}
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
@@ -494,19 +534,19 @@
                                             {transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (
                                                 <div key={t.id} className={`p-5 flex justify-between items-center group hover:bg-slate-50 transition-colors ${t.status === 'pendente' ? 'bg-orange-50/30' : ''}`}>
                                                     <div className="flex items-center gap-4">
-                                                        <button onClick={() => togglePaid(t)} title={t.status === 'pago' ? "Marcar como pendente" : "Marcar como pago"} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-white border-2 border-orange-300 text-orange-500'}`}>
-                                                            {t.status === 'pago' ? <Icon name="check" size={16}/> : <Icon name="clock" size={16}/>}
+                                                        <button disabled={t.type === 'transferencia'} onClick={() => togglePaid(t)} title={t.status === 'pago' ? "Marcar como pendente" : "Marcar como pago"} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${t.type === 'transferencia' ? 'bg-blue-100 text-blue-600' : (t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-white border-2 border-orange-300 text-orange-500')}`}>
+                                                            {t.type === 'transferencia' ? <Icon name="repeat" size={16}/> : (t.status === 'pago' ? <Icon name="check" size={16}/> : <Icon name="clock" size={16}/>)}
                                                         </button>
                                                         <div>
                                                             <p className={`font-black text-sm uppercase leading-tight ${t.status === 'pendente' ? 'text-orange-700' : ''}`}>{t.description}</p>
                                                             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                                {t.date.split('-').reverse().join('/')} • {t.account} • {t.category} 
+                                                                {t.date.split('-').reverse().join('/')} • {t.account} {t.destinationAccount && ` → ${t.destinationAccount}`} • {t.category} 
                                                                 {t.status === 'pendente' && <span className="text-orange-500 font-black ml-1">• A VENCER</span>}
                                                             </p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-4">
-                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : (t.type === 'transferencia' ? 'text-blue-600' : 'text-slate-800')}`}>{formatMoney(t.amount)}</p>
                                                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => startEdit(t)} className="text-slate-300 hover:text-orange-400"><Icon name="edit-3" size={16}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-slate-300 hover:text-red-500"><Icon name="trash-2" size={16}/></button></div>
                                                     </div>
                                                 </div>
@@ -729,7 +769,7 @@
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.6</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.7</p>
                     </footer>
                 </div>
             );
