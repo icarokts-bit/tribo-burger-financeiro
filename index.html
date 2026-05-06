@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v8.5</title>
+    <title>Tribo Burger | Gestão Total v8.6</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -96,7 +96,8 @@
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
-            const [account, setAccount] = useState('');
+            // Definir Mercado Pago como padrão
+            const [account, setAccount] = useState('Mercado Pago');
             const [destAccount, setDestAccount] = useState(''); 
             const [cat, setCat] = useState('');
             const [status, setStatus] = useState('pago'); 
@@ -134,7 +135,15 @@
                     });
 
                 const unsubAccounts = db.collection(`${path}/accounts`)
-                    .onSnapshot(snap => setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                    .onSnapshot(snap => {
+                        const accs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        setAccounts(accs);
+                        // Garantir que Mercado Pago esteja disponível para ser o padrão, se já existir
+                        if (accs.length > 0 && !account) {
+                           const hasMP = accs.find(a => a.name === 'Mercado Pago');
+                           if (hasMP) setAccount('Mercado Pago');
+                        }
+                    });
 
                 const unsubCategories = db.collection(`${path}/categories`)
                     .onSnapshot(snap => setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -189,7 +198,7 @@
                 const todayStr = today.toLocaleDateString('en-CA');
                 
                 const limit = new Date();
-                limit.setDate(limit.getDate() + 2); // Definir limite de 2 dias à frente
+                limit.setDate(limit.getDate() + 2); 
                 const limitStr = limit.toLocaleDateString('en-CA');
                 
                 return transactions.filter(t => 
@@ -262,7 +271,7 @@
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.5</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.6</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
@@ -278,7 +287,7 @@
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
-                                {/* ALERTA DE VENCIMENTO PRÓXIMO COM BOTÃO PAGO */}
+                                {/* Alerta Próximo Vencimento */}
                                 {upcomingAlerts.length > 0 && (
                                     <div className="bg-white border-2 border-red-500 p-6 rounded-[2.5rem] alert-pulse shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
                                         <div className="flex items-center gap-4">
@@ -295,11 +304,7 @@
                                                         <span className="text-red-700 uppercase leading-none">{a.description}</span>
                                                         <span className="text-slate-800 mt-1">{formatMoney(a.amount)}</span>
                                                     </div>
-                                                    <button 
-                                                        onClick={() => markAsPaid(a)}
-                                                        title="Marcar como Pago"
-                                                        className="w-10 h-10 bg-green-500 text-white rounded-lg flex items-center justify-center hover:bg-green-600 active:scale-90 transition-all shadow-md"
-                                                    >
+                                                    <button onClick={() => markAsPaid(a)} className="w-10 h-10 bg-green-500 text-white rounded-lg flex items-center justify-center hover:bg-green-600 active:scale-90 transition-all shadow-md">
                                                         <Icon name="check" size={16} />
                                                     </button>
                                                 </div>
@@ -335,7 +340,8 @@
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit">
+                                    {/* FORMULÁRIO COM BLOQUEIO DE AUTOCOMPLETE */}
+                                    <form onSubmit={saveTx} autoComplete="off" className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit">
                                         <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">Novo Lançamento</h2>
                                         <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                             <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
@@ -365,7 +371,7 @@
                                             <div className="space-y-1 animate-in slide-in-from-top-2">
                                                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Conta Destino</label>
                                                 <select required className="w-full p-4 bg-blue-50 border border-blue-200 rounded-2xl font-black text-[10px] outline-none uppercase" value={destAccount} onChange={e => setDestAccount(e.target.value)}>
-                                                    <option value="">Para onde vai o dinheiro?</option>
+                                                    <option value="">Para onde vai?</option>
                                                     {accounts.filter(a => a.name !== account).map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                                 </select>
                                             </div>
@@ -402,7 +408,7 @@
                                         </div>
 
                                         <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg bg-[#1A202C] text-[#F8CC82] hover:bg-black transition-all">
-                                            {type === 'transferencia' ? 'Efetuar Transferência' : 'Gravar no Caixa'}
+                                            {type === 'transferencia' ? 'Efetuar Transferência' : 'Gravar Movimento'}
                                         </button>
                                     </form>
 
@@ -580,7 +586,7 @@
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-300">
                                 {Object.entries(creditCardStats).length === 0 ? (
                                     <div className="col-span-full py-20 text-center glass-card rounded-[3rem]">
-                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão cadastrado nos Ajustes.</p>
+                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão cadastrado.</p>
                                     </div>
                                 ) : Object.entries(creditCardStats).map(([name, data]) => (
                                     <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
@@ -671,8 +677,7 @@
                                             {accounts.map(a => (
                                                 <div key={a.id} className={`flex justify-between items-center p-3 border rounded-xl transition-all ${editingAccount && editingAccount.id === a.id ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
                                                     <div className="flex items-center gap-2">
-                                                        <Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12} className="text-slate-400"/>
-                                                        <span className="text-[10px] font-black uppercase">{a.name}</span>
+                                                        <Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12} className="text-slate-400"/><span className="text-[10px] font-black uppercase">{a.name}</span>
                                                     </div>
                                                     <div className="flex gap-3">
                                                         <button onClick={() => editAccount(a)} className="text-slate-300 hover:text-blue-500"><Icon name="edit-2" size={12}/></button>
@@ -707,7 +712,7 @@
                     </main>
 
                     <footer className="py-12 text-center border-t border-slate-100 opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">
-                        Tribo Burger Management • Sistema Refinado v8.5
+                        Tribo Burger Management • Versão 8.6
                     </footer>
                 </div>
             );
