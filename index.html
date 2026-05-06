@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.8</title>
+    <title>Tribo Burger | Gestão Total v9.8.1</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -184,12 +184,17 @@
             const parseMoney = (v) => typeof v === 'string' ? parseFloat(v.replace(',', '.')) || 0 : v;
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+            // Gerar histórico único de descrições para o autocompletar
+            const descriptionHistory = useMemo(() => {
+                const descs = transactions.map(t => t.description);
+                return [...new Set(descs)].filter(Boolean).sort();
+            }, [transactions]);
+
             const resetForm = () => {
                 setEditingId(null); setDesc(''); setVal(''); setType('saida');
                 setAccount('Mercado Pago'); setDestAccount(''); setCat('');
                 setSupplier(''); setStatus('pago');
-                setDate(new Date().toLocaleDateString('en-CA'));
-                setClearance(new Date().toLocaleDateString('en-CA'));
+                // Nota: Não resetamos a 'date' nem a 'clearance' para manter o último dia como padrão conforme solicitado
             };
 
             const saveTx = async (e) => {
@@ -309,7 +314,7 @@
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.1</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'Consultor' : tab}</button>
@@ -347,7 +352,20 @@
                                             <button type="button" onClick={() => setType('transferencia')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'transferencia' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-400'}`}>Transf.</button>
                                         </div>
                                         {type !== 'transferencia' && (
-                                            <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <div className="relative">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Descrição" 
+                                                    required 
+                                                    list="desc-suggestions" 
+                                                    className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" 
+                                                    value={desc} 
+                                                    onChange={e => setDesc(e.target.value)} 
+                                                />
+                                                <datalist id="desc-suggestions">
+                                                    {descriptionHistory.map((d, i) => <option key={i} value={d} />)}
+                                                </datalist>
+                                            </div>
                                         )}
                                         <div className="grid grid-cols-2 gap-3">
                                             <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
@@ -494,7 +512,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.1</footer>
                 </div>
             );
         }
