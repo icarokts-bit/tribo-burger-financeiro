@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v8.9</title>
+    <title>Tribo Burger | Gestão Total v9.0</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -218,6 +218,12 @@
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+            // MEMO PARA HISTÓRICO DE DESCRIÇÕES
+            const descriptionHistory = useMemo(() => {
+                const descs = transactions.map(t => t.description);
+                return [...new Set(descs)].filter(Boolean).sort();
+            }, [transactions]);
+
             // ALERTA DE CONTAS PRÓXIMAS AO VENCIMENTO (ATÉ 2 DIAS)
             const upcomingAlerts = useMemo(() => {
                 const today = new Date();
@@ -297,7 +303,7 @@
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.9</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
@@ -374,8 +380,24 @@
                                             <button type="button" onClick={() => setType('transferencia')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'transferencia' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-400'}`}>Transf.</button>
                                         </div>
                                         
+                                        {/* CAMPO DE DESCRIÇÃO COM DATALIST (HISTÓRICO) */}
                                         {type !== 'transferencia' && (
-                                            <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <div className="relative w-full">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Descrição" 
+                                                    required 
+                                                    list="desc-suggestions"
+                                                    className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" 
+                                                    value={desc} 
+                                                    onChange={e => setDesc(e.target.value)} 
+                                                />
+                                                <datalist id="desc-suggestions">
+                                                    {descriptionHistory.map((d, idx) => (
+                                                        <option key={idx} value={d} />
+                                                    ))}
+                                                </datalist>
+                                            </div>
                                         )}
                                         
                                         <div className="grid grid-cols-2 gap-3">
@@ -730,7 +752,7 @@
                     </main>
 
                     <footer className="py-12 text-center border-t border-slate-100 opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">
-                        Tribo Burger Management • Versão 8.9
+                        Tribo Burger Management • Versão 9.0
                     </footer>
                 </div>
             );
