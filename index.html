@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v7.6</title>
+    <title>Tribo Burger | Gestão Total v8.0</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -24,35 +24,25 @@
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* Estilos Excel para Planilha de Vendas */
         .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
-        .table-input:focus { background-color: rgba(255, 255, 255, 0.8); }
+        .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
         
-        .header-green { background-color: #92D050; color: #000; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #7cb342; }
-        .header-red { background-color: #FF0000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #cc0000; }
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
         
-        .cell-green { background-color: #E2EFDA; border: 1px solid #c5e0b4; }
-        .cell-red { background-color: #FFC7CE; color: #9C0006; border: 1px solid #ffb3b3; }
-        .cell-white { background-color: #FFF; border: 1px solid #e2e8f0; }
-
         .bg-watermark { position: fixed; bottom: -50px; right: -50px; opacity: 0.03; z-index: -1; transform: rotate(-15deg); pointer-events: none; }
         
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Estilo para Resposta da IA */
         .prose-ia h3 { font-weight: 800; text-transform: uppercase; font-size: 0.75rem; color: #D97757; margin-top: 1.5rem; margin-bottom: 0.5rem; letter-spacing: 0.1em; }
         .prose-ia p { font-size: 0.875rem; line-height: 1.6; margin-bottom: 1rem; color: #4A5568; }
-        .prose-ia ul { list-style-type: none; padding: 0; }
-        .prose-ia li { padding-left: 1.5rem; position: relative; margin-bottom: 0.5rem; font-size: 0.875rem; }
-        .prose-ia li::before { content: '→'; position: absolute; left: 0; color: #D97757; font-weight: bold; }
     </style>
 </head>
 <body class="antialiased">
 
     <div id="root"></div>
 
+    <!-- Firebase Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -74,6 +64,7 @@
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
 
+        // Componente Icon Corrigido
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -93,41 +84,32 @@
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            // Estados de Dados
+            // Dados Principais
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
             const [categories, setCategories] = useState([]);
             const [suppliers, setSuppliers] = useState([]);
             
-            // Estados de Lançamento
+            // Formulário
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
             const [destAccount, setDestAccount] = useState(''); 
             const [cat, setCat] = useState('');
-            const [supplier, setSupplier] = useState(''); 
             const [status, setStatus] = useState('pago'); 
             const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
             const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
             const [editingId, setEditingId] = useState(null);
-            const [isInstallment, setIsInstallment] = useState(false);
-            const [installments, setInstallments] = useState(2);
 
-            // Filtros e Ajustes
+            // Filtros
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
             const [newItemName, setNewItemName] = useState('');
             const [newItemType, setNewItemType] = useState('corrente');
             const [newItemClosingDay, setNewItemClosingDay] = useState('');
             const [newItemDueDay, setNewItemDueDay] = useState('');
-            const [editingAccount, setEditingAccount] = useState(null);
-            
-            // API Config
-            const [storeCode, setStoreCode] = useState('');
-            const [apiToken, setApiToken] = useState('');
-            const [isSyncing, setIsSyncing] = useState(false);
 
             // AI
             const [aiResponse, setAiResponse] = useState('');
@@ -160,13 +142,6 @@
                 const unsubSuppliers = db.collection(`${path}/suppliers`)
                     .onSnapshot(snap => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-                db.doc(`${path}/config/api`).get().then(doc => {
-                    if(doc.exists) {
-                        setStoreCode(doc.data().storeCode || '');
-                        setApiToken(doc.data().apiToken || '');
-                    }
-                });
-
                 return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); };
             }, [user]);
 
@@ -176,41 +151,17 @@
                 e.preventDefault();
                 if (!user || !val || !desc) return;
                 const baseAmount = parseMoney(val);
-                const isCard = accounts.find(a => a.name === account)?.type === 'cartao';
-
-                if (isInstallment && isCard && installments > 1 && !editingId) {
-                    const installmentValue = baseAmount / installments;
-                    for (let i = 1; i <= installments; i++) {
-                        const d = new Date(date + 'T00:00:00');
-                        d.setMonth(d.getMonth() + i - 1);
-                        const payload = {
-                            description: `${desc} (${i}/${installments})`,
-                            amount: installmentValue,
-                            type: 'saida',
-                            status: i === 1 ? 'pago' : 'pendente',
-                            date: d.toISOString().split('T')[0],
-                            clearanceDate: d.toISOString().split('T')[0],
-                            account, category: cat, supplier, timestamp: new Date().toISOString()
-                        };
-                        await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add(payload);
-                    }
-                } else {
-                    const payload = {
-                        description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : desc,
-                        amount: baseAmount,
-                        type, status: type === 'transferencia' ? 'pago' : status,
-                        date, clearanceDate: clearance, account, destinationAccount: destAccount,
-                        category: type === 'transferencia' ? 'Transferência Interna' : cat,
-                        supplier: supplier || '', timestamp: new Date().toISOString()
-                    };
-                    const txId = editingId || Date.now().toString();
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${txId}`).set(payload, { merge: true });
-                }
-                resetForm();
-            };
-
-            const resetForm = () => {
-                setDesc(''); setVal(''); setEditingId(null); setType('saida'); setIsInstallment(false);
+                const payload = {
+                    description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : desc,
+                    amount: baseAmount,
+                    type, status: type === 'transferencia' ? 'pago' : status,
+                    date, clearanceDate: clearance, account, destinationAccount: destAccount,
+                    category: type === 'transferencia' ? 'Transferência Interna' : cat,
+                    timestamp: new Date().toISOString()
+                };
+                const txId = editingId || Date.now().toString();
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${txId}`).set(payload, { merge: true });
+                setDesc(''); setVal(''); setEditingId(null);
             };
 
             const togglePaid = async (t) => {
@@ -219,39 +170,9 @@
                 });
             };
 
-            const syncSalesFromAPI = async () => {
-                if (!storeCode || !apiToken) { alert("Configure a API nos Ajustes."); setActiveTab('ajustes'); return; }
-                
-                // Pega a data selecionada no campo 'newDay' da planilha
-                const targetDate = newDay;
-                const displayDate = targetDate.split('-').reverse().join('/');
-
-                if (!confirm(`Deseja sincronizar as vendas para o dia selecionado: ${displayDate}?`)) return;
-
-                setIsSyncing(true);
-                try {
-                    await new Promise(r => setTimeout(r, 2000)); 
-                    
-                    // Aqui seria a chamada real à API usando targetDate
-                    const imported = {
-                        pix: (Math.random() * 300 + 100).toFixed(2),
-                        ifood: (Math.random() * 500 + 200).toFixed(2),
-                        syncSource: "Anota AI", 
-                        lastSync: new Date().toLocaleTimeString()
-                    };
-                    
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${targetDate}`).set(imported, { merge: true });
-                    alert(`Vendas do dia ${displayDate} sincronizadas com sucesso!`);
-                } catch (e) { 
-                    alert("Erro ao conectar com a API do cardápio."); 
-                } finally { 
-                    setIsSyncing(false); 
-                }
-            };
-
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // Memos para Cálculos
+            // Cálculos Mês
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
                 let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; let pendingTotal = 0;
@@ -276,17 +197,14 @@
                 });
 
                 const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
-                const totalDespesas = custosVariaveis + totalOperating;
-                return { rb, custosVariaveis, costsByCategory, totalOperating, pendingTotal, lucro: rb - totalDespesas, cmv: (costsByCategory['CMV Insumos'] || 0) + (costsByCategory['CMV Bebidas'] || 0) };
+                return { rb, custosVariaveis, costsByCategory, totalOperating, pendingTotal, lucro: rb - (custosVariaveis + totalOperating), cmv: (costsByCategory['CMV Insumos'] || 0) + (costsByCategory['CMV Bebidas'] || 0) };
             }, [transactions, dailyRecords, filterMonth]);
 
             const creditCardStats = useMemo(() => {
                 const results = {};
                 accounts.filter(a => a.type === 'cartao').forEach(card => {
                     let total = 0;
-                    transactions.filter(t => t.account === card.name && t.type === 'saida').forEach(t => {
-                        if (t.date.startsWith(filterMonth)) total += parseFloat(t.amount) || 0;
-                    });
+                    transactions.filter(t => t.account === card.name && t.type === 'saida' && t.date.startsWith(filterMonth)).forEach(t => total += parseFloat(t.amount) || 0);
                     results[card.name] = { total, closing: card.closingDay || 1, due: card.dueDay || 10 };
                 });
                 return results;
@@ -301,14 +219,15 @@
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v7.6</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>
-                                        {tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'IA Consultor' : tab === 'cartoes' ? 'Faturas' : tab}
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'Consultor' : tab}
                                     </button>
                                 ))}
+                                <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black uppercase text-red-400">Sair</button>
                             </nav>
                         </div>
                     </header>
@@ -316,9 +235,9 @@
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
-                                <div className="flex justify-center mb-4">
+                                <div className="flex justify-center">
                                     <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4">
-                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês de Referência:</span>
+                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês Selecionado:</span>
                                         <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
                                     </div>
                                 </div>
@@ -333,23 +252,23 @@
                                         <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3>
                                     </div>
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm">
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">A Pagar</p>
                                         <h3 className="text-xl font-black text-orange-500">{formatMoney(stats.pendingTotal)}</h3>
                                     </div>
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm">
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">CMV Total</p>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">CMV Mês</p>
                                         <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit">
-                                        <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">Novo Movimento</h2>
+                                        <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">Novo Lançamento</h2>
                                         <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                             <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
                                             <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-sm' : 'text-slate-400'}`}>Saída</button>
                                         </div>
-                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} />
                                         <div className="grid grid-cols-2 gap-3">
                                             <input type="text" placeholder="R$ 0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                             <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>
@@ -361,22 +280,19 @@
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[500px] flex flex-col">
-                                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center"><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico Financeiro ({filterMonth})</span></div>
+                                        <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 tracking-widest">Histórico Financeiro</div>
                                         <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                             {transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (
-                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
+                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
                                                     <div className="flex items-center gap-4">
                                                         <button onClick={() => togglePaid(t)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
                                                             <Icon name={t.status === 'pago' ? 'check' : 'clock'} size={14} />
                                                         </button>
-                                                        <div>
-                                                            <p className="font-black text-sm uppercase leading-tight">{t.description}</p>
-                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p>
-                                                        </div>
+                                                        <div><p className="font-black text-sm uppercase leading-tight">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p></div>
                                                     </div>
                                                     <div className="flex items-center gap-4">
                                                         <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p>
-                                                        <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14}/></button>
+                                                        <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14}/></button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -388,20 +304,13 @@
 
                         {activeTab === 'planilha' && (
                             <div className="space-y-4 animate-in fade-in duration-300">
-                                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2"><Icon name="table" /> Mapa de Vendas Diárias (Manual)</h2>
                                     <div className="flex items-center gap-2">
-                                        <Icon name="table" className="text-[#D97757]"/>
-                                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Mapa de Vendas Diárias</h2>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
-                                        <div className="flex items-center gap-2 px-2">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase">Data p/ Sync:</span>
-                                            <input type="date" className="text-xs font-black border-0 outline-none" value={newDay} onChange={e => setNewDay(e.target.value)} />
-                                        </div>
-                                        <button onClick={syncSalesFromAPI} disabled={isSyncing} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                                            <Icon name={isSyncing ? "refresh-cw" : "zap"} className={isSyncing ? "animate-spin" : ""} size={14} />
-                                            {isSyncing ? 'A Sincronizar...' : 'Sincronizar Data Selecionada'}
-                                        </button>
+                                        <input type="date" className="p-2 border rounded-xl text-xs font-bold" value={newDay} onChange={e => setNewDay(e.target.value)} />
+                                        <button onClick={async() => {
+                                            await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true });
+                                        }} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Dia</button>
                                     </div>
                                 </div>
                                 <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border">
@@ -410,9 +319,10 @@
                                             <thead>
                                                 <tr className="header-black text-white uppercase">
                                                     <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
-                                                    <th className="p-4 bg-yellow-500 text-black">Faturação Total</th>
+                                                    <th className="p-4 bg-yellow-500 text-black">Total</th>
                                                     {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
                                                     <th className="p-4 text-red-400">Motoboy</th>
+                                                    <th className="p-4">Limpar</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y font-bold">
@@ -423,18 +333,16 @@
                                                         <tr key={d} className="hover:bg-slate-50 transition-colors">
                                                             <td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td>
                                                             <td className="p-4 bg-yellow-50 text-sm">{formatMoney(total)}</td>
-                                                            {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                                <td key={f} className="p-0 border-r">
+                                                            {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','motoboy'].map(f => (
+                                                                <td key={f} className="p-0 border-r min-w-[90px]">
                                                                     <input className="table-input" value={r[f] || ''} onChange={async(e) => {
-                                                                        const val = e.target.value.replace(',', '.');
+                                                                        const val = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
                                                                         await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: val }, { merge: true });
                                                                     }} placeholder="0,00" />
                                                                 </td>
                                                             ))}
-                                                            <td className="p-0 text-red-500">
-                                                                <input className="table-input text-red-500" value={r.motoboy || ''} onChange={async(e) => {
-                                                                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ motoboy: e.target.value.replace(',','.') }, { merge: true });
-                                                                }} placeholder="0,00" />
+                                                            <td className="p-4 border-l">
+                                                                <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-slate-200 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button>
                                                             </td>
                                                         </tr>
                                                     );
@@ -450,20 +358,18 @@
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-300">
                                 {Object.entries(creditCardStats).length === 0 ? (
                                     <div className="col-span-full py-20 text-center glass-card rounded-[3rem]">
-                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão cadastrado nos Ajustes.</p>
+                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Regista os teus cartões nos Ajustes.</p>
                                     </div>
                                 ) : Object.entries(creditCardStats).map(([name, data]) => (
                                     <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
                                         <div className="flex justify-between items-start mb-6">
-                                            <div><h3 className="font-black uppercase text-lg">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status: Aberta</p></div>
+                                            <div><h3 className="font-black uppercase text-lg">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Fatura do Mês</p></div>
                                             <Icon name="credit-card" className="text-slate-300" />
                                         </div>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Gasto no Mês</span><span className="text-xl font-black text-[#1A202C]">{formatMoney(data.total)}</span></div>
-                                            <div className="mt-4 grid grid-cols-2 gap-4 border-t pt-4">
-                                                <div className="text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Fecho</p><p className="font-black text-sm text-[#D97757]">Dia {data.closing}</p></div>
-                                                <div className="text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Vencimento</p><p className="font-black text-sm text-red-500">Dia {data.due}</p></div>
-                                            </div>
+                                        <h3 className="text-xl font-black text-[#1A202C]">{formatMoney(data.total)}</h3>
+                                        <div className="mt-4 pt-4 border-t grid grid-cols-2">
+                                            <div className="text-center border-r"><p className="text-[8px] font-black text-slate-400 uppercase">Fecho</p><p className="font-black text-sm text-[#D97757]">Dia {data.closing}</p></div>
+                                            <div className="text-center"><p className="text-[8px] font-black text-slate-400 uppercase">Pagar</p><p className="font-black text-sm text-red-500">Dia {data.due}</p></div>
                                         </div>
                                     </div>
                                 ))}
@@ -475,12 +381,10 @@
                                 <h2 className="text-xl font-black uppercase tracking-tighter mb-8 border-b pb-4">Demonstração de Resultados (DRE)</h2>
                                 <div className="space-y-4">
                                     <div className="flex justify-between p-4 bg-green-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-green-800">(+) RECEITA BRUTA</span><span className="font-black text-green-700">{formatMoney(stats.rb)}</span></div>
-                                    <div className="flex justify-between p-4 bg-red-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-red-800">(-) CUSTOS VARIÁVEIS</span><span className="font-black text-red-700">{formatMoney(stats.custosVariaveis)}</span></div>
+                                    <div className="flex justify-between p-4 bg-red-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-red-800">(-) CUSTOS DE ENTREGA</span><span className="font-black text-red-700">{formatMoney(stats.custosVariaveis)}</span></div>
                                     <div className="py-4 border-b">
-                                        {Object.keys(stats.costsByCategory).length === 0 ? (
-                                            <p className="text-center text-[10px] text-slate-400 uppercase p-4">Sem custos operacionais pagos este mês.</p>
-                                        ) : Object.entries(stats.costsByCategory).map(([cat, val]) => (
-                                            <div key={cat} className="flex justify-between px-4 py-2"><span className="text-[10px] font-bold text-slate-600 uppercase">(-) {cat}</span><span className="text-sm font-black text-red-400">{formatMoney(val)}</span></div>
+                                        {Object.entries(stats.costsByCategory).map(([cat, val]) => (
+                                            <div key={cat} className="flex justify-between px-4 py-2 hover:bg-slate-50"><span className="text-[10px] font-bold text-slate-600 uppercase">(-) {cat}</span><span className="text-sm font-black text-red-400">{formatMoney(val)}</span></div>
                                         ))}
                                     </div>
                                     <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}>
@@ -494,23 +398,21 @@
                         {activeTab === 'fornecedores' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg h-fit">
-                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Registar Fornecedor</h2>
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Novo Fornecedor</h2>
                                     <div className="space-y-4">
-                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome da Empresa / Fornecedor" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome do Fornecedor" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                         <button onClick={async() => {
                                             if(!newItemName) return;
                                             await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: newItemName, createdAt: new Date().toISOString() });
                                             setNewItemName('');
-                                        }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Adicionar Fornecedor</button>
+                                        }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Adicionar</button>
                                     </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg max-h-[500px] overflow-y-auto no-scrollbar">
-                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="users" /> Lista de Fornecedores</h2>
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="users" /> Fornecedores</h2>
                                     <div className="space-y-2">
-                                        {suppliers.length === 0 ? (
-                                            <p className="text-center text-slate-400 text-[10px] uppercase py-8">Nenhum fornecedor registado.</p>
-                                        ) : suppliers.map(s => (
-                                            <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group">
+                                        {suppliers.map(s => (
+                                            <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group hover:border-[#D97757]">
                                                 <span className="text-xs font-black uppercase">{s.name}</span>
                                                 <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
                                             </div>
@@ -525,20 +427,19 @@
                                 <div className="glass-card rounded-[3rem] shadow-2xl bg-white p-10 border-t-8 border-[#F8CC82]">
                                     <div className="flex items-center gap-4 mb-8">
                                         <div className="bg-[#1A202C] p-4 rounded-3xl"><Icon name="sparkles" className="text-[#F8CC82]" size={32}/></div>
-                                        <div><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Consultor IA</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise Estratégica do Negócio</p></div>
+                                        <div><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">IA Consultor</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise de Desempenho Mensal</p></div>
                                     </div>
                                     {!aiResponse && !aiLoading && (
                                         <div className="text-center py-12">
-                                            <p className="text-xs font-bold text-slate-400 uppercase mb-8 leading-relaxed">Clique abaixo para que a IA analise a sua faturação, CMV e gastos fixos do mês de {filterMonth.split('-').reverse().join('/')}.</p>
                                             <button onClick={async() => {
                                                 setAiLoading(true);
                                                 await new Promise(r => setTimeout(r, 2000));
-                                                setAiResponse(`### Relatório Estratégico Tribo Burger\n\nIdentifiquei que no mês de **${filterMonth}**, a tua margem líquida está em torno de **${((stats.lucro / stats.rb) * 100).toFixed(1)}%**. \n\n* **Ponto de Atenção:** O teu CMV está a representar ${((stats.cmv / stats.rb) * 100).toFixed(1)}% da receita bruta. Tenta renegociar com os teus fornecedores de embalagens.\n* **Fluxo de Caixa:** Tens ${stats.pendingTotal > 0 ? "pagamentos pendentes" : "as contas em dia"}. \n\n**Sugestão:** O iFood representa uma grande fatia das vendas. Considera uma campanha de fidelização no teu cardápio próprio para baixar as taxas.`);
+                                                setAiResponse(`### Relatório Estratégico Mensal\n\nIdentifiquei que no mês de **${filterMonth}**, a tua margem líquida está em torno de **${((stats.lucro / stats.rb) * 100).toFixed(1)}%**. \n\n* **CMV:** O teu CMV está a representar ${((stats.cmv / stats.rb) * 100).toFixed(1)}% da receita bruta. \n* **Caixa:** Tens ${stats.pendingTotal > 0 ? formatMoney(stats.pendingTotal) + " em pagamentos pendentes." : "todas as contas pagas."} \n\n**Sugestão:** Foca em aumentar o ticket médio da Tribo para diluir os custos fixos de aluguer e luz.`);
                                                 setAiLoading(false);
-                                            }} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase text-xs shadow-xl active:scale-95 transition-all">Analisar Desempenho Mensal</button>
+                                            }} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase text-xs shadow-xl transition-all active:scale-95">Analisar Meu Mês Agora</button>
                                         </div>
                                     )}
-                                    {aiLoading && <div className="text-center py-20 animate-pulse text-[10px] font-black uppercase text-slate-400 tracking-widest">A calcular métricas e tendências...</div>}
+                                    {aiLoading && <div className="text-center py-20 animate-pulse text-[10px] font-black uppercase text-slate-400 tracking-widest">Estou a ler os teus dados financeiros...</div>}
                                     {aiResponse && (
                                         <div className="prose-ia bg-slate-50 p-8 rounded-[2rem] border relative">
                                             <button onClick={() => setAiResponse('')} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600"><Icon name="x" size={16}/></button>
@@ -550,68 +451,50 @@
                         )}
 
                         {activeTab === 'ajustes' && (
-                            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom duration-500">
-                                <div className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-blue-500 h-fit">
-                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="zap" className="text-blue-500"/> API Cardápio (Anota AI)</h2>
-                                    <div className="space-y-4">
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">ID da Loja</label><input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none focus:border-blue-400" value={storeCode} onChange={e => setStoreCode(e.target.value)} /></div>
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Token de Acesso</label><input type="password" placeholder="••••••••" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none focus:border-blue-400" value={apiToken} onChange={e => setApiToken(e.target.value)} /></div>
-                                        <button onClick={async() => {
-                                            await db.doc(`artifacts/${appId}/users/${user.uid}/config/api`).set({ storeCode, apiToken }, { merge: true });
-                                            alert("Configurações de API guardadas!");
-                                        }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Guardar Chaves</button>
-                                    </div>
-                                </div>
-                                <div className="glass-card p-8 rounded-[3rem] shadow-lg h-fit">
-                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Contas & Bancos</h2>
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Bancos & Cartões</h2>
                                     <div className="space-y-4">
                                         <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                                            <input type="text" className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none mb-2" placeholder="Ex: C6 Bank, Caixa..." value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                            <input type="text" className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none mb-2" placeholder="Nome da Conta / Cartão" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                             <div className="flex gap-2 mb-2">
-                                                <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase transition-all ${newItemType === 'corrente' ? 'bg-black text-white shadow-md' : 'bg-white border text-slate-400'}`}>Corrente</button>
-                                                <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase transition-all ${newItemType === 'cartao' ? 'bg-orange-500 text-white shadow-md' : 'bg-white border text-slate-400'}`}>Cartão</button>
+                                                <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border text-slate-400'}`}>Corrente</button>
+                                                <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border text-slate-400'}`}>Cartão</button>
                                             </div>
                                             {newItemType === 'cartao' && (
-                                                <div className="grid grid-cols-2 gap-2 mb-2 animate-in zoom-in">
-                                                    <div className="space-y-1"><label className="text-[7px] font-black uppercase text-slate-400 ml-1">Dia Fecho</label><input type="number" min="1" max="31" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /></div>
-                                                    <div className="space-y-1"><label className="text-[7px] font-black uppercase text-slate-400 ml-1">Dia Venc.</label><input type="number" min="1" max="31" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>
+                                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                                    <div className="space-y-1"><label className="text-[7px] font-black text-slate-400 uppercase ml-1">Fecho</label><input type="number" min="1" max="31" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /></div>
+                                                    <div className="space-y-1"><label className="text-[7px] font-black text-slate-400 uppercase ml-1">Venc.</label><input type="number" min="1" max="31" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>
                                                 </div>
                                             )}
                                             <button onClick={async() => {
                                                 if(!newItemName) return;
-                                                await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ 
-                                                    name: newItemName, 
-                                                    type: newItemType, 
-                                                    closingDay: newItemClosingDay || '1', 
-                                                    dueDay: newItemDueDay || '10' 
-                                                });
-                                                setNewItemName(''); setNewItemClosingDay(''); setNewItemDueDay('');
-                                            }} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-sm">Adicionar Conta</button>
+                                                await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ name: newItemName, type: newItemType, closingDay: newItemClosingDay || '1', dueDay: newItemDueDay || '10' });
+                                                setNewItemName('');
+                                            }} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-sm">Adicionar</button>
                                         </div>
                                         <div className="space-y-2 max-h-40 overflow-y-auto no-scrollbar">
                                             {accounts.map(a => (
-                                                <div key={a.id} className="flex justify-between items-center p-3 bg-white border rounded-xl hover:bg-slate-50 transition-colors">
-                                                    <div className="flex items-center gap-2"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12} className={a.type === 'cartao' ? 'text-orange-400' : 'text-slate-400'}/><span className="text-[10px] font-black uppercase">{a.name}</span></div>
+                                                <div key={a.id} className="flex justify-between items-center p-3 bg-white border rounded-xl">
+                                                    <div className="flex items-center gap-2"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12} className="text-slate-400"/><span className="text-[10px] font-black uppercase">{a.name}</span></div>
                                                     <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="glass-card p-8 rounded-[3rem] shadow-lg h-fit">
-                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias de Gasto</h2>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias DRE</h2>
                                     <div className="flex gap-2 mb-6">
-                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none focus:border-[#D97757]" placeholder="Nova Categoria" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Insumos, Luz..." value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                         <button onClick={async() => {
                                             if(!newItemName) return;
                                             await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: newItemName });
                                             setNewItemName('');
-                                        }} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl active:scale-95 transition-all"><Icon name="plus" /></button>
+                                        }} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button>
                                     </div>
                                     <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
-                                        {categories.length === 0 ? (
-                                            <p className="text-center text-[10px] text-slate-300 uppercase py-4">Crie categorias para o DRE.</p>
-                                        ) : categories.map(c => (
+                                        {categories.map(c => (
                                             <div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl hover:bg-slate-50">
                                                 <span className="text-xs font-bold uppercase">{c.name}</span>
                                                 <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button>
@@ -624,7 +507,7 @@
                     </main>
 
                     <footer className="py-12 text-center border-t border-slate-100 opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">
-                        Tribo Burger Management • Sistema de Precisão v7.6
+                        Tribo Burger Management • Versão Manual v8.0
                     </footer>
                 </div>
             );
