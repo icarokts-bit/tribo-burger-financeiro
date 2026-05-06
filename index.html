@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v6.7</title>
+    <title>Tribo Burger | Gestão Total v6.8</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -111,7 +111,7 @@
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
-            const [destAccount, setDestAccount] = useState(''); // Para transferências
+            const [destAccount, setDestAccount] = useState(''); 
             const [cat, setCat] = useState('');
             const [supplier, setSupplier] = useState(''); 
             const [status, setStatus] = useState('pago'); 
@@ -124,6 +124,8 @@
             const [newDay, setNewDay] = useState(new Date().toISOString().split('T')[0]);
             const [newItemName, setNewItemName] = useState('');
             const [newItemType, setNewItemType] = useState('corrente');
+            const [newItemClosingDay, setNewItemClosingDay] = useState('');
+            const [newItemDueDay, setNewItemDueDay] = useState('');
             const [newSupplierContact, setNewSupplierContact] = useState('');
             const [newSupplierCat, setNewSupplierCat] = useState('');
 
@@ -271,7 +273,13 @@
                 const path = `artifacts/${appId}/users/${user.uid}/${collectionName}`;
                 let data = { name: newItemName };
                 
-                if (collectionName === 'accounts') data.type = newItemType;
+                if (collectionName === 'accounts') {
+                    data.type = newItemType;
+                    if (newItemType === 'cartao') {
+                        data.closingDay = newItemClosingDay;
+                        data.dueDay = newItemDueDay;
+                    }
+                }
                 if (collectionName === 'suppliers') {
                     data.contact = newSupplierContact;
                     data.category = newSupplierCat;
@@ -279,6 +287,7 @@
                 
                 await db.collection(path).add(data);
                 setNewItemName(''); setNewSupplierContact(''); setNewSupplierCat('');
+                setNewItemClosingDay(''); setNewItemDueDay('');
             };
 
             const removeItem = async (collectionName, id) => {
@@ -314,7 +323,46 @@
                 return balances;
             }, [transactions, accounts]);
 
-            // Memo para lembretes de vencimento (Hoje, Atrasados ou AMANHÃ)
+            // Memo para faturas de cartões de crédito
+            const creditCardStats = useMemo(() => {
+                const stats = {};
+                const currentMonth = parseInt(filterMonth.split('-')[1]);
+                const currentYear = parseInt(filterMonth.split('-')[0]);
+
+                accounts.filter(a => a.type === 'cartao').forEach(card => {
+                    let openInvoice = 0;
+                    let closedInvoice = 0;
+                    let nextInvoice = 0;
+                    const closingDay = parseInt(card.closingDay) || 1;
+
+                    transactions.filter(t => t.account === card.name && t.type === 'saida').forEach(t => {
+                        const tDate = new Date(t.date + 'T00:00:00');
+                        const tDay = tDate.getDate();
+                        const tMonth = tDate.getMonth() + 1;
+                        const tYear = tDate.getFullYear();
+                        const amount = parseFloat(t.amount) || 0;
+
+                        // Lógica básica de faturas: se o dia é maior que o fechamento, cai no próximo mês
+                        // Consideramos o mês selecionado no filtro como referência
+                        if (tMonth === currentMonth && tYear === currentYear) {
+                            if (tDay <= closingDay) {
+                                openInvoice += amount;
+                            } else {
+                                nextInvoice += amount;
+                            }
+                        } else if (tMonth === currentMonth - 1 || (currentMonth === 1 && tMonth === 12)) {
+                            // Gastos do mês passado após o fechamento também caem na fatura atual
+                            if (tDay > closingDay) {
+                                openInvoice += amount;
+                            }
+                        }
+                    });
+
+                    stats[card.name] = { openInvoice, nextInvoice, closingDay, dueDay: card.dueDay };
+                });
+                return stats;
+            }, [transactions, accounts, filterMonth]);
+
             const reminders = useMemo(() => {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
@@ -407,9 +455,9 @@
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4"><img src="logo.png" className="h-12 w-12 bg-white rounded-full p-1" /><div><h1 className="text-xl font-black text-[#F8CC82] uppercase leading-none tracking-tighter">Tribo Burger</h1><p className="text-[9px] opacity-50 uppercase tracking-widest">{user.email}</p></div></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar w-full md:w-auto">
-                                {['dashboard', 'planilha', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
+                                {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : ''}`}>
-                                        {tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'IA Consultor' : tab}
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'IA Consultor' : tab === 'cartoes' ? 'Faturas' : tab}
                                     </button>
                                 ))}
                                 <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black uppercase text-red-400">Sair</button>
@@ -422,7 +470,6 @@
                             <div className="space-y-6">
                                 <div className="flex justify-center mb-4"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4"><span className="text-[9px] font-black uppercase text-slate-400">Mês:</span><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
                                 
-                                {/* Painel de Lembretes de Vencimento */}
                                 {reminders.length > 0 && (
                                     <div className="bg-red-50 border-2 border-red-200 p-6 rounded-[2.5rem] shadow-sm animate-in zoom-in duration-300">
                                         <div className="flex items-center gap-3 mb-4">
@@ -446,7 +493,6 @@
                                     </div>
                                 )}
 
-                                {/* Painel de Saldos Bancários */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500">
                                         <p className="text-[8px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-1">Saldo Realizado (Mês)</p>
@@ -525,7 +571,6 @@
                                         </div>
 
                                         <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82] hover:bg-black">{editingId ? 'Confirmar Edição' : 'Gravar Movimento'}</button>
-                                        {editingId && <button type="button" onClick={resetForm} className="w-full text-[9px] font-black uppercase text-slate-400">Cancelar</button>}
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
@@ -557,6 +602,54 @@
                             </div>
                         )}
 
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-8 animate-in fade-in duration-500 py-6">
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-[#1A202C]">Gestão de Cartões de Crédito</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {Object.entries(creditCardStats).length === 0 ? (
+                                        <div className="col-span-full py-20 text-center glass-card rounded-[3rem]">
+                                            <Icon name="credit-card" size={48} className="text-slate-200 mb-4" />
+                                            <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum cartão configurado nos ajustes.</p>
+                                        </div>
+                                    ) : (
+                                        Object.entries(creditCardStats).map(([name, data]) => (
+                                            <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
+                                                <div className="flex justify-between items-start mb-6">
+                                                    <div>
+                                                        <h3 className="font-black uppercase text-lg leading-tight">{name}</h3>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status: Fatura Aberta</p>
+                                                    </div>
+                                                    <Icon name="credit-card" className="text-slate-300" />
+                                                </div>
+                                                
+                                                <div className="space-y-4">
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Fatura Atual (Prevista)</span>
+                                                        <span className="text-xl font-black text-[#1A202C]">{formatMoney(data.openInvoice)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Próxima Fatura</span>
+                                                        <span className="text-sm font-black text-slate-400">{formatMoney(data.nextInvoice)}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-8 grid grid-cols-2 gap-4 border-t pt-6">
+                                                    <div className="bg-slate-50 p-3 rounded-2xl text-center">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fechamento</p>
+                                                        <p className="font-black text-sm text-[#D97757]">Dia {data.closingDay}</p>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-3 rounded-2xl text-center">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Vencimento</p>
+                                                        <p className="font-black text-sm text-red-500">Dia {data.dueDay}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'resultados' && (
                             <div className="space-y-10 animate-in zoom-in duration-500 py-10">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
@@ -577,7 +670,6 @@
                                         <h3 className="text-3xl font-black text-[#1A202C]">{formatMoney(stats.rb)}</h3>
                                     </div>
                                 </div>
-
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
                                     <div className="glass-card p-8 rounded-[3rem] shadow-lg">
                                         <h4 className="text-xs font-black uppercase text-[#1A202C] mb-8 flex items-center gap-2 border-b pb-4"><Icon name="bar-chart" className="text-[#D97757]"/> Gastos Pagos p/ Categoria</h4>
@@ -593,7 +685,6 @@
                                             ))}
                                         </div>
                                     </div>
-
                                     <div className="glass-card p-8 rounded-[3rem] shadow-lg">
                                         <h4 className="text-xs font-black uppercase text-[#1A202C] mb-8 flex items-center gap-2 border-b pb-4"><Icon name="pie-chart" className="text-[#D97757]"/> Resumo Financeiro Real</h4>
                                         <div className="space-y-4">
@@ -754,6 +845,20 @@
                                             <button onClick={() => setNewItemType('corrente')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${newItemType === 'corrente' ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-slate-100 text-slate-400'}`}>Corrente</button>
                                             <button onClick={() => setNewItemType('cartao')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Cartão</button>
                                         </div>
+                                        
+                                        {newItemType === 'cartao' && (
+                                            <div className="grid grid-cols-2 gap-3 animate-in fade-in">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Fechamento</label>
+                                                    <input type="number" min="1" max="31" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" placeholder="Ex: 5" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Vencimento</label>
+                                                    <input type="number" min="1" max="31" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" placeholder="Ex: 15" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button onClick={() => addItem('accounts')} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">ADICIONAR <Icon name="plus" size={14}/></button>
                                     </div>
                                     <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><div className="flex items-center gap-2"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={14} className={a.type === 'cartao' ? 'text-orange-500' : 'text-slate-400'} /><span className="text-xs font-bold uppercase">{a.name}</span></div><button onClick={() => removeItem('accounts', a.id)} className="text-red-300 hover:text-red-500"><Icon name="trash-2" size={14} /></button></div>))}</div>
@@ -769,7 +874,7 @@
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.7</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.8</p>
                     </footer>
                 </div>
             );
