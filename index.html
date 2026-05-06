@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v8.3</title>
+    <title>Tribo Burger | Gestão Total v8.5</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -175,18 +175,28 @@
                 });
             };
 
+            const markAsPaid = async (t) => {
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({
+                    status: 'pago'
+                });
+            };
+
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // ALERTA DE CONTAS A VENCER (1 DIA ANTES)
+            // ALERTA DE CONTAS PRÓXIMAS AO VENCIMENTO (ATÉ 2 DIAS)
             const upcomingAlerts = useMemo(() => {
-                const target = new Date();
-                target.setDate(target.getDate() + 1); // Definir data de amanhã
-                const targetStr = target.toLocaleDateString('en-CA');
+                const today = new Date();
+                const todayStr = today.toLocaleDateString('en-CA');
+                
+                const limit = new Date();
+                limit.setDate(limit.getDate() + 2); // Definir limite de 2 dias à frente
+                const limitStr = limit.toLocaleDateString('en-CA');
                 
                 return transactions.filter(t => 
                     t.type === 'saida' && 
                     t.status === 'pendente' && 
-                    t.clearanceDate === targetStr // Comparar com Data de Vencimento
+                    t.clearanceDate >= todayStr &&
+                    t.clearanceDate <= limitStr 
                 );
             }, [transactions]);
 
@@ -252,7 +262,7 @@
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.3</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v8.5</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
@@ -268,21 +278,30 @@
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
-                                {/* ALERTA DE VENCIMENTO DE AMANHÃ */}
+                                {/* ALERTA DE VENCIMENTO PRÓXIMO COM BOTÃO PAGO */}
                                 {upcomingAlerts.length > 0 && (
                                     <div className="bg-white border-2 border-red-500 p-6 rounded-[2.5rem] alert-pulse shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
                                         <div className="flex items-center gap-4">
                                             <div className="bg-red-500 p-3 rounded-2xl"><Icon name="bell-ring" className="text-white" size={24} /></div>
                                             <div>
-                                                <h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Contas a Vencer Amanhã!</h4>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Tens {upcomingAlerts.length} pagamento(s) agendado(s) para amanhã.</p>
+                                                <h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Conta próximo do vencimento</h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Tens {upcomingAlerts.length} pagamento(s) para os próximos 2 dias.</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 justify-center">
                                             {upcomingAlerts.map(a => (
-                                                <div key={a.id} className="bg-red-50 px-4 py-2 rounded-xl text-[10px] font-black border border-red-100 flex items-center gap-2">
-                                                    <span className="text-red-700 uppercase">{a.description}</span>
-                                                    <span className="text-slate-800">{formatMoney(a.amount)}</span>
+                                                <div key={a.id} className="bg-red-50 pl-4 pr-1 py-1 rounded-xl text-[10px] font-black border border-red-100 flex items-center gap-3 shadow-sm group">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-red-700 uppercase leading-none">{a.description}</span>
+                                                        <span className="text-slate-800 mt-1">{formatMoney(a.amount)}</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => markAsPaid(a)}
+                                                        title="Marcar como Pago"
+                                                        className="w-10 h-10 bg-green-500 text-white rounded-lg flex items-center justify-center hover:bg-green-600 active:scale-90 transition-all shadow-md"
+                                                    >
+                                                        <Icon name="check" size={16} />
+                                                    </button>
                                                 </div>
                                             ))}
                                         </div>
@@ -688,7 +707,7 @@
                     </main>
 
                     <footer className="py-12 text-center border-t border-slate-100 opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">
-                        Tribo Burger Management • Sistema Refinado v8.3
+                        Tribo Burger Management • Sistema Refinado v8.5
                     </footer>
                 </div>
             );
