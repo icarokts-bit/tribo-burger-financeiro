@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v6.3</title>
+    <title>Tribo Burger | Gestão Total v6.4</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -268,6 +268,28 @@
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+            // Memo para histórico de descrições (Auto-complete)
+            const uniqueDescriptions = useMemo(() => {
+                const set = new Set(transactions.map(t => t.description));
+                return Array.from(set).filter(d => d && d.length > 1);
+            }, [transactions]);
+
+            // Memo para saldos por conta bancária
+            const accountBalances = useMemo(() => {
+                const balances = {};
+                accounts.forEach(acc => balances[acc.name] = 0);
+                
+                transactions.forEach(t => {
+                    const amt = parseFloat(t.amount) || 0;
+                    if (t.type === 'entrada') {
+                        balances[t.account] = (balances[t.account] || 0) + amt;
+                    } else if (t.type === 'saida') {
+                        balances[t.account] = (balances[t.account] || 0) - amt;
+                    }
+                });
+                return balances;
+            }, [transactions, accounts]);
+
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
                 let rb = 0; 
@@ -374,15 +396,45 @@
                             <div className="space-y-6">
                                 <div className="flex justify-center mb-4"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4"><span className="text-[9px] font-black uppercase text-slate-400">Mês:</span><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
                                 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-green-500 shadow-sm text-center"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Receita Bruta</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3></div>
-                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-red-500 shadow-sm text-center"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Despesas Totais</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.despesaTotal)}</h3></div>
+                                {/* Painel de Saldos Bancários */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in slide-in-from-top duration-500">
+                                    <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500">
+                                        <p className="text-[8px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-1">Lucro do Mês Selecionado</p>
+                                        <h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3>
+                                    </div>
+                                    {accounts.map(acc => (
+                                        <div key={acc.id} className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm transition-all hover:scale-105">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                                <Icon name={acc.type === 'cartao' ? 'credit-card' : 'landmark'} size={12} />
+                                                {acc.name}
+                                            </p>
+                                            <h3 className={`text-xl font-black ${accountBalances[acc.name] < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                                                {formatMoney(accountBalances[acc.name])}
+                                            </h3>
+                                        </div>
+                                    ))}
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <form onSubmit={saveTx} className={`lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit border-2 transition-all ${editingId ? 'border-orange-400 bg-orange-50/20' : 'border-transparent'}`}>
                                         <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">{editingId ? 'Editar Movimento' : 'Novo Movimento'}</h2>
-                                        <input type="text" placeholder="Descrição (Ex: Carne, Limpeza)" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        
+                                        {/* Input com Datalist para Histórico */}
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Descrição do Gasto</label>
+                                            <input 
+                                                type="text" 
+                                                list="desc-history"
+                                                placeholder="Ex: Carne, Limpeza, Aluguel" 
+                                                required 
+                                                className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:ring-2 ring-yellow-500/20" 
+                                                value={desc} 
+                                                onChange={e => setDesc(e.target.value)} 
+                                            />
+                                            <datalist id="desc-history">
+                                                {uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}
+                                            </datalist>
+                                        </div>
                                         
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">R$</span><input type="text" placeholder="0,00" required className="w-full p-4 pl-10 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} /></div>
@@ -406,7 +458,10 @@
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
                                         </div>
-                                        <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82]">{editingId ? 'Confirmar Edição' : 'Gravar Registo'}</button>
+                                        <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all bg-[#1A202C] text-[#F8CC82] hover:bg-black">
+                                            {editingId ? 'Confirmar Edição' : 'Gravar Registo'}
+                                        </button>
+                                        {editingId && <button type="button" onClick={resetForm} className="w-full text-[9px] font-black uppercase text-slate-400">Cancelar Edição</button>}
                                     </form>
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
@@ -676,7 +731,7 @@
 
                     <footer className="py-12 text-center flex flex-col items-center gap-4 border-t border-slate-100 mt-10">
                         <img src="logo.png" className="h-10 opacity-30 grayscale" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.3</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v6.4</p>
                     </footer>
                 </div>
             );
