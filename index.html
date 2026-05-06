@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.8.3 (COMPLETA)</title>
+    <title>Tribo Burger | Gestão Total v9.8.4</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -182,7 +182,8 @@
                 if (!user || !val || (type !== 'transferencia' && !desc)) return;
                 
                 const totalAmount = parseMoney(val);
-                const numInstallments = parseInt(installments) || 1;
+                const isCard = accounts.find(acc => acc.name === account)?.type === 'cartao';
+                const numInstallments = isCard && type === 'saida' ? (parseInt(installments) || 1) : 1;
                 const batch = db.batch();
                 
                 for(let i = 0; i < numInstallments; i++) {
@@ -217,6 +218,11 @@
 
                 await batch.commit();
                 resetForm();
+            };
+
+            const markAsPaid = async (tId) => {
+                if (!user) return;
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
             };
 
             const startEdit = (t) => {
@@ -284,18 +290,16 @@
                 return results;
             }, [transactions, accounts, filterMonth]);
 
-            const editAccount = (acc) => {
-                setEditingAccount(acc); setNewItemName(acc.name); setNewItemType(acc.type);
-                setNewItemClosingDay(acc.closingDay || ''); setNewItemDueDay(acc.dueDay || '');
-                setActiveTab('ajustes');
-            };
+            const isCardSelected = useMemo(() => {
+                return accounts.find(acc => acc.name === account)?.type === 'cartao';
+            }, [account, accounts]);
 
             if (loading) return <div className="h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={32}/></div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-20 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">v9.8.3 Business</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-20 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">v9.8.4 Business</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -306,12 +310,21 @@
                 </div>
             );
 
+            const MonthPicker = () => (
+                <div className="flex justify-center mb-6">
+                    <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4">
+                        <span className="text-[9px] font-black uppercase text-slate-400">Filtrar Período:</span>
+                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
+                    </div>
+                </div>
+            );
+
             return (
                 <div className="min-h-screen flex flex-col fade-in">
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.3</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.4</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab}</button>
@@ -326,11 +339,25 @@
                             <div className="space-y-6">
                                 {upcomingAlerts.length > 0 && (
                                     <div className="bg-white border-2 border-red-500 p-6 rounded-[2.5rem] alert-pulse shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4"><div className="bg-red-500 p-3 rounded-2xl"><Icon name="bell-ring" className="text-white" size={24} /></div><div><h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Contas Próximas</h4><p className="text-[10px] font-bold text-slate-400 uppercase">Tens {upcomingAlerts.length} pagamentos pendentes.</p></div></div>
-                                        <div className="flex flex-wrap gap-2 justify-center">{upcomingAlerts.map(a => (<div key={a.id} className="bg-red-50 pl-4 pr-1 py-1 rounded-xl text-[10px] font-black border border-red-100 flex items-center gap-3"><span className="text-red-700 uppercase">{a.description}</span></div>))}</div>
+                                        <div className="flex items-center gap-4"><div className="bg-red-500 p-3 rounded-2xl"><Icon name="bell-ring" className="text-white" size={24} /></div><div><h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Contas Próximas</h4><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tens {upcomingAlerts.length} pagamentos pendentes para hoje/amanhã.</p></div></div>
+                                        <div className="flex flex-wrap gap-2 justify-center">
+                                            {upcomingAlerts.map(a => (
+                                                <div key={a.id} className="bg-red-50 pl-4 pr-1 py-1 rounded-xl text-[10px] font-black border border-red-100 flex items-center gap-3">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-red-700 uppercase leading-none">{a.description}</span>
+                                                        <span className="text-[8px] text-slate-500 mt-0.5">{formatMoney(a.amount)} • Venc: {a.clearanceDate.split('-').reverse().join('/')}</span>
+                                                    </div>
+                                                    <button onClick={() => markAsPaid(a.id)} title="Marcar como pago" className="w-8 h-8 bg-green-500 text-white rounded-lg flex items-center justify-center hover:bg-green-600 transition-colors shadow-sm">
+                                                        <Icon name="check" size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
-                                <div className="flex justify-center"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4"><span className="text-[9px] font-black uppercase text-slate-400">Mês:</span><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
+                                
+                                <MonthPicker />
+
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500 text-center"><p className="text-[8px] font-black text-[#F8CC82] uppercase mb-1 tracking-widest">Lucro Estimado</p><h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3></div>
                                     <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Receita Bruta</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3></div>
@@ -359,8 +386,9 @@
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={status} onChange={e => setStatus(e.target.value)}><option value="pago">Pago</option><option value="pendente">Pendente</option></select>
                                             </div>
                                         )}
-                                        {type === 'saida' && (
-                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas (Vezes)</label><input type="number" min="1" max="60" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={installments} onChange={e=>setInstallments(e.target.value)} /></div>
+                                        {/* PARCELAMENTO: SÓ NO CARTÃO DE CRÉDITO */}
+                                        {type === 'saida' && isCardSelected && (
+                                            <div className="space-y-1 animate-in slide-in-from-top-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas (Vezes no Cartão)</label><input type="number" min="1" max="60" className="w-full p-4 bg-slate-50 border border-orange-200 rounded-2xl font-black text-sm outline-none" value={installments} onChange={e=>setInstallments(e.target.value)} /></div>
                                         )}
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /></div><div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Venc.</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
@@ -369,7 +397,7 @@
                                     </form>
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col">
                                         <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 tracking-widest flex justify-between"><span>Histórico Mensal</span><span>{filterMonth}</span></div>
-                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">{transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (<div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group"><div className="flex items-center gap-4"><div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div><div><p className="font-black text-sm uppercase leading-tight">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p></div></div><div className="flex items-center gap-2"><p className="font-black text-sm mr-2">{formatMoney(t.amount)}</p><div className="flex items-center gap-1 opacity-0 group-hover:opacity-100"><button onClick={() => startEdit(t)} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="edit-3" size={14}/></button></div></div></div>))}</div>
+                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">{transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (<div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-colors"><div className="flex items-center gap-4"><div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div><div><p className="font-black text-sm uppercase leading-tight">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p></div></div><div className="flex items-center gap-2"><p className="font-black text-sm mr-2">{formatMoney(t.amount)}</p><div className="flex items-center gap-1 opacity-0 group-hover:opacity-100"><button onClick={() => startEdit(t)} className="p-2 text-slate-300 hover:text-blue-500"><Icon name="edit-3" size={14}/></button></div></div></div>))}</div>
                                     </div>
                                 </div>
                             </div>
@@ -380,9 +408,35 @@
                         )}
 
                         {activeTab === 'planilha' && (
-                             <div className="space-y-4 animate-in fade-in duration-300"><div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-2"><Icon name="table" className="text-[#D97757]" /><h2 className="text-sm font-black uppercase text-slate-800">Planilha Diária</h2></div><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-6 py-3 rounded-2xl text-[9px] font-black uppercase">Abrir Novo Dia</button></div><div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4">X</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => { const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={r[f] || ''} onChange={async(e) => { const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''); await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v }, { merge: true }); }} placeholder="0" /></td>))}<td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td></tr>); })}</tbody></table></div></div>
+                             <div className="space-y-4 animate-in fade-in duration-300"><div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-2"><Icon name="table" className="text-[#D97757]" /><h2 className="text-sm font-black uppercase text-slate-800">Planilha Diária</h2></div><div className="flex items-center gap-2 p-2 bg-white rounded-2xl shadow-inner"><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2"/><div className="w-px h-6 bg-slate-100"></div><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Novo Dia</button></div></div><div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4">X</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => { const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={r[f] || ''} onChange={async(e) => { const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''); await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v }, { merge: true }); }} placeholder="0" /></td>))}<td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td></tr>); })}</tbody></table></div></div>
                         )}
 
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-center">Resultados de {filterMonth}</h2>
+                                <MonthPicker />
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Faturamento</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Gastos</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
+                                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'}`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">CMV</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757]">
+                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center tracking-tighter">DRE - {filterMonth}</h2>
+                                <MonthPicker />
+                                <div className="space-y-4">
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black uppercase text-[10px] text-green-800"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="py-4 border-b">{Object.entries(stats.costsByCategory).map(([cat, val]) => (<div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(val)}</span></div>))}</div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">Resultado Final</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Outras abas (Cartões, Fornecedores, Ajustes) mantidas com o padrão completo da v9.8.3 */}
                         {activeTab === 'cartoes' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-300">
                                 {Object.entries(creditCardStats).length === 0 ? (<div className="col-span-full py-20 text-center opacity-30 font-black uppercase text-xs">Sem cartões ativos.</div>) : Object.entries(creditCardStats).map(([name, data]) => (<div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]"><h3 className="font-black uppercase text-lg">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Acumulado Mês</p><h3 className="text-xl font-black text-[#1A202C] mt-2">{formatMoney(data.total)}</h3><div className="mt-4 pt-4 border-t grid grid-cols-2"><div className="text-center border-r"><p className="text-[8px] font-black text-slate-400">Fecho</p><p className="font-black text-sm text-[#D97757]">Dia {data.closing}</p></div><div className="text-center"><p className="text-[8px] font-black text-slate-400">Venc.</p><p className="font-black text-sm text-red-500">Dia {data.due}</p></div></div></div>))}
@@ -393,20 +447,12 @@
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8"><div className="glass-card p-8 rounded-[3rem] h-fit shadow-lg"><h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Novo Fornecedor</h2><div className="space-y-4"><input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><button onClick={async() => { if(!newItemName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: newItemName }); setNewItemName(''); }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Adicionar</button></div></div><div className="glass-card p-8 rounded-[3rem] shadow-lg max-h-[500px] overflow-y-auto no-scrollbar"><h2 className="text-sm font-black uppercase mb-6">Lista</h2><div className="space-y-2">{suppliers.map(s => (<div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group"><span className="text-xs font-black uppercase">{s.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 hover:text-red-500 transition-opacity"><Icon name="trash-2" size={14} /></button></div>))}</div></div></div>
                         )}
 
-                        {activeTab === 'resultados' && (
-                            <div className="space-y-8 animate-in fade-in duration-500"><h2 className="text-xl font-black uppercase text-center">Resumo {filterMonth}</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center"><div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Faturamento</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div><div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Gastos</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div><div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'}`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div><div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">CMV</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3></div></div></div>
-                        )}
-
-                        {activeTab === 'dre' && (
-                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757]"><h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE</h2><div className="space-y-4"><div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black uppercase text-[10px] text-green-800"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div><div className="py-4 border-b">{Object.entries(stats.costsByCategory).map(([cat, val]) => (<div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(val)}</span></div>))}</div><div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">Resultado Final</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div></div></div>
-                        )}
-
                         {activeTab === 'ajustes' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom duration-500"><div className="glass-card p-8 rounded-[3rem] shadow-lg"><h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Contas & Cartões</h2><div className="space-y-4"><div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200"><input type="text" className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none mb-2" placeholder="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><div className="flex gap-2 mb-2"><button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border text-slate-400'}`}>Corrente</button><button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border text-slate-400'}`}>Cartão</button></div>{newItemType === 'cartao' && (<div className="grid grid-cols-2 gap-2 mb-2"><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Fecho (Dia)" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Venc. (Dia)" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>)}<button onClick={async() => { if(!newItemName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ name: newItemName, type: newItemType, closingDay: newItemClosingDay || '1', dueDay: newItemDueDay || '10' }); setNewItemName(''); }} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-sm">Adicionar</button></div><div className="space-y-2 max-h-40 overflow-y-auto no-scrollbar">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><div className="flex items-center gap-2 text-[10px] font-black uppercase"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12}/><span>{a.name}</span></div><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>))}</div></div></div><div className="glass-card p-8 rounded-[3rem] shadow-lg"><h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias</h2><div className="flex gap-2 mb-6"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Ex: Insumos" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><button onClick={async() => { if(!newItemName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: newItemName }); setNewItemName(''); }} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button></div><div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span className="text-xs font-bold uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>))}</div></div></div>
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.3 Stable</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.4 Stable</footer>
                 </div>
             );
         }
