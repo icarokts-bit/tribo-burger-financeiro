@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.8.4</title>
+    <title>Tribo Burger | Gestão Total v9.8.5 (BASE ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -252,6 +252,8 @@
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
                 let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; let pendingTotal = 0;
+                
+                // FATURAMENTO: Pegar somente os valores de vendas da Planilha Diária
                 Object.keys(dailyRecords).forEach(day => {
                     if (day.startsWith(filterMonth)) {
                         const r = dailyRecords[day];
@@ -259,16 +261,19 @@
                         custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
                     }
                 });
+
+                // DESPESAS: Lançamentos manuais de saída e pendentes
                 transactions.forEach(t => {
                     if (t.date.startsWith(filterMonth)) {
                         const amount = p(t.amount);
-                        if (t.type === 'entrada' && t.status === 'pago') rb += amount;
+                        // ENTRADAS manuais NÃO contam mais no RB (Faturamento) conforme solicitado
                         if (t.type === 'saida') {
                             if (t.status === 'pendente') pendingTotal += amount;
                             else costsByCategory[t.category] = (costsByCategory[t.category] || 0) + amount;
                         }
                     }
                 });
+
                 const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
                 const cmv = (costsByCategory['CMV Insumos'] || 0) + (costsByCategory['CMV Bebidas'] || 0);
                 return { rb, custosVariaveis, costsByCategory, totalOperating, pendingTotal, lucro: rb - (custosVariaveis + totalOperating), cmv };
@@ -299,7 +304,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-20 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">v9.8.4 Business</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-20 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">v9.8.5 Business</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -324,7 +329,7 @@
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.4</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.5</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab}</button>
@@ -359,10 +364,10 @@
                                 <MonthPicker />
 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500 text-center"><p className="text-[8px] font-black text-[#F8CC82] uppercase mb-1 tracking-widest">Lucro Estimado</p><h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3></div>
-                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Receita Bruta</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3></div>
-                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">A Pagar</p><h3 className="text-xl font-black text-orange-500">{formatMoney(stats.pendingTotal)}</h3></div>
-                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">CMV Mês</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3></div>
+                                    <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500 text-center"><p className="text-[8px] font-black text-[#F8CC82] uppercase mb-1 tracking-widest">Lucro Operacional</p><h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Faturamento (Vendas)</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3></div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">A Pagar (Pendente)</p><h3 className="text-xl font-black text-orange-500">{formatMoney(stats.pendingTotal)}</h3></div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">CMV Acumulado</p><h3 className="text-xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3></div>
                                 </div>
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit">
@@ -386,7 +391,6 @@
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={status} onChange={e => setStatus(e.target.value)}><option value="pago">Pago</option><option value="pendente">Pendente</option></select>
                                             </div>
                                         )}
-                                        {/* PARCELAMENTO: SÓ NO CARTÃO DE CRÉDITO */}
                                         {type === 'saida' && isCardSelected && (
                                             <div className="space-y-1 animate-in slide-in-from-top-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas (Vezes no Cartão)</label><input type="number" min="1" max="60" className="w-full p-4 bg-slate-50 border border-orange-200 rounded-2xl font-black text-sm outline-none" value={installments} onChange={e=>setInstallments(e.target.value)} /></div>
                                         )}
@@ -404,21 +408,21 @@
                         )}
 
                         {activeTab === 'saldos' && (
-                            <div className="space-y-6 animate-in fade-in zoom-in duration-500"><h2 className="text-xl font-black uppercase tracking-tighter text-center">Saldo das Contas</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{accounts.map(acc => (<div key={acc.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center"><div className="bg-slate-100 p-3 rounded-full mb-3"><Icon name={acc.type === 'cartao' ? 'credit-card' : 'landmark'} className="text-slate-500" /></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p><h3 className={`text-2xl font-black ${accountBalances[acc.name] >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3><p className="text-[8px] font-bold text-slate-300 uppercase mt-2">Disponível agora</p></div>))}{accounts.length === 0 && (<div className="col-span-full py-20 text-center opacity-20 font-black uppercase text-xs">Sem contas.</div>)}</div></div>
+                            <div className="space-y-6 animate-in fade-in zoom-in duration-500"><h2 className="text-xl font-black uppercase tracking-tighter text-center">Saldo das Contas (Fluxo Real)</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{accounts.map(acc => (<div key={acc.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center"><div className="bg-slate-100 p-3 rounded-full mb-3"><Icon name={acc.type === 'cartao' ? 'credit-card' : 'landmark'} className="text-slate-500" /></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p><h3 className={`text-2xl font-black ${accountBalances[acc.name] >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3><p className="text-[8px] font-bold text-slate-300 uppercase mt-2">Disponível agora</p></div>))}{accounts.length === 0 && (<div className="col-span-full py-20 text-center opacity-20 font-black uppercase text-xs">Sem contas.</div>)}</div></div>
                         )}
 
                         {activeTab === 'planilha' && (
-                             <div className="space-y-4 animate-in fade-in duration-300"><div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-2"><Icon name="table" className="text-[#D97757]" /><h2 className="text-sm font-black uppercase text-slate-800">Planilha Diária</h2></div><div className="flex items-center gap-2 p-2 bg-white rounded-2xl shadow-inner"><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2"/><div className="w-px h-6 bg-slate-100"></div><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Novo Dia</button></div></div><div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4">X</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => { const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={r[f] || ''} onChange={async(e) => { const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''); await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v }, { merge: true }); }} placeholder="0" /></td>))}<td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td></tr>); })}</tbody></table></div></div>
+                             <div className="space-y-4 animate-in fade-in duration-300"><div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-2"><Icon name="table" className="text-[#D97757]" /><h2 className="text-sm font-black uppercase text-slate-800">Planilha Diária de Vendas</h2></div><div className="flex items-center gap-2 p-2 bg-white rounded-2xl shadow-inner"><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2"/><div className="w-px h-6 bg-slate-100"></div><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Novo Dia</button></div></div><div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Faturamento</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4">X</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => { const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={r[f] || ''} onChange={async(e) => { const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''); await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v }, { merge: true }); }} placeholder="0" /></td>))}<td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td></tr>); })}</tbody></table></div></div>
                         )}
 
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                <h2 className="text-xl font-black uppercase tracking-tighter text-center">Resultados de {filterMonth}</h2>
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-center">Desempenho Comercial: {filterMonth}</h2>
                                 <MonthPicker />
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Faturamento</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Gastos</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
-                                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'}`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Faturamento (Vendas)</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Gastos Operacionais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
+                                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'}`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Lucro Operacional</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">CMV</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3></div>
                                 </div>
                             </div>
@@ -426,17 +430,17 @@
 
                         {activeTab === 'dre' && (
                             <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757]">
-                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center tracking-tighter">DRE - {filterMonth}</h2>
+                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center tracking-tighter">DRE Operacional - {filterMonth}</h2>
                                 <MonthPicker />
                                 <div className="space-y-4">
-                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black uppercase text-[10px] text-green-800"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black uppercase text-[10px] text-green-800"><span>(+) Receita Operacional Bruta (Vendas)</span><span>{formatMoney(stats.rb)}</span></div>
                                     <div className="py-4 border-b">{Object.entries(stats.costsByCategory).map(([cat, val]) => (<div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(val)}</span></div>))}</div>
-                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">Resultado Final</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase tracking-widest">Resultado do Exercício</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                    <p className="text-[8px] text-slate-400 text-center uppercase font-bold">* Entradas manuais de capital não são contabilizadas no DRE.</p>
                                 </div>
                             </div>
                         )}
                         
-                        {/* Outras abas (Cartões, Fornecedores, Ajustes) mantidas com o padrão completo da v9.8.3 */}
                         {activeTab === 'cartoes' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-300">
                                 {Object.entries(creditCardStats).length === 0 ? (<div className="col-span-full py-20 text-center opacity-30 font-black uppercase text-xs">Sem cartões ativos.</div>) : Object.entries(creditCardStats).map(([name, data]) => (<div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]"><h3 className="font-black uppercase text-lg">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Acumulado Mês</p><h3 className="text-xl font-black text-[#1A202C] mt-2">{formatMoney(data.total)}</h3><div className="mt-4 pt-4 border-t grid grid-cols-2"><div className="text-center border-r"><p className="text-[8px] font-black text-slate-400">Fecho</p><p className="font-black text-sm text-[#D97757]">Dia {data.closing}</p></div><div className="text-center"><p className="text-[8px] font-black text-slate-400">Venc.</p><p className="font-black text-sm text-red-500">Dia {data.due}</p></div></div></div>))}
@@ -452,7 +456,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.4 Stable</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.5 Base Estável</footer>
                 </div>
             );
         }
