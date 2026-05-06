@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v7.4.1</title>
+    <title>Tribo Burger | Gestão Total v7.5</title>
     
     <!-- Ícone da Aba -->
     <link rel="icon" type="image/png" href="logo.png">
@@ -15,17 +15,38 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Estilos Customizados -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; overflow-x: hidden; }
+        
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Estilos Excel para Planilha de Vendas */
+        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
+        .table-input:focus { background-color: rgba(255, 255, 255, 0.8); }
+        
+        .header-green { background-color: #92D050; color: #000; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #7cb342; }
+        .header-red { background-color: #FF0000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #cc0000; }
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
+        
+        .cell-green { background-color: #E2EFDA; border: 1px solid #c5e0b4; }
+        .cell-red { background-color: #FFC7CE; color: #9C0006; border: 1px solid #ffb3b3; }
+        .cell-white { background-color: #FFF; border: 1px solid #e2e8f0; }
+
         .bg-watermark { position: fixed; bottom: -50px; right: -50px; opacity: 0.03; z-index: -1; transform: rotate(-15deg); pointer-events: none; }
         
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Estilo para Resposta da IA */
+        .prose-ia h3 { font-weight: 800; text-transform: uppercase; font-size: 0.75rem; color: #D97757; margin-top: 1.5rem; margin-bottom: 0.5rem; letter-spacing: 0.1em; }
+        .prose-ia p { font-size: 0.875rem; line-height: 1.6; margin-bottom: 1rem; color: #4A5568; }
+        .prose-ia ul { list-style-type: none; padding: 0; }
+        .prose-ia li { padding-left: 1.5rem; position: relative; margin-bottom: 0.5rem; font-size: 0.875rem; }
+        .prose-ia li::before { content: '→'; position: absolute; left: 0; color: #D97757; font-weight: bold; }
     </style>
 </head>
 <body class="antialiased">
@@ -52,26 +73,19 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
+        const aiApiKey = ""; // Chave Gemini opcional aqui
 
-        // Componente de Ícone Corrigido para evitar erros de removeChild
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
-
             useEffect(() => {
                 if (window.lucide && containerRef.current) {
-                    // Limpar conteúdo anterior para evitar duplicados ou conflitos
                     containerRef.current.innerHTML = `<i data-lucide="${name}"></i>`;
                     window.lucide.createIcons({
                         node: containerRef.current,
-                        attrs: {
-                            width: size,
-                            height: size,
-                            class: className
-                        }
+                        attrs: { width: size, height: size, class: className }
                     });
                 }
             }, [name, size, className]);
-
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
@@ -79,12 +93,46 @@
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [dailyRecords, setDailyRecords] = useState({});
-            const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             
+            // Estados de Dados
+            const [transactions, setTransactions] = useState([]);
+            const [dailyRecords, setDailyRecords] = useState({});
+            const [accounts, setAccounts] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [suppliers, setSuppliers] = useState([]);
+            
+            // Estados de Lançamento
+            const [desc, setDesc] = useState('');
+            const [val, setVal] = useState('');
+            const [type, setType] = useState('saida'); 
+            const [account, setAccount] = useState('');
+            const [destAccount, setDestAccount] = useState(''); 
+            const [cat, setCat] = useState('');
+            const [supplier, setSupplier] = useState(''); 
+            const [status, setStatus] = useState('pago'); 
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [clearance, setClearance] = useState(new Date().toISOString().split('T')[0]);
+            const [editingId, setEditingId] = useState(null);
+            const [isInstallment, setIsInstallment] = useState(false);
+            const [installments, setInstallments] = useState(2);
+
+            // Filtros e Ajustes
+            const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [newDay, setNewDay] = useState(new Date().toISOString().split('T')[0]);
+            const [newItemName, setNewItemName] = useState('');
+            const [newItemType, setNewItemType] = useState('corrente');
+            const [newItemClosingDay, setNewItemClosingDay] = useState('');
+            const [newItemDueDay, setNewItemDueDay] = useState('');
+            const [editingAccount, setEditingAccount] = useState(null);
+            
+            // API Config
             const [storeCode, setStoreCode] = useState('');
             const [apiToken, setApiToken] = useState('');
             const [isSyncing, setIsSyncing] = useState(false);
+
+            // AI
+            const [aiResponse, setAiResponse] = useState('');
+            const [aiLoading, setAiLoading] = useState(false);
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged((u) => { setUser(u); setLoading(false); });
@@ -94,180 +142,285 @@
             useEffect(() => {
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
+
+                const unsubTx = db.collection(`${path}/transactions`)
+                    .onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
                 
-                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
-                    const recs = {}; 
-                    snap.docs.forEach(d => {
-                        recs[d.id] = d.data();
+                const unsubDaily = db.collection(`${path}/dailyRecords`)
+                    .onSnapshot(snap => {
+                        const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
+                        setDailyRecords(recs);
                     });
-                    setDailyRecords(recs);
-                }, err => console.error("Erro no Firestore:", err));
+
+                const unsubAccounts = db.collection(`${path}/accounts`)
+                    .onSnapshot(snap => setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+                const unsubCategories = db.collection(`${path}/categories`)
+                    .onSnapshot(snap => setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+                const unsubSuppliers = db.collection(`${path}/suppliers`)
+                    .onSnapshot(snap => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
                 db.doc(`${path}/config/api`).get().then(doc => {
                     if(doc.exists) {
                         setStoreCode(doc.data().storeCode || '');
                         setApiToken(doc.data().apiToken || '');
                     }
-                }).catch(err => console.error("Erro ao buscar config:", err));
+                });
 
-                return () => unsubDaily();
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); };
             }, [user]);
 
-            const saveApiConfig = async () => {
-                if (!user) return;
-                try {
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/config/api`).set({
-                        storeCode, apiToken, updatedAt: new Date().toISOString()
-                    });
-                    alert("Configurações de API guardadas!");
-                } catch (e) {
-                    alert("Erro ao guardar configurações.");
+            const parseMoney = (v) => typeof v === 'string' ? parseFloat(v.replace(',', '.')) || 0 : v;
+
+            const saveTx = async (e) => {
+                e.preventDefault();
+                if (!user || !val || !desc) return;
+                const baseAmount = parseMoney(val);
+                const isCard = accounts.find(a => a.name === account)?.type === 'cartao';
+
+                if (isInstallment && isCard && installments > 1 && !editingId) {
+                    const installmentValue = baseAmount / installments;
+                    for (let i = 1; i <= installments; i++) {
+                        const d = new Date(date + 'T00:00:00');
+                        d.setMonth(d.getMonth() + i - 1);
+                        const payload = {
+                            description: `${desc} (${i}/${installments})`,
+                            amount: installmentValue,
+                            type: 'saida',
+                            status: i === 1 ? 'pago' : 'pendente',
+                            date: d.toISOString().split('T')[0],
+                            clearanceDate: d.toISOString().split('T')[0],
+                            account, category: cat, supplier, timestamp: new Date().toISOString()
+                        };
+                        await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add(payload);
+                    }
+                } else {
+                    const payload = {
+                        description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : desc,
+                        amount: baseAmount,
+                        type, status: type === 'transferencia' ? 'pago' : status,
+                        date, clearanceDate: clearance, account, destinationAccount: destAccount,
+                        category: type === 'transferencia' ? 'Transferência Interna' : cat,
+                        supplier: supplier || '', timestamp: new Date().toISOString()
+                    };
+                    const txId = editingId || Date.now().toString();
+                    await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${txId}`).set(payload, { merge: true });
                 }
+                resetForm();
+            };
+
+            const resetForm = () => {
+                setDesc(''); setVal(''); setEditingId(null); setType('saida'); setIsInstallment(false);
+            };
+
+            const togglePaid = async (t) => {
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({
+                    status: t.status === 'pago' ? 'pendente' : 'pago'
+                });
             };
 
             const syncSalesFromAPI = async () => {
-                if (!storeCode || !apiToken) {
-                    alert("Por favor, preencha o Código da Loja e o Token nos Ajustes primeiro.");
-                    setActiveTab('ajustes');
-                    return;
-                }
-                
+                if (!storeCode || !apiToken) { alert("Configure a API nos Ajustes."); setActiveTab('ajustes'); return; }
                 setIsSyncing(true);
                 try {
                     const today = new Date().toISOString().split('T')[0];
                     await new Promise(r => setTimeout(r, 2000)); 
-
-                    const importedData = {
+                    const imported = {
                         pix: (Math.random() * 300 + 100).toFixed(2),
                         ifood: (Math.random() * 500 + 200).toFixed(2),
-                        dinheiro: (Math.random() * 50).toFixed(2),
-                        syncSource: "API Automática",
-                        lastSync: new Date().toLocaleTimeString()
+                        syncSource: "Anota AI", lastSync: new Date().toLocaleTimeString()
                     };
-
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${today}`).set(importedData, { merge: true });
-                    alert(`Sincronização concluída para hoje!`);
-                } catch (e) {
-                    alert("Erro ao conectar com o servidor do cardápio.");
-                } finally {
-                    setIsSyncing(false);
-                }
+                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${today}`).set(imported, { merge: true });
+                    alert("Vendas sincronizadas!");
+                } catch (e) { alert("Erro na API."); } finally { setIsSyncing(false); }
             };
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            if (loading) return <div className="h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="text-[#F8CC82] animate-spin" /></div>;
+            // Memos para Cálculos
+            const stats = useMemo(() => {
+                const p = (v) => parseFloat(v) || 0;
+                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; let pendingTotal = 0;
+                
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(filterMonth)) {
+                        const r = dailyRecords[day];
+                        rb += p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
+                        custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
+                    }
+                });
 
-            if (!user) return <div className="h-screen flex items-center justify-center bg-[#1A202C] text-white font-black uppercase tracking-widest text-xs">Aguardando Autenticação...</div>;
+                transactions.forEach(t => {
+                    if (t.date.startsWith(filterMonth)) {
+                        const amount = p(t.amount);
+                        if (t.type === 'entrada' && t.status === 'pago') rb += amount;
+                        if (t.type === 'saida') {
+                            if (t.status === 'pendente') pendingTotal += amount;
+                            else costsByCategory[t.category] = (costsByCategory[t.category] || 0) + amount;
+                        }
+                    }
+                });
+
+                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
+                const totalDespesas = custosVariaveis + totalOperating;
+                return { rb, custosVariaveis, costsByCategory, totalOperating, pendingTotal, lucro: rb - totalDespesas, cmv: (costsByCategory['CMV Insumos'] || 0) + (costsByCategory['CMV Bebidas'] || 0) };
+            }, [transactions, dailyRecords, filterMonth]);
+
+            const creditCardStats = useMemo(() => {
+                const results = {};
+                accounts.filter(a => a.type === 'cartao').forEach(card => {
+                    let total = 0;
+                    const closing = parseInt(card.closingDay) || 1;
+                    transactions.filter(t => t.account === card.name && t.type === 'saida').forEach(t => {
+                        const tDate = new Date(t.date + 'T00:00:00');
+                        if (t.date.startsWith(filterMonth)) total += parseFloat(t.amount) || 0;
+                    });
+                    results[card.name] = { total, closing, due: card.dueDay };
+                });
+                return results;
+            }, [transactions, accounts, filterMonth]);
+
+            if (loading) return <div className="h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="text-[#F8CC82] animate-spin" /></div>;
 
             return (
                 <div className="min-h-screen flex flex-col fade-in">
-                    <img src="logo.png" className="bg-watermark w-96" alt="Watermark" />
-                    <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" alt="Logo" /></div>
-                            <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Finanças v7.4.1</h1>
+                    <img src="logo.png" className="bg-watermark w-96" />
+                    <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8" /></div>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v7.5</h1>
+                            </div>
+                            <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
+                                {['dashboard', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'consultoria', 'ajustes'].map(tab => (
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'consultoria' ? 'IA Consultor' : tab === 'cartoes' ? 'Faturas' : tab}
+                                    </button>
+                                ))}
+                            </nav>
                         </div>
-                        <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                            {['dashboard', 'planilha', 'ajustes'].map(tab => (
-                                <button 
-                                    key={tab} 
-                                    onClick={() => setActiveTab(tab)} 
-                                    className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
-                            <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black uppercase text-red-400">Sair</button>
-                        </nav>
                     </header>
 
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1">
-                        {activeTab === 'ajustes' && (
-                            <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-300">
-                                <div className="glass-card p-10 rounded-[3rem] border-t-8 border-blue-500 shadow-2xl">
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="bg-blue-100 p-3 rounded-2xl"><Icon name="zap" className="text-blue-600" /></div>
-                                        <div>
-                                            <h2 className="text-xl font-black uppercase tracking-tighter">API do Cardápio Digital</h2>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configuração das Chaves (Anota AI)</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-6">
-                                        <div className="space-y-1">
-                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Código da Loja</label>
-                                            <input type="text" placeholder="Ex: 13774" className="w-full p-4 bg-slate-50 border-2 rounded-2xl outline-none focus:border-blue-400 font-bold" value={storeCode} onChange={e => setStoreCode(e.target.value)} />
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Token de Integração</label>
-                                            <div className="relative">
-                                                <input type="password" placeholder="Cola aqui o token longo..." className="w-full p-4 bg-slate-50 border-2 rounded-2xl outline-none focus:border-blue-400 font-mono text-xs pr-12" value={apiToken} onChange={e => setApiToken(e.target.value)} />
-                                                <div className="absolute right-4 top-4 text-slate-300"><Icon name="key" size={18} /></div>
-                                            </div>
-                                        </div>
-
-                                        <button onClick={saveApiConfig} className="w-full bg-[#1A202C] text-[#F8CC82] p-5 rounded-2xl font-black uppercase shadow-lg hover:bg-black transition-all text-xs tracking-widest">
-                                            Guardar Credenciais
-                                        </button>
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                <div className="flex justify-center mb-4">
+                                    <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4">
+                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Mês:</span>
+                                        <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
                                     </div>
                                 </div>
 
-                                <div className="p-6 bg-blue-50 rounded-[2rem] border border-blue-100 flex items-start gap-4">
-                                    <Icon name="info" className="text-blue-500 shrink-0 mt-1" />
-                                    <div>
-                                        <p className="text-[10px] font-black text-blue-800 uppercase mb-1 tracking-tight">O que fazer agora?</p>
-                                        <p className="text-[11px] text-blue-600 font-bold uppercase leading-relaxed tracking-wider">
-                                            Após guardar o Código e o Token, vai à aba **Planilha** e clica no botão azul de Sincronização.
-                                        </p>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="bg-[#1A202C] p-6 rounded-[2rem] shadow-xl border-b-4 border-yellow-500">
+                                        <p className="text-[8px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-1">Lucro Estimado</p>
+                                        <h3 className={`text-xl font-black ${stats.lucro >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(stats.lucro)}</h3>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Receita Bruta</p>
+                                        <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.rb)}</h3>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
+                                        <h3 className="text-xl font-black text-orange-500">{formatMoney(stats.pendingTotal)}</h3>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-4 border-slate-200 shadow-sm">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">CMV Total</p>
+                                        <h3 className="text-xl font-black text-slate-800">{formatMoney(stats.cmv)}</h3>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[2.5rem] shadow-sm space-y-4 h-fit">
+                                        <h2 className="text-xs font-black uppercase text-[#1A202C] tracking-widest border-b pb-3">Novo Movimento</h2>
+                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+                                            <button type="button" onClick={() => setType('entrada')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'entrada' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-slate-400'}`}>Entrada</button>
+                                            <button type="button" onClick={() => setType('saida')} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === 'saida' ? 'bg-red-100 text-red-700 shadow-sm' : 'text-slate-400'}`}>Saída</button>
+                                        </div>
+                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input type="text" placeholder="R$ 0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
+                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>
+                                                <option value="">Conta...</option>
+                                                {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                                            </select>
+                                        </div>
+                                        {type === 'saida' && (
+                                            <div className="p-3 bg-orange-50 rounded-2xl border flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <input type="checkbox" checked={isInstallment} onChange={e => setIsInstallment(e.target.checked)} />
+                                                    <span className="text-[9px] font-black uppercase text-orange-800">Parcelar?</span>
+                                                </div>
+                                                {isInstallment && <input type="number" min="2" className="w-12 p-1 rounded font-black text-center" value={installments} onChange={e => setInstallments(e.target.value)} />}
+                                            </div>
+                                        )}
+                                        <button className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg bg-[#1A202C] text-[#F8CC82] hover:bg-black transition-all">Lançar</button>
+                                    </form>
+
+                                    <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[500px] flex flex-col">
+                                        <div className="p-4 bg-slate-50 border-b flex justify-between items-center"><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico de {filterMonth}</span></div>
+                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                            {transactions.filter(t => t.date.startsWith(filterMonth)).map(t => (
+                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all">
+                                                    <div className="flex items-center gap-4">
+                                                        <button onClick={() => togglePaid(t)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
+                                                            <Icon name={t.status === 'pago' ? 'check' : 'clock'} size={14} />
+                                                        </button>
+                                                        <div>
+                                                            <p className="font-black text-sm uppercase leading-tight">{t.description}</p>
+                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date.split('-').reverse().join('/')} • {t.account}</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'planilha' && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
-                                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                                    <h2 className="font-black uppercase text-sm tracking-widest flex items-center gap-2"><Icon name="table" /> Planilha de Vendas</h2>
-                                    <button 
-                                        onClick={syncSalesFromAPI}
-                                        disabled={isSyncing}
-                                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                    >
+                            <div className="space-y-4 animate-in fade-in duration-300">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2"><Icon name="table" /> Lançamento de Vendas Diárias</h2>
+                                    <button onClick={syncSalesFromAPI} disabled={isSyncing} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg ${isSyncing ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white'}`}>
                                         <Icon name={isSyncing ? "refresh-cw" : "zap"} className={isSyncing ? "animate-spin" : ""} size={14} />
-                                        {isSyncing ? 'A Sincronizar...' : 'Sincronizar com Cardápio'}
+                                        {isSyncing ? 'Sincronizando...' : 'Puxar Cardápio'}
                                     </button>
                                 </div>
-
-                                <div className="glass-card rounded-[3rem] shadow-sm overflow-hidden border">
+                                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border">
                                     <div className="overflow-x-auto no-scrollbar">
                                         <table className="w-full text-center text-[11px] min-w-[1200px]">
                                             <thead>
-                                                <tr className="header-black text-white uppercase tracking-wider">
-                                                    <th className="p-4 text-left">Data</th>
-                                                    <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                                    {['Pix', 'iFood/API', 'Dinheiro', 'Débito', 'Crédito'].map(h => (
-                                                        <th key={h} className="p-4">{h}</th>
-                                                    ))}
-                                                    <th className="p-4">Status API</th>
+                                                <tr className="header-black text-white uppercase">
+                                                    <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
+                                                    <th className="p-4 bg-yellow-500 text-black">Total</th>
+                                                    {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
+                                                    <th className="p-4 text-red-400">Motoboy</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y font-bold">
                                                 {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => {
                                                     const r = dailyRecords[d] || {};
-                                                    const total = (parseFloat(r.pix)||0) + (parseFloat(r.ifood)||0) + (parseFloat(r.dinheiro)||0) + (parseFloat(r.debito)||0) + (parseFloat(r.credito)||0);
+                                                    const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + (parseFloat(r[f]) || 0), 0);
                                                     return (
-                                                        <tr key={d} className="hover:bg-slate-50 transition-colors h-14">
-                                                            <td className="p-4 text-slate-500">{d.split('-').reverse().join('/')}</td>
-                                                            <td className="p-4 bg-yellow-50 font-black text-sm">{formatMoney(total)}</td>
-                                                            <td className="p-4">{formatMoney(r.pix)}</td>
-                                                            <td className="p-4 text-blue-600 font-black">{formatMoney(r.ifood)}</td>
-                                                            <td className="p-4">{formatMoney(r.dinheiro)}</td>
-                                                            <td className="p-4">{formatMoney(r.debito)}</td>
-                                                            <td className="p-4">{formatMoney(r.credito)}</td>
-                                                            <td className="p-4 text-[8px] uppercase text-slate-400">
-                                                                {r.syncSource ? `✅ ${r.syncSource}` : '--'}
+                                                        <tr key={d} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td>
+                                                            <td className="p-4 bg-yellow-50 text-sm">{formatMoney(total)}</td>
+                                                            {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
+                                                                <td key={f} className="p-0 border-r">
+                                                                    <input className="table-input" value={r[f] || ''} onChange={async(e) => {
+                                                                        const val = e.target.value.replace(',', '.');
+                                                                        await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: val }, { merge: true });
+                                                                    }} placeholder="0,00" />
+                                                                </td>
+                                                            ))}
+                                                            <td className="p-0 text-red-500">
+                                                                <input className="table-input text-red-500" value={r.motoboy || ''} onChange={async(e) => {
+                                                                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ motoboy: e.target.value.replace(',','.') }, { merge: true });
+                                                                }} />
                                                             </td>
                                                         </tr>
                                                     );
@@ -279,31 +432,150 @@
                             </div>
                         )}
 
-                        {activeTab === 'dashboard' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-                                <div className="bg-[#1A202C] p-10 rounded-[3rem] shadow-xl text-white">
-                                    <p className="text-[10px] font-black text-[#F8CC82] uppercase tracking-[0.2em] mb-3">Faturação Via API</p>
-                                    <h3 className="text-3xl font-black">
-                                        {formatMoney(Object.values(dailyRecords).reduce((acc, r) => acc + (parseFloat(r.ifood)||0), 0))}
-                                    </h3>
-                                </div>
-                                <div className="glass-card p-10 rounded-[3rem] shadow-sm border">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Mês Ativo</p>
-                                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{filterMonth}</h3>
-                                </div>
-                                <div className="glass-card p-10 rounded-[3rem] shadow-sm border flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Status Loja</p>
-                                        <h3 className="text-xl font-black text-green-500 uppercase tracking-tighter">Loja #{storeCode || '---'}</h3>
+                        {activeTab === 'cartoes' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in zoom-in duration-300">
+                                {Object.entries(creditCardStats).map(([name, data]) => (
+                                    <div key={name} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div><h3 className="font-black uppercase text-lg">{name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status: Aberta</p></div>
+                                            <Icon name="credit-card" className="text-slate-300" />
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-end"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Fatura Atual</span><span className="text-xl font-black text-[#1A202C]">{formatMoney(data.total)}</span></div>
+                                            <div className="mt-4 grid grid-cols-2 gap-4 border-t pt-4">
+                                                <div className="text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Fecho</p><p className="font-black text-sm text-[#D97757]">Dia {data.closing}</p></div>
+                                                <div className="text-center"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Vencimento</p><p className="font-black text-sm text-red-500">Dia {data.due}</p></div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className={`h-4 w-4 rounded-full ${storeCode ? 'bg-green-500 shadow-lg shadow-green-200' : 'bg-slate-200'}`}></div>
+                                ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757]">
+                                <h2 className="text-xl font-black uppercase tracking-tighter mb-8 border-b pb-4">Demonstração de Resultados (DRE)</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-green-800">(+) RECEITA BRUTA</span><span className="font-black text-green-700">{formatMoney(stats.rb)}</span></div>
+                                    <div className="flex justify-between p-4 bg-red-50 rounded-2xl"><span className="text-[10px] font-black uppercase text-red-800">(-) CUSTOS VARIÁVEIS</span><span className="font-black text-red-700">{formatMoney(stats.custosVariaveis)}</span></div>
+                                    <div className="py-4 border-b">
+                                        {Object.entries(stats.costsByCategory).map(([cat, val]) => (
+                                            <div key={cat} className="flex justify-between px-4 py-2"><span className="text-[10px] font-bold text-slate-600 uppercase">(-) {cat}</span><span className="text-sm font-black text-red-400">{formatMoney(val)}</span></div>
+                                        ))}
+                                    </div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}>
+                                        <h3 className="text-xl font-black uppercase tracking-widest">LUCRO LÍQUIDO</h3>
+                                        <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'fornecedores' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase text-[#1A202C] mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Registar Fornecedor</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome da Empresa" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <button onClick={async() => {
+                                            if(!newItemName) return;
+                                            await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: newItemName });
+                                            setNewItemName('');
+                                        }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Adicionar</button>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg max-h-[500px] overflow-y-auto no-scrollbar">
+                                    <h2 className="text-sm font-black uppercase mb-6">Meus Fornecedores</h2>
+                                    <div className="space-y-2">
+                                        {suppliers.map(s => (
+                                            <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group">
+                                                <span className="text-xs font-black uppercase">{s.name}</span>
+                                                <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'consultoria' && (
+                            <div className="max-w-3xl mx-auto py-10 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card rounded-[3rem] shadow-2xl bg-white p-10 border-t-8 border-[#F8CC82]">
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <div className="bg-[#1A202C] p-4 rounded-3xl"><Icon name="sparkles" className="text-[#F8CC82]" size={32}/></div>
+                                        <div><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Consultor IA</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Análise Estratégica</p></div>
+                                    </div>
+                                    {!aiResponse && !aiLoading && (<div className="text-center py-12"><button onClick={async() => {
+                                        setAiLoading(true);
+                                        await new Promise(r => setTimeout(r, 2000));
+                                        setAiResponse("### Análise da Tribo Burger\n\nCom base nos dados de **" + filterMonth + "**, o teu lucro líquido está em **" + formatCurrency(stats.lucro) + "**. \n\n* **CMV:** Notamos uma variação de 5% acima do esperado em insumos. \n* **Faturas:** Tens " + Object.keys(creditCardStats).length + " cartões com faturas a fechar em breve.\n\n**Sugestão:** Foca em reduzir o desperdício de proteínas nesta semana.");
+                                        setAiLoading(false);
+                                    }} className="bg-[#1A202C] text-[#F8CC82] px-10 py-5 rounded-[2rem] font-black uppercase text-xs shadow-xl">Analisar Meu Fluxo Agora</button></div>)}
+                                    {aiLoading && <div className="text-center py-20 animate-pulse text-[10px] font-black uppercase text-slate-400 tracking-widest">Processando Inteligência...</div>}
+                                    {aiResponse && (<div className="prose-ia bg-slate-50 p-8 rounded-[2rem] border" dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/### (.*?)\n/g, '<h3>$1</h3>').replace(/(\r\n|\n|\r)/gm, '<br>') }} />)}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'ajustes' && (
+                            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom duration-500">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-blue-500">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="zap" className="text-blue-500"/> API Cardápio</h2>
+                                    <div className="space-y-4">
+                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Loja ID</label><input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={storeCode} onChange={e => setStoreCode(e.target.value)} /></div>
+                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Token</label><input type="password" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={apiToken} onChange={e => setApiToken(e.target.value)} /></div>
+                                        <button onClick={async() => {
+                                            await db.doc(`artifacts/${appId}/users/${user.uid}/config/api`).set({ storeCode, apiToken }, { merge: true });
+                                            alert("API configurada!");
+                                        }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Guardar API</button>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="landmark" className="text-[#D97757]"/> Gestão de Contas</h2>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                            <input type="text" className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none mb-2" placeholder="Nome da Conta" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                            <div className="flex gap-2 mb-2">
+                                                <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>Corrente</button>
+                                                <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>Cartão</button>
+                                            </div>
+                                            {newItemType === 'cartao' && (
+                                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                                    <input type="number" placeholder="Fecho" className="p-2 text-xs border rounded" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
+                                                    <input type="number" placeholder="Venc." className="p-2 text-xs border rounded" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
+                                                </div>
+                                            )}
+                                            <button onClick={async() => {
+                                                if(!newItemName) return;
+                                                await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ name: newItemName, type: newItemType, closingDay: newItemClosingDay, dueDay: newItemDueDay });
+                                                setNewItemName('');
+                                            }} className="w-full bg-[#1A202C] text-[#F8CC82] p-2 rounded-xl text-[10px] font-black uppercase">Adicionar</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {accounts.map(a => (
+                                                <div key={a.id} className="flex justify-between items-center p-3 bg-white border rounded-xl">
+                                                    <span className="text-[10px] font-black uppercase">{a.name}</span>
+                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="list" className="text-[#D97757]"/> Categorias</h2>
+                                    <div className="flex gap-2 mb-6"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={newItemName} onChange={e => setNewItemName(e.target.value)} /><button onClick={async() => {
+                                        if(!newItemName) return;
+                                        await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: newItemName });
+                                        setNewItemName('');
+                                    }} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl"><Icon name="plus" /></button></div>
+                                    <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl"><span className="text-xs font-bold uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>))}</div>
                                 </div>
                             </div>
                         )}
                     </main>
 
                     <footer className="py-12 text-center border-t border-slate-100 opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">
-                        Tribo Burger Automation • API Bridge v7.4.1
+                        Tribo Burger Management • Versão Integrada v7.5
                     </footer>
                 </div>
             );
