@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.9.5 (BASE ESTÁVEL)</title>
+    <title>Tribo Burger | Gestão Total v9.9.6 (BASE ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -221,7 +221,6 @@
 
             const markAsPaid = async (tId) => {
                 if (!user) return;
-                // Se for uma fatura virtual, precisamos marcar todas as transações daquele cartão no mês como pagas
                 if (tId.startsWith('invoice-')) {
                     const [, cardName, month] = tId.split('-');
                     const batch = db.batch();
@@ -238,7 +237,7 @@
             };
 
             const startEdit = (t) => {
-                if (t.isInvoice) return; // Não editamos a fatura consolidada
+                if (t.isInvoice) return; 
                 setEditingId(t.id); setDesc(t.description || ''); setVal(t.amount ? t.amount.toString().replace('.', ',') : '');
                 setType(t.type || 'saida'); setAccount(t.account || 'Mercado Pago'); setDestAccount(t.destinationAccount || '');
                 setCat(t.category || ''); setSupplier(t.supplier || ''); setStatus(t.status || 'pago');
@@ -318,9 +317,7 @@
                 return results;
             }, [transactions, accounts, filterMonth]);
 
-            // LÓGICA DE CONSOLIDAÇÃO DE FATURAS NA ABA "A PAGAR"
             const pendingPaymentsConsolidated = useMemo(() => {
-                // 1. Pagamentos individuais de contas que NÃO são cartão
                 const nonCardPending = transactions.filter(t => {
                     const acc = accounts.find(a => a.name === t.account);
                     return t.type === 'saida' && 
@@ -329,7 +326,6 @@
                            acc?.type !== 'cartao';
                 });
 
-                // 2. Faturas de Cartão (Um item por cartão com saldo devedor pendente no mês)
                 const cardInvoices = accounts
                     .filter(a => a.type === 'cartao')
                     .map(card => {
@@ -348,7 +344,7 @@
                             clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`,
                             account: card.name,
                             category: 'Cartão de Crédito',
-                            isInvoice: true // Flag para UI
+                            isInvoice: true 
                         };
                     })
                     .filter(Boolean);
@@ -368,7 +364,6 @@
                 return accounts.find(acc => acc.name === account)?.type === 'cartao';
             }, [account, accounts]);
 
-            // LISTA DE LANÇAMENTOS INDIVIDUAIS DE CARTÃO PARA A NOVA SEÇÃO
             const cardTransactionsForMonth = useMemo(() => {
                 return transactions.filter(t => {
                     const acc = accounts.find(a => a.name === t.account);
@@ -381,7 +376,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.5</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.6</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -444,7 +439,7 @@
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.5</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.6</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -551,7 +546,6 @@
                             <div className="space-y-8 animate-in fade-in zoom-in duration-500">
                                 <h2 className="text-2xl font-black uppercase tracking-tighter text-center">Fluxo de Caixa & Saldos</h2>
                                 
-                                {/* CONTAS PRINCIPAIS EM DESTAQUE (MERCADO PAGO, C6, C6 BANK, IFOOD) */}
                                 <div className="space-y-4">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Contas Operacionais Principais</p>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -575,7 +569,6 @@
                                     </div>
                                 </div>
 
-                                {/* OUTRAS CONTAS E APLICAÇÕES */}
                                 <div className="space-y-4 pt-4 border-t border-slate-100">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Fundos & Aplicações Secundárias</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -601,14 +594,12 @@
                             </div>
                         )}
 
-                        {/* ABA A PAGAR ATUALIZADA - CONSOLIDADA */}
                         {activeTab === 'a_pagar' && (
                             <div className="space-y-8 animate-in fade-in duration-300">
                                 <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Contas a Pagar (Consolidado)</h2>
                                 
                                 <MonthPicker />
 
-                                {/* CARD DE DESTAQUE - TOTAL A PAGAR NO MÊS */}
                                 <div className="flex justify-center">
                                     <div className="bg-white p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 flex flex-col items-center w-full max-w-md group transition-all hover:scale-105">
                                         <div className="bg-red-100 p-4 rounded-3xl mb-4 group-hover:rotate-12 transition-transform shadow-sm">
@@ -652,32 +643,49 @@
                                 
                                 <MonthPicker />
 
-                                {/* FORMULÁRIO DE LANÇAMENTO EXCLUSIVO PARA CARTÃO */}
-                                <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-orange-400 max-w-2xl mx-auto">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-orange-400 max-w-4xl mx-auto">
                                     <h3 className="text-xs font-black text-[#1A202C] uppercase tracking-widest mb-6 flex items-center gap-2">
                                         <Icon name="plus-circle" className="text-orange-500" /> Novo Gasto no Cartão
                                     </h3>
-                                    <form onSubmit={(e) => { setType('saida'); setStatus('pendente'); saveTx(e); }} className="space-y-4">
+                                    <form onSubmit={(e) => { setType('saida'); setStatus('pendente'); saveTx(e); }} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Cartão</label>
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Cartão de Crédito</label>
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>
                                                     <option value="">Selecione o Cartão...</option>
                                                     {accounts.filter(a => a.type === 'cartao').map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                                 </select>
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Descrição</label>
-                                                <input type="text" placeholder="Ex: Compra Insumos" required list="desc-history" className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Descrição do Gasto</label>
+                                                <input type="text" placeholder="Ex: Compra de Carne" required list="desc-history" className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
                                             </div>
                                         </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Categoria do Gasto</label>
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase focus:border-orange-400" value={cat} onChange={e => setCat(e.target.value)}>
+                                                    <option value="">Selecione a Categoria...</option>
+                                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Fornecedor Vinculado</label>
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase focus:border-orange-400" value={supplier} onChange={e => setSupplier(e.target.value)}>
+                                                    <option value="">Selecione o Fornecedor...</option>
+                                                    {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="space-y-1">
                                                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Valor Total</label>
                                                 <input type="text" placeholder="R$ 0,00" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Compra</label>
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data da Compra</label>
                                                 <input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} />
                                             </div>
                                             <div className="space-y-1">
@@ -685,7 +693,9 @@
                                                 <input type="number" min="1" max="60" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={installments} onChange={e=>setInstallments(e.target.value)} />
                                             </div>
                                         </div>
-                                        <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg mt-2">Lançar no Cartão</button>
+                                        <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg mt-2 flex items-center justify-center gap-2 hover:bg-black transition-colors">
+                                            <Icon name="credit-card" size={16} /> Lançar Despesa no Cartão
+                                        </button>
                                     </form>
                                 </div>
 
@@ -711,7 +721,6 @@
                                     ))}
                                 </div>
 
-                                {/* NOVA SEÇÃO: DETALHAMENTO DE LANÇAMENTOS DO CARTÃO */}
                                 <div className="space-y-4 pt-8">
                                     <div className="flex items-center gap-2 px-4">
                                         <Icon name="list-filter" className="text-slate-400" />
@@ -738,7 +747,7 @@
                                                                     {t.description}
                                                                 </p>
                                                                 <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                                    {t.account} • {t.category} {t.totalInstallments > 1 ? `• Parcela ${t.installmentIndex + 1}/${t.totalInstallments}` : ''}
+                                                                    <span className="text-orange-600">{t.account}</span> • {t.category} {t.supplier ? `• ${t.supplier}` : ''} {t.totalInstallments > 1 ? `• Parcela ${t.installmentIndex + 1}/${t.totalInstallments}` : ''}
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -799,7 +808,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.5 Base Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.6 Base Estável</footer>
                 </div>
             );
         }
