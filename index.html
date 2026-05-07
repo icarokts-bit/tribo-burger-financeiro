@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.8.7</title>
+    <title>Tribo Burger | Gestão Total v9.8.8 (BASE ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -291,6 +291,17 @@
                 return results;
             }, [transactions, accounts, filterMonth]);
 
+            // NOVOS FILTROS DE ABAS
+            const pendingPayments = useMemo(() => {
+                return transactions.filter(t => t.type === 'saida' && t.status === 'pendente')
+                                  .sort((a,b) => new Date(a.clearanceDate) - new Date(b.clearanceDate));
+            }, [transactions]);
+
+            const futureIncomes = useMemo(() => {
+                return transactions.filter(t => t.type === 'entrada' && t.status === 'pendente')
+                                  .sort((a,b) => new Date(a.date) - new Date(b.date));
+            }, [transactions]);
+
             const isCardSelected = useMemo(() => {
                 return accounts.find(acc => acc.name === account)?.type === 'cartao';
             }, [account, accounts]);
@@ -300,7 +311,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-20 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">v9.8.7 Business</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.8.8</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -320,15 +331,49 @@
                 </div>
             );
 
+            const TransactionList = ({ list, title, showVenc = true }) => (
+                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 tracking-widest flex justify-between"><span>{title}</span><span>{list.length} Itens</span></div>
+                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                        {list.length === 0 ? (
+                            <div className="p-20 text-center opacity-20 font-black uppercase text-xs">Sem registos pendentes.</div>
+                        ) : (
+                            list.map(t => (
+                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'arrow-up-right' : 'arrow-down-left'} size={18} /></div>
+                                        <div>
+                                            <p className="font-black text-sm uppercase leading-tight">
+                                                <span className="text-red-500 mr-2">[{showVenc ? 'VENC: ' : 'DATA: '}{ (showVenc ? t.clearanceDate : t.date).split('-').reverse().join('/')}]</span>
+                                                {t.description}
+                                            </p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                                {t.supplier ? `${t.supplier} • ` : ''} 
+                                                {t.account} • {t.category}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <p className="font-black text-sm text-[#1A202C]">{formatMoney(t.amount)}</p>
+                                        <button onClick={() => markAsPaid(t.id)} title="Marcar como pago" className="w-8 h-8 bg-green-500 text-white rounded-lg flex items-center justify-center hover:bg-green-600 transition-colors shadow-sm"><Icon name="check" size={14} /></button>
+                                        <button onClick={() => startEdit(t)} className="p-2 text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Icon name="edit-3" size={14}/></button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+
             return (
                 <div className="min-h-screen flex flex-col fade-in">
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.7</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.8.8</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
-                                {['dashboard', 'saldos', 'planilha', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
-                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab}</button>
+                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
                                 ))}
                                 <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black uppercase text-red-400">Sair</button>
                             </nav>
@@ -340,7 +385,7 @@
                             <div className="space-y-6">
                                 {upcomingAlerts.length > 0 && (
                                     <div className="bg-white border-2 border-red-500 p-6 rounded-[2.5rem] alert-pulse shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4"><div className="bg-red-500 p-3 rounded-2xl"><Icon name="bell-ring" className="text-white" size={24} /></div><div><h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Contas Próximas</h4><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tens {upcomingAlerts.length} pagamentos pendentes.</p></div></div>
+                                        <div className="flex items-center gap-4"><div className="bg-red-500 p-3 rounded-2xl"><Icon name="bell-ring" className="text-white" size={24} /></div><div><h4 className="text-sm font-black text-red-600 uppercase tracking-widest">Contas Próximas</h4><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tens {upcomingAlerts.length} pagamentos pendentes para hoje/amanhã.</p></div></div>
                                         <div className="flex flex-wrap gap-2 justify-center">
                                             {upcomingAlerts.map(a => (
                                                 <div key={a.id} className="bg-red-50 pl-4 pr-1 py-1 rounded-xl text-[10px] font-black border border-red-100 flex items-center gap-3">
@@ -436,6 +481,21 @@
                              <div className="space-y-4 animate-in fade-in duration-300"><div className="flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-2"><Icon name="table" className="text-[#D97757]" /><h2 className="text-sm font-black uppercase text-slate-800">Planilha Diária de Vendas</h2></div><div className="flex items-center gap-2 p-2 bg-white rounded-2xl shadow-inner"><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="text-xs border-0 outline-none font-black text-[#D97757] px-2"/><div className="w-px h-6 bg-slate-100"></div><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Novo Dia</button></div></div><div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden border overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Faturamento</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4">X</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b) - new Date(a)).map(d => { const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-4 sticky left-0 bg-white font-black text-slate-500 border-r">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={r[f] || ''} onChange={async(e) => { const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''); await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: v }, { merge: true }); }} placeholder="0" /></td>))}<td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td></tr>); })}</tbody></table></div></div>
                         )}
 
+                        {/* NOVAS ABAS DE CONTAS PENDENTES */}
+                        {activeTab === 'a_pagar' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-xl font-black uppercase text-center tracking-tighter">Contas a Pagar (Abertas)</h2>
+                                <TransactionList list={pendingPayments} title="Saídas Pendentes" showVenc={true} />
+                            </div>
+                        )}
+
+                        {activeTab === 'a_receber' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-xl font-black uppercase text-center tracking-tighter">Entradas Futuras (Pendente)</h2>
+                                <TransactionList list={futureIncomes} title="Recebimentos Previstos" showVenc={false} />
+                            </div>
+                        )}
+
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
                                 <h2 className="text-xl font-black uppercase tracking-tighter text-center">Desempenho Comercial: {filterMonth}</h2>
@@ -477,7 +537,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.7 Base Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.8.8 Base Estável</footer>
                 </div>
             );
         }
