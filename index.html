@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.8.0</title>
+    <title>Tribo Burger | Gestão Total v10.9.0</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -177,14 +177,25 @@
 
             const pendingPaymentsConsolidated = useMemo(() => {
                 const p = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
+                // Itens pendentes normais
                 const items = transactions.filter(t => t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth));
+                const nonCard = items.filter(t => {
+                    const acc = accounts.find(a => a.name === t.account);
+                    return !acc || acc.type !== 'cartao';
+                });
                 
-                const nonCard = items.filter(t => accounts.find(a => a.name === t.account)?.type !== 'cartao');
-                
+                // Consolidação de Faturas de Cartão
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    const sum = items.filter(t => t.account === card.name).reduce((acc, t) => acc + p(t.amount), 0);
+                    // Soma tudo que vence neste mês para este cartão e ainda está pendente
+                    const sum = transactions.filter(t => 
+                        t.account === card.name && 
+                        t.status === 'pendente' && 
+                        t.clearanceDate?.startsWith(filterMonth)
+                    ).reduce((acc, t) => acc + p(t.amount), 0);
+                    
                     const total = Math.round(sum * 100) / 100;
-                    if (total === 0) return null;
+                    if (total <= 0) return null;
+                    
                     return { 
                         id: `invoice-${card.name}-${filterMonth}`, 
                         description: `Fatura: ${card.name}`, 
@@ -225,30 +236,59 @@
             const saveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val || (type !== 'transferencia' && !desc)) return;
-                const totalAmount = parseFloat(val.replace(',', '.')) || 0;
+                
+                const totalAmount = Math.round(parseFloat(val.replace(',', '.')) * 100) / 100;
+                if (isNaN(totalAmount)) return;
+
                 const cardInfo = accounts.find(acc => acc.name === account && acc.type === 'cartao');
                 const numInstallments = cardInfo && type === 'saida' ? (parseInt(installments) || 1) : 1;
+                
                 const batch = db.batch();
+                
+                // Cálculo de parcelas com ajuste de centavos na última
+                const installmentBase = Math.floor((totalAmount / numInstallments) * 100) / 100;
+                
                 for(let i = 0; i < numInstallments; i++) {
                     const currentId = i === 0 && editingId ? editingId : Date.now().toString() + i;
+                    
                     const baseDate = new Date(date + 'T12:00:00');
                     baseDate.setMonth(baseDate.getMonth() + i);
                     const finalDateStr = baseDate.toISOString().split('T')[0];
+                    
                     let finalClearance = clearance;
+                    let finalStatus = status;
+
                     if (cardInfo) {
+                        // Compras no cartão são SEMPRE pendentes até o pagamento da fatura
+                        finalStatus = 'pendente';
                         const purchaseDate = new Date(finalDateStr + 'T12:00:00');
-                        if (purchaseDate.getDate() > parseInt(cardInfo.closingDay)) purchaseDate.setMonth(purchaseDate.getMonth() + 1);
+                        // Se passar do dia de fechamento, vai para a fatura do mês seguinte
+                        if (purchaseDate.getDate() > parseInt(cardInfo.closingDay)) {
+                            purchaseDate.setMonth(purchaseDate.getMonth() + 1);
+                        }
+                        // O vencimento é sempre no mês seguinte ao fechamento
                         purchaseDate.setMonth(purchaseDate.getMonth() + 1);
                         purchaseDate.setDate(parseInt(cardInfo.dueDay));
                         finalClearance = purchaseDate.toISOString().split('T')[0];
                     }
+
+                    // Ajuste da última parcela para bater o centavo
+                    const currentAmount = (i === numInstallments - 1) 
+                        ? Math.round((totalAmount - (installmentBase * (numInstallments - 1))) * 100) / 100
+                        : installmentBase;
+
                     const payload = {
                         description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : (numInstallments > 1 ? `${desc} (${i+1}/${numInstallments})` : desc),
-                        amount: Math.round((totalAmount / numInstallments) * 100) / 100,
-                        type, status: type === 'transferencia' ? 'pago' : status,
-                        date: finalDateStr, clearanceDate: finalClearance, account, destinationAccount: type === 'transferencia' ? destAccount : '',
+                        amount: currentAmount,
+                        type, 
+                        status: type === 'transferencia' ? 'pago' : finalStatus,
+                        date: finalDateStr, 
+                        clearanceDate: finalClearance, 
+                        account, 
+                        destinationAccount: type === 'transferencia' ? destAccount : '',
                         category: type === 'transferencia' ? 'Transferência Interna' : (cat || 'Outros'),
-                        supplier: type === 'saida' ? supplier : '', timestamp: new Date().toISOString()
+                        supplier: type === 'saida' ? supplier : '', 
+                        timestamp: new Date().toISOString()
                     };
                     batch.set(db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${currentId}`), payload, { merge: true });
                 }
@@ -257,15 +297,24 @@
             };
 
             const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setAccount(accounts[0]?.name || ''); setDestAccount(''); setCat(''); setSupplier(''); setStatus('pago'); setInstallments(1); };
+            
             const markAsPaid = async (tId) => {
                 if (!user) return;
+                // Se for uma fatura consolidada
                 if (tId.startsWith('invoice-')) {
                     const [, cardName, month] = tId.split('-');
                     const batch = db.batch();
-                    transactions.filter(t => t.account === cardName && t.clearanceDate?.startsWith(month) && t.status === 'pendente')
-                        .forEach(t => batch.update(db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`), { status: 'pago' }));
-                    await batch.commit(); return;
+                    transactions.filter(t => 
+                        t.account === cardName && 
+                        t.clearanceDate?.startsWith(month) && 
+                        t.status === 'pendente'
+                    ).forEach(t => {
+                        batch.update(db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`), { status: 'pago' });
+                    });
+                    await batch.commit(); 
+                    return;
                 }
+                // Se for um item avulso
                 await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
             };
 
@@ -274,7 +323,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
-                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.8</p></div>
+                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.9</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -436,7 +485,10 @@
                         {activeTab === 'cartoes' && (
                             <div className="space-y-8 animate-in zoom-in duration-300">
                                 <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Gestão de Crédito</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{accounts.filter(a => a.type === 'cartao').map(card => { const sum = transactions.filter(t => t.account === card.name && t.type === 'saida' && t.clearanceDate?.startsWith(filterMonth)).reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0); return (<div key={card.id} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]"><h3 className="font-black uppercase text-lg">{card.name}</h3><h3 className="text-xl font-black text-[#1A202C] mt-2">{formatMoney(sum)}</h3><div className="mt-4 pt-4 border-t grid grid-cols-2 text-center text-[10px] font-bold uppercase"><div className="border-r">Fecho {card.closingDay}</div><div>Venc {card.dueDay}</div></div></div>); })}</div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{accounts.filter(a => a.type === 'cartao').map(card => { 
+                                    const sum = transactions.filter(t => t.account === card.name && t.type === 'saida' && t.clearanceDate?.startsWith(filterMonth)).reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0); 
+                                    return (<div key={card.id} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]"><h3 className="font-black uppercase text-lg">{card.name}</h3><h3 className="text-xl font-black text-[#1A202C] mt-2">{formatMoney(sum)}</h3><div className="mt-4 pt-4 border-t grid grid-cols-2 text-center text-[10px] font-bold uppercase"><div className="border-r">Fecho {card.closingDay}</div><div>Venc {card.dueDay}</div></div></div>); 
+                                })}</div>
                                 <div className="pt-8 space-y-4">
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 text-center">Compras no Período (Cartões)</h3>
                                     <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col h-[400px]">
@@ -577,7 +629,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.8.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.9.0</footer>
                 </div>
             );
         }
