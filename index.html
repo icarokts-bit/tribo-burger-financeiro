@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.9.4 (BASE ESTÁVEL)</title>
+    <title>Tribo Burger | Gestão Total v9.9.5 (BASE ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -368,12 +368,20 @@
                 return accounts.find(acc => acc.name === account)?.type === 'cartao';
             }, [account, accounts]);
 
+            // LISTA DE LANÇAMENTOS INDIVIDUAIS DE CARTÃO PARA A NOVA SEÇÃO
+            const cardTransactionsForMonth = useMemo(() => {
+                return transactions.filter(t => {
+                    const acc = accounts.find(a => a.name === t.account);
+                    return acc?.type === 'cartao' && t.date.startsWith(filterMonth);
+                }).sort((a,b) => new Date(b.date) - new Date(a.date));
+            }, [transactions, accounts, filterMonth]);
+
             if (loading) return <div className="h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={32}/></div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.4</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.5</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -436,7 +444,7 @@
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.4</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.5</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -642,7 +650,9 @@
                             <div className="space-y-8 animate-in zoom-in duration-300">
                                 <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Gestão de Cartões</h2>
                                 
-                                {/* NOVO FORMULÁRIO DE LANÇAMENTO EXCLUSIVO PARA CARTÃO */}
+                                <MonthPicker />
+
+                                {/* FORMULÁRIO DE LANÇAMENTO EXCLUSIVO PARA CARTÃO */}
                                 <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-orange-400 max-w-2xl mx-auto">
                                     <h3 className="text-xs font-black text-[#1A202C] uppercase tracking-widest mb-6 flex items-center gap-2">
                                         <Icon name="plus-circle" className="text-orange-500" /> Novo Gasto no Cartão
@@ -700,6 +710,55 @@
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* NOVA SEÇÃO: DETALHAMENTO DE LANÇAMENTOS DO CARTÃO */}
+                                <div className="space-y-4 pt-8">
+                                    <div className="flex items-center gap-2 px-4">
+                                        <Icon name="list-filter" className="text-slate-400" />
+                                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Detalhamento de Compras (Cartão)</h3>
+                                    </div>
+                                    <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col h-[400px]">
+                                        <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 tracking-widest flex justify-between">
+                                            <span>Transações Individuais do Mês</span>
+                                            <span>{cardTransactionsForMonth.length} Lançamentos</span>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                            {cardTransactionsForMonth.length === 0 ? (
+                                                <div className="p-20 text-center opacity-20 font-black uppercase text-xs">Sem compras individuais neste mês.</div>
+                                            ) : (
+                                                cardTransactionsForMonth.map(t => (
+                                                    <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-colors">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
+                                                                <Icon name="shopping-cart" size={14} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-sm uppercase leading-tight">
+                                                                    <span className="text-slate-400 mr-2">[{t.date.split('-').reverse().join('/')}]</span>
+                                                                    {t.description}
+                                                                </p>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                                                    {t.account} • {t.category} {t.totalInstallments > 1 ? `• Parcela ${t.installmentIndex + 1}/${t.totalInstallments}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-black text-sm mr-2">{formatMoney(t.amount)}</p>
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                                                                <button onClick={() => startEdit(t)} title="Editar" className="p-2 text-slate-300 hover:text-blue-500 transition-colors">
+                                                                    <Icon name="edit-3" size={14}/>
+                                                                </button>
+                                                                <button onClick={async () => { if(confirm('Apagar lançamento?')) await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete(); }} title="Excluir" className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                                                                    <Icon name="trash-2" size={14}/>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -740,7 +799,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.4 Base Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.5 Base Estável</footer>
                 </div>
             );
         }
