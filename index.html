@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.9.1 (BASE ESTÁVEL)</title>
+    <title>Tribo Burger | Gestão Total v9.9.2 (BASE ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -323,7 +323,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.1</p></div>
+                        <div className="text-center mb-8"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Versão de Gestão 9.9.2</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -382,7 +382,7 @@
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.1</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.2</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -489,14 +489,14 @@
                             <div className="space-y-8 animate-in fade-in zoom-in duration-500">
                                 <h2 className="text-2xl font-black uppercase tracking-tighter text-center">Fluxo de Caixa & Saldos</h2>
                                 
-                                {/* CONTAS PRINCIPAIS EM DESTAQUE (MERCADO PAGO, C6, IFOOD) */}
+                                {/* CONTAS PRINCIPAIS EM DESTAQUE (MERCADO PAGO, C6, C6 BANK, IFOOD) */}
                                 <div className="space-y-4">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Contas Operacionais Principais</p>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {accounts
                                             .filter(acc => {
                                                 const name = acc.name.toLowerCase();
-                                                return acc.type !== 'cartao' && (name === 'mercado pago' || name === 'c6' || name === 'ifood');
+                                                return acc.type !== 'cartao' && (name === 'mercado pago' || name === 'c6' || name === 'c6 bank' || name === 'ifood');
                                             })
                                             .map(acc => (
                                                 <div key={acc.id} className="bg-white p-8 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] flex flex-col items-center group transition-all hover:scale-105">
@@ -520,7 +520,7 @@
                                         {accounts
                                             .filter(acc => {
                                                 const name = acc.name.toLowerCase();
-                                                return acc.type !== 'cartao' && !(name === 'mercado pago' || name === 'c6' || name === 'ifood');
+                                                return acc.type !== 'cartao' && !(name === 'mercado pago' || name === 'c6' || name === 'c6 bank' || name === 'ifood');
                                             })
                                             .map(acc => (
                                                 <div key={acc.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center opacity-80 hover:opacity-100 transition-opacity">
@@ -596,7 +596,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.1 Base Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.2 Base Estável</footer>
                 </div>
             );
         }
