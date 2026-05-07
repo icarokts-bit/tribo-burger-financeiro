@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v9.9.9 (COMPLETA)</title>
+    <title>Tribo Burger | Gestão Total v10.0.0 (ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -85,6 +85,7 @@
             
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
+            const [isRegistering, setIsRegistering] = useState(false);
             const [authError, setAuthError] = useState('');
 
             const [transactions, setTransactions] = useState([]);
@@ -123,8 +124,6 @@
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await auth.signInWithCustomToken(__initial_auth_token);
-                        } else {
-                            await auth.signInAnonymously();
                         }
                     } catch (e) { console.error("Erro Auth", e); }
                     setLoading(false);
@@ -150,8 +149,16 @@
                 setAuthError('');
                 setLoading(true);
                 try {
-                    await auth.signInWithEmailAndPassword(email, password);
-                } catch (err) { setAuthError("Credenciais inválidas."); } finally { setLoading(false); }
+                    if (isRegistering) {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } else {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    }
+                } catch (err) { 
+                    setAuthError(err.message || "Credenciais inválidas."); 
+                } finally { 
+                    setLoading(false); 
+                }
             };
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -354,12 +361,41 @@
 
             if (loading) return <div className="h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={32}/></div>;
 
+            if (!user) return (
+                <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
+                    <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
+                        <div className="text-center mb-8">
+                            <img src="logo.png" className="w-24 mx-auto mb-4" />
+                            <h2 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">Tribo Finanças</h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Painel Administrativo v10.0</p>
+                        </div>
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Email</label>
+                                <input type="email" required placeholder="gerencia@triboburger.com" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Senha</label>
+                                <input type="password" required placeholder="••••••••" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
+                            </div>
+                            {authError && <p className="text-red-500 text-[10px] font-bold text-center bg-red-50 p-2 rounded-lg">{authError}</p>}
+                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">
+                                {isRegistering ? 'Criar Conta' : 'Entrar no Painel'}
+                            </button>
+                        </form>
+                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-6 text-[10px] font-black text-[#D97757] uppercase tracking-widest hover:underline">
+                            {isRegistering ? 'Já tem conta? Faça Login' : 'Novo por aqui? Registe-se'}
+                        </button>
+                    </div>
+                </div>
+            );
+
             return (
                 <div className="min-h-screen flex flex-col fade-in">
                     <img src="logo.png" className="bg-watermark w-96" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v9.9.9</h1></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-8 w-8 bg-white p-0.5 rounded-full" /><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v10.0</h1></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -405,7 +441,7 @@
                                         </div>
 
                                         <form onSubmit={saveTx} className="glass-card p-8 rounded-[3rem] shadow-sm space-y-4 h-fit">
-                                            <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">Novo Lançamento</h2>
+                                            <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar Registo' : 'Novo Lançamento'}</h2>
                                             <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                                 {['entrada', 'saida', 'transferencia'].map(t => (
                                                     <button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t.slice(0, 5)}</button>
@@ -630,9 +666,12 @@
                                                 <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>Cartão</button>
                                             </div>
                                             {newItemType === 'cartao' && (<div className="grid grid-cols-2 gap-2 mb-2"><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Fecho" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Venc" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>)}
-                                            <button onClick={handleSaveAccount} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-sm">Gravar Conta</button>
+                                            <button onClick={handleSaveAccount} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-sm">
+                                                {editingAccountId ? 'Guardar Alteração' : 'Gravar Conta'}
+                                            </button>
+                                            {editingAccountId && <button onClick={() => {setEditingAccountId(null); setNewItemName('')}} className="w-full mt-2 text-[8px] font-black uppercase text-red-400">Cancelar Edição</button>}
                                         </div>
-                                        <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><div className="flex items-center gap-2 text-[10px] font-black uppercase"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12}/><span>{a.name}</span></div><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>))}</div>
+                                        <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><div className="flex items-center gap-2 text-[10px] font-black uppercase"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12}/><span>{a.name}</span></div><div className="flex gap-1"><button onClick={() => {setEditingAccountId(a.id); setNewItemName(a.name); setNewItemType(a.type); setNewItemClosingDay(a.closingDay); setNewItemDueDay(a.dueDay);}} className="text-slate-300 hover:text-blue-500"><Icon name="edit-2" size={12}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={12}/></button></div></div>))}</div>
                                     </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-lg">
@@ -644,7 +683,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v9.9.9 Base Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.0.0 Base Estável</footer>
                 </div>
             );
         }
