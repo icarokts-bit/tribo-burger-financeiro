@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.3.0 (COMPLETA)</title>
+    <title>Tribo Burger | Gestão Total v10.4.0 (CORRIGIDA)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -87,6 +87,7 @@
             const [categories, setCategories] = useState([]);
             const [suppliers, setSuppliers] = useState([]);
             
+            // FORMULÁRIO DASHBOARD
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
@@ -125,7 +126,7 @@
                 const path = `artifacts/${appId}/users/${user.uid}`;
 
                 const unsubTx = db.collection(`${path}/transactions`)
-                    .onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
+                    .onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 
                 const unsubDaily = db.collection(`${path}/dailyRecords`)
                     .onSnapshot(snap => {
@@ -252,6 +253,14 @@
                 return [...nonCard, ...cardInvoices].sort((a,b) => new Date(a.clearanceDate) - new Date(b.clearanceDate));
             }, [transactions, filterMonth, accounts]);
 
+            // CARTÕES: Filtrar por data da compra (t.date) para não sumirem no mês da compra
+            const cardTransactionsForMonth = useMemo(() => {
+                return transactions.filter(t => {
+                    const acc = accounts.find(a => a.name === t.account);
+                    return acc?.type === 'cartao' && t.date.startsWith(filterMonth);
+                }).sort((a,b) => new Date(b.date) - new Date(a.date));
+            }, [transactions, filterMonth, accounts]);
+
             const futureIncomes = useMemo(() => {
                 return transactions.filter(t => t.type === 'entrada' && t.status === 'pendente' && t.date.startsWith(filterMonth))
                                   .sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -317,7 +326,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
-                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" alt="Logo" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Painel Administrativo v10.3</p></div>
+                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" alt="Logo" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Painel Administrativo v10.4</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -334,7 +343,7 @@
                     <img src="logo.png" className="bg-watermark w-96" alt="" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="" /><div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v10.3</h1><div className="flex items-center gap-2"><span className="text-[8px] text-green-400 font-bold uppercase">{user.email}</span><button onClick={handleLogout} className="text-[8px] text-red-400 font-black uppercase hover:underline">Sair</button></div></div></div>
+                            <div className="flex items-center gap-3"><img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="" /><div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management v10.4</h1><div className="flex items-center gap-2"><span className="text-[8px] text-green-400 font-bold uppercase">{user.email}</span><button onClick={handleLogout} className="text-[8px] text-red-400 font-black uppercase hover:underline">Sair</button></div></div></div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -357,13 +366,36 @@
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <div className="lg:col-span-1 space-y-6">
                                         <div className="glass-card p-8 rounded-[3rem] shadow-xl flex flex-col items-center justify-center text-center"><Icon name="brain-circuit" size={40} className="text-[#D97757] mb-4" /><h3 className="text-xs font-black uppercase text-[#1A202C]">IA Consultor Tribo</h3>{aiReport ? (<div className="bg-slate-50 p-4 rounded-3xl text-left text-[10px] font-semibold leading-relaxed border mt-4 animate-in zoom-in">{aiReport.split('\n').map((line, i) => <p key={i} className="mb-1">{line}</p>)}<button onClick={() => setAiReport('')} className="mt-3 text-[8px] font-black text-red-400 uppercase tracking-widest">Limpar</button></div>) : (<button onClick={callAiConsultant} disabled={aiLoading} className="bg-[#1A202C] text-[#F8CC82] px-6 py-3 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 mt-4 hover:scale-105 transition-all">{aiLoading ? <Icon name="loader" className="animate-spin" /> : <Icon name="sparkles" />}Analisar Negócio</button>)}</div>
+                                        
+                                        {/* FORMULÁRIO DE LANÇAMENTO COMPLETO */}
                                         <form onSubmit={saveTx} className="glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-[#1A202C] h-fit">
                                             <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
                                             <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t.slice(0, 5)}</button>))}</div>
                                             {type !== 'transferencia' && (<div className="relative"><input type="text" placeholder="O que comprou?" required list="desc-history" className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-[#D97757]" value={desc} onChange={e => setDesc(e.target.value)} /><datalist id="desc-history">{transactions.map(t => t.description).filter((v, i, a) => a.indexOf(v) === i).map((h, i) => <option key={i} value={h} />)}</datalist></div>)}
-                                            <div className="grid grid-cols-2 gap-3"><input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} /><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}><option value="">Conta...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select></div>
-                                            {type === 'transferencia' && (<select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}><option value="">Para Conta...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>)}
-                                            {type !== 'transferencia' && (<div className="grid grid-cols-2 gap-3"><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={supplier} onChange={e => setSupplier(e.target.value)}><option value="">Fornecedor...</option>{suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>)}
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>
+                                                    <option value="">Conta...</option>
+                                                    {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                                                </select>
+                                            </div>
+
+                                            {type === 'transferencia' ? (
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}><option value="">Para Conta...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            ) : (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={supplier} onChange={e => setSupplier(e.target.value)}><option value="">Fornecedor...</option>{suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
+                                                    </div>
+                                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={status} onChange={e => setStatus(e.target.value)}>
+                                                        <option value="pago">Pago / Recebido</option>
+                                                        <option value="pendente">Pendente / A Pagar</option>
+                                                    </select>
+                                                </>
+                                            )}
+                                            
                                             <div className="grid grid-cols-2 gap-3"><div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2 tracking-widest">Data Gasto</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /></div><div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2 tracking-widest">Compensação</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div></div>
                                             <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-black transition-all">Gravar Registo</button>
                                         </form>
@@ -375,16 +407,20 @@
 
                         {activeTab === 'saldos' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter text-center">Liquidez e Saldos</h2>
+                                <h2 className="text-2xl font-black uppercase tracking-tighter text-center">Liquidez: C6, MP e iFood</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {accounts.filter(acc => acc.type !== 'cartao').map(acc => (
+                                    {/* MOSTRAR APENAS AS CONTAS PRINCIPAIS */}
+                                    {accounts.filter(acc => ['C6 Bank', 'Mercado Pago', 'iFood'].includes(acc.name)).map(acc => (
                                         <div key={acc.id} className="bg-white p-8 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] flex flex-col items-center group transition-all hover:scale-105">
                                             <div className="bg-[#F8CC82] p-4 rounded-3xl mb-4 group-hover:rotate-12 transition-transform shadow-sm"><Icon name="landmark" className="text-[#1A202C]" size={28} /></div>
                                             <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
                                             <h3 className={`text-3xl font-black ${accountBalances[acc.name] >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
-                                            <p className="text-[8px] font-bold text-slate-300 uppercase mt-2">Saldo em Conta</p>
+                                            <p className="text-[8px] font-bold text-slate-300 uppercase mt-2 tracking-widest">Saldo Atual</p>
                                         </div>
                                     ))}
+                                </div>
+                                <div className="pt-8 opacity-40 text-center">
+                                    <p className="text-[9px] font-black uppercase tracking-widest">Outras contas disponíveis nas tabelas de histórico</p>
                                 </div>
                             </div>
                         )}
@@ -417,21 +453,26 @@
                             </div>
                         )}
 
-                        {activeTab === 'a_receber' && (
-                            <div className="space-y-8 animate-in fade-in duration-300">
-                                <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Entradas Futuras</h2>
-                                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex justify-between"><span>Previstos</span><span>{formatMoney(futureIncomes.reduce((acc, t) => acc + t.amount, 0))}</span></div>
-                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">{futureIncomes.map(t => (<div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="arrow-up-right" size={18} /></div><div><p className="font-black text-sm uppercase leading-tight"><span className="text-green-500 mr-2">[{t.date.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div></div><div className="flex items-center gap-4"><p className="font-black text-sm text-[#1A202C]">{formatMoney(t.amount)}</p><button onClick={() => markAsPaid(t.id)} className="w-8 h-8 bg-green-500 text-white rounded-lg flex items-center justify-center"><Icon name="check" size={14} /></button></div></div>))}</div>
-                                </div>
-                            </div>
-                        )}
-
                         {activeTab === 'cartoes' && (
                             <div className="space-y-8 animate-in zoom-in duration-300">
                                 <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Gestão de Crédito</h2>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-orange-400 max-w-4xl mx-auto"><h3 className="text-xs font-black uppercase tracking-widest mb-6 flex items-center gap-2"><Icon name="plus-circle" className="text-orange-500" /> Nova Despesa no Cartão</h3><form onSubmit={(e) => { setType('saida'); setStatus('pendente'); saveTx(e); }} className="space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}><option value="">Selecionar Cartão...</option>{accounts.filter(a => a.type === 'cartao').map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select><input type="text" placeholder="O que comprou?" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} /></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={supplier} onChange={e => setSupplier(e.target.value)}><option value="">Fornecedor...</option>{suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} /><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /><input type="number" min="1" max="60" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={installments} onChange={e=>setInstallments(e.target.value)} /></div><button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Lançar no Cartão</button></form></div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{accounts.filter(a => a.type === 'cartao').map(card => { const sum = transactions.filter(t => t.account === card.name && t.type === 'saida' && t.clearanceDate.startsWith(filterMonth)).reduce((acc, t) => acc + t.amount, 0); return (<div key={card.id} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-[#1A202C]"><h3 className="font-black uppercase text-lg">{card.name}</h3><h3 className="text-xl font-black text-[#1A202C] mt-2">{formatMoney(sum)}</h3><div className="mt-4 pt-4 border-t grid grid-cols-2 text-center text-[10px] font-bold uppercase"><div className="border-r">Fecho {card.closingDay}</div><div>Venc {card.dueDay}</div></div></div>); })}</div>
+                                
+                                <div className="pt-8 space-y-4">
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">Compras Efetuadas no Mês (Lançamentos de Cartão)</h3>
+                                    <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col h-[400px]">
+                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                            {cardTransactionsForMonth.map(t => (
+                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                                    <div><p className="font-black text-sm uppercase leading-tight"><span className="text-slate-400 mr-2">[{t.date.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category} • {t.supplier}</p></div>
+                                                    <div className="flex items-center gap-2"><p className="font-black text-sm mr-2">{formatMoney(t.amount)}</p><button onClick={() => startEdit(t)} className="p-2 text-slate-300 hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"><Icon name="edit-3" size={14}/></button></div>
+                                                </div>
+                                            ))}
+                                            {cardTransactionsForMonth.length === 0 && <div className="p-20 text-center opacity-20 text-xs font-black uppercase">Nenhum gasto de cartão este mês.</div>}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -478,7 +519,6 @@
                                             </div>
                                             {newItemType === 'cartao' && (<div className="grid grid-cols-2 gap-2 mb-2"><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Dia Fecho" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /><input type="number" className="p-2 text-xs border rounded-lg font-bold" placeholder="Dia Vencimento" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>)}
                                             <button onClick={handleSaveAccount} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-lg">{editingAccountId ? 'Guardar Alteração' : 'Registar Conta'}</button>
-                                            {editingAccountId && <button onClick={() => {setEditingAccountId(null); setNewItemName('')}} className="w-full mt-2 text-[8px] font-black uppercase text-red-400">Cancelar</button>}
                                         </div>
                                         <div className="space-y-2">{accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow"><div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-600"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12}/><span>{a.name}</span></div><div className="flex gap-1"><button onClick={() => {setEditingAccountId(a.id); setNewItemName(a.name); setNewItemType(a.type); setNewItemClosingDay(a.closingDay); setNewItemDueDay(a.dueDay);}} className="text-slate-300 hover:text-blue-500 transition-colors"><Icon name="edit-2" size={12}/></button><button onClick={() => {if(confirm('Eliminar conta?')) db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()}} className="text-red-200 hover:text-red-500 transition-colors"><Icon name="trash-2" size={12}/></button></div></div>))}</div>
                                     </div>
@@ -492,7 +532,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.3.0 (Versão Estável)</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.4.0 (Versão Estável)</footer>
                 </div>
             );
 
