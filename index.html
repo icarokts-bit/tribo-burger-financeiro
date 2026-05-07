@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.10.0</title>
+    <title>Tribo Burger | Gestão Total v10.11.0</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -178,8 +178,7 @@
             const pendingPaymentsConsolidated = useMemo(() => {
                 const p = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
                 
-                // Itens pendentes normais (não cartão)
-                const nonCard = transactions.filter(t => {
+                const items = transactions.filter(t => {
                     const acc = accounts.find(a => a.name === t.account);
                     return t.type === 'saida' && 
                            t.status === 'pendente' && 
@@ -187,22 +186,14 @@
                            (!acc || acc.type !== 'cartao');
                 });
                 
-                // Consolidação de Faturas de Cartão baseada no ciclo total
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    // Filtramos todas as transações deste ciclo (pelo clearanceDate)
                     const cycleTxs = transactions.filter(t => 
                         t.account === card.name && 
                         t.clearanceDate?.startsWith(filterMonth)
                     );
-
-                    // Somamos o total do ciclo (assim garantimos os R$ 916,04 das imagens)
                     const total = Math.round(cycleTxs.reduce((acc, t) => acc + p(t.amount), 0) * 100) / 100;
-                    
-                    // Só mostramos na aba A Pagar se a fatura ainda tiver itens pendentes
                     const isStillUnpaid = cycleTxs.some(t => t.status === 'pendente');
-
                     if (total <= 0 || !isStillUnpaid) return null;
-                    
                     return { 
                         id: `invoice-${card.name}-${filterMonth}`, 
                         description: `Fatura: ${card.name}`, 
@@ -216,7 +207,7 @@
                     };
                 }).filter(Boolean);
                 
-                return [...nonCard, ...cardInvoices].sort((a,b) => new Date(a.clearanceDate) - new Date(b.clearanceDate));
+                return [...items, ...cardInvoices].sort((a,b) => new Date(a.clearanceDate) - new Date(b.clearanceDate));
             }, [transactions, filterMonth, accounts]);
 
             const futureIncomes = useMemo(() => {
@@ -321,7 +312,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
-                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.10</p></div>
+                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.11</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -382,7 +373,7 @@
                                 <div className="space-y-4">
                                     <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#D97757] text-center">Contas em Destaque</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        {accounts.filter(acc => ['C6 Bank', 'Mercado Pago', 'iFood'].some(name => acc.name?.includes(name))).map(acc => (
+                                        {accounts.filter(acc => acc.type !== 'cartao' && ['C6 Bank', 'Mercado Pago', 'iFood'].includes(acc.name)).map(acc => (
                                             <div key={acc.id} className="bg-white p-8 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] flex flex-col items-center group transition-all hover:scale-105">
                                                 <div className="bg-[#F8CC82] p-4 rounded-3xl mb-4 group-hover:rotate-12 transition-transform shadow-sm"><Icon name="landmark" className="text-[#1A202C]" size={28} /></div>
                                                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
@@ -395,7 +386,7 @@
                                 <div className="space-y-4 pt-6">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 text-center">Outras Disponibilidades</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        {accounts.filter(acc => !['C6 Bank', 'Mercado Pago', 'iFood'].some(name => acc.name?.includes(name)) && acc.type !== 'cartao').map(acc => (
+                                        {accounts.filter(acc => acc.type !== 'cartao' && !['C6 Bank', 'Mercado Pago', 'iFood'].includes(acc.name)).map(acc => (
                                             <div key={acc.id} className="bg-white p-4 rounded-[2rem] border shadow-sm flex flex-col items-center transition-all hover:bg-slate-50">
                                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">{acc.name}</p>
                                                 <h3 className={`text-sm font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-800' : 'text-red-400'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
@@ -627,7 +618,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.10.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.11.0</footer>
                 </div>
             );
         }
