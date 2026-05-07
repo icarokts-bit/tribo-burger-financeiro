@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.21.0 (RESTAURADO)</title>
+    <title>Tribo Burger | Gestão Total v11.0.0 (ESTÁVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -375,7 +375,9 @@
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
-                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
+                                        {tab === 'planilha' ? 'Vendas' : tab === 'dashboard' ? 'Lançamentos' : tab.replace('_', ' ')}
+                                    </button>
                                 ))}
                             </nav>
                         </div>
@@ -699,7 +701,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.21.0 (Sistema Integral)</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.0.0 (Versão Estável)</footer>
                 </div>
             );
         }
