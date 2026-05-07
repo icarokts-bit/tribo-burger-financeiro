@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.20.0 (FINANCEIRO CORRIGIDO)</title>
+    <title>Tribo Burger | Gestão Total v10.21.0 (RESTAURADO)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -177,13 +177,11 @@
 
             const pendingPaymentsConsolidated = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
-                // Despesas normais pendentes
                 const normalPendings = transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
 
-                // Faturas de Cartão
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
                     const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
                     const total = cardTxs.reduce((acc, t) => {
@@ -209,6 +207,11 @@
 
                 return [...normalPendings, ...cardInvoices].sort((a,b) => new Date(a.clearanceDate) - new Date(b.clearanceDate));
             }, [transactions, filterMonth, accounts]);
+
+            const futureIncomes = useMemo(() => {
+                return transactions.filter(t => t.type === 'entrada' && t.status === 'pendente' && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)))
+                                  .sort((a,b) => new Date(a.date) - new Date(b.date));
+            }, [transactions, filterMonth]);
 
             const accountBalances = useMemo(() => {
                 const balances = {}; accounts.forEach(acc => balances[acc.name] = 0);
@@ -282,7 +285,6 @@
                 const path = `artifacts/${appId}/users/${user.uid}/transactions`;
                 const payAmt = parseFloat(payInfo.amountToPay);
                 
-                // 1. Criar transação de SAÍDA na conta corrente (Para aparecer no dashboard)
                 const outId = "PAY-OUT-" + Date.now();
                 batch.set(db.doc(`${path}/${outId}`), {
                     description: `PAGAMENTO FATURA: ${cardName}`,
@@ -296,7 +298,6 @@
                     timestamp: new Date().toISOString()
                 });
 
-                // 2. Criar transação de CRÉDITO no cartão (Para abater o Valor Aberto)
                 const inId = "PAY-IN-" + Date.now();
                 batch.set(db.doc(`${path}/${inId}`), {
                     description: `ADIANTAMENTO / PAGAMENTO`,
@@ -304,13 +305,12 @@
                     type: 'entrada',
                     status: 'pago',
                     date: new Date().toISOString().split('T')[0],
-                    clearanceDate: filterMonth + "-01", // Força cair no mês do filtro
+                    clearanceDate: filterMonth + "-01", 
                     account: cardName,
                     category: 'Pagamento de Fatura',
                     timestamp: new Date().toISOString()
                 });
 
-                // 3. Se for pagamento total, podemos marcar as despesas do mês como pagas (opcional, mas ajuda na organização)
                 if (payAmt >= totalValue * 0.99) {
                     const cycleTxs = transactions.filter(t => t.account === cardName && t.clearanceDate?.startsWith(filterMonth) && t.status === 'pendente');
                     cycleTxs.forEach(t => batch.update(db.doc(`${path}/${t.id}`), { status: 'pago' }));
@@ -342,6 +342,8 @@
                 } catch (err) { setAuthError(err.message); } finally { setLoading(false); }
             };
 
+            const handleLogout = () => { if (confirm('Sair do sistema?')) auth.signOut(); };
+
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={48} /></div>;
 
             if (!user) return (
@@ -364,7 +366,13 @@
                     
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-3"><img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="logo" /><div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Management</h1></div></div>
+                            <div className="flex items-center gap-3">
+                                <img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="logo" />
+                                <div>
+                                    <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter leading-none">Tribo Management</h1>
+                                    <button onClick={handleLogout} className="text-[8px] text-red-400 font-bold uppercase mt-1">Sair do Sistema</button>
+                                </div>
+                            </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar w-full md:w-auto">
                                 {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>{tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}</button>
@@ -442,110 +450,13 @@
                                         );
                                     })}
                                 </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'cartoes' && (
-                            <div className="space-y-12 animate-in zoom-in duration-300">
-                                <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Gestão Individual de Faturas</h2>
-                                
-                                {accounts.filter(a => a.type === 'cartao').map(card => {
-                                    // Pega todas as transações do cartão que vencem no mês do filtro
-                                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
-                                    
-                                    // Soma faturas (Saídas - Entradas/Pagamentos)
-                                    const cardTotalPendente = cardTxs.reduce((acc, t) => {
-                                        const amt = parseFloat(t.amount) || 0;
-                                        if (t.type === 'saida') return acc + amt;
-                                        if (t.type === 'entrada') return acc - amt;
-                                        return acc;
-                                    }, 0);
-
-                                    const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotalPendente), sourceAccount: '' };
-
-                                    return (
-                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] space-y-8">
-                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
-                                                <div className="text-center md:text-left">
-                                                    <h3 className="text-2xl font-black uppercase tracking-tighter text-[#1A202C]">{card.name}</h3>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p>
-                                                </div>
-                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1 tracking-widest">Valor em Aberto ({filterMonth})</p>
-                                                    <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotalPendente)}</h3>
-                                                </div>
-                                            </div>
-
-                                            <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Pagar através de:</label>
-                                                    <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none" value={payInfo.sourceAccount} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, sourceAccount: e.target.value }})}>
-                                                        <option value="">Selecionar Conta Corrente...</option>
-                                                        {accounts.filter(acc => acc.type !== 'cartao').map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Valor Pagamento:</label>
-                                                    <input type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={payInfo.amountToPay} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: e.target.value }})}/>
-                                                </div>
-                                                <button onClick={() => handleIndividualCardPayment(card.name, cardTotalPendente)} className={`w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg transition-all ${cardTotalPendente > 0 ? 'bg-[#1A202C] text-[#F8CC82] active:scale-95' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>Confirmar Pagamento</button>
-                                            </div>
-
-                                            <div className="overflow-hidden rounded-[2rem] border shadow-inner">
-                                                <div className="p-4 bg-slate-50 border-b font-black text-[9px] uppercase text-slate-400">Detalhamento de Compras / Pagamentos</div>
-                                                <div className="max-h-[300px] overflow-y-auto no-scrollbar">
-                                                    <table className="w-full text-left text-[11px]">
-                                                        <thead>
-                                                            <tr className="bg-white border-b text-[9px] font-black uppercase text-slate-400">
-                                                                <th className="p-4">Data Compra</th>
-                                                                <th className="p-4">Descrição</th>
-                                                                <th className="p-4 text-center">Status</th>
-                                                                <th className="p-4 text-right">Valor</th>
-                                                                <th className="p-4 text-center">Ações</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y font-semibold">
-                                                            {cardTxs.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (
-                                                                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                                                                    <td className="p-4 text-slate-400">{t.date?.split('-').reverse().join('/')}</td>
-                                                                    <td className="p-4 font-black uppercase">{t.description}</td>
-                                                                    <td className="p-4 text-center"><span className={`status-badge ${t.type === 'entrada' ? 'bg-blue-100 text-blue-700' : (t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}`}>{t.type === 'entrada' ? 'CRÉDITO' : t.status}</span></td>
-                                                                    <td className={`p-4 text-right font-black ${t.type === 'entrada' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'entrada' ? "-" : ""}{formatMoney(t.amount)}</td>
-                                                                    <td className="p-4 text-center"><button onClick={() => deleteTx(t.id)} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-2">
+                                    {accounts.filter(acc => acc.type !== 'cartao' && !['C6 Bank', 'Mercado Pago', 'iFood'].includes(acc.name)).map(acc => (
+                                        <div key={acc.id} className="glass-card p-6 rounded-[2.5rem] shadow-sm flex flex-col items-center hover:bg-white transition-all">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                            <h4 className={`text-lg font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-700' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h4>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {activeTab === 'a_pagar' && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
-                                <div className="stat-banner !border-red-500">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.4em] text-red-400 mb-2">Compromissos Pendentes (Vencimento {filterMonth})</p>
-                                    <h3 className="text-4xl font-black text-white">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3>
-                                </div>
-                                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {pendingPaymentsConsolidated.map(t => (
-                                            <div key={t.id} className={`p-6 flex justify-between items-center hover:bg-slate-50 transition-colors ${t.isInvoice ? 'bg-orange-50/40' : ''}`}>
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${t.isInvoice ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice ? 'credit-card' : 'calendar'} size={24} /></div>
-                                                    <div><p className="font-black text-base uppercase leading-tight"><span className="text-red-500 mr-2">[{t.clearanceDate?.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p></div>
-                                                </div>
-                                                <div className="flex items-center gap-6">
-                                                    <p className={`font-black text-lg ${t.isInvoice ? 'text-orange-600' : 'text-[#1A202C]'}`}>{formatMoney(t.amount)}</p>
-                                                    <button onClick={() => markAsPaid(t.id)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-green-600 transition-all"><Icon name="check" size={18} /></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {pendingPaymentsConsolidated.length === 0 && <div className="p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">Tudo em dia para este período!</div>}
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -576,11 +487,219 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {/* Outras abas (DRE, Fornecedores, Ajustes, etc.) permanecem funcionais conforme v10.19.1 */}
+
+                        {activeTab === 'a_pagar' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="stat-banner !border-red-500">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.4em] text-red-400 mb-2">Compromissos Pendentes (Vencimento {filterMonth})</p>
+                                    <h3 className="text-4xl font-black text-white">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3>
+                                </div>
+                                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                        {pendingPaymentsConsolidated.map(t => (
+                                            <div key={t.id} className={`p-6 flex justify-between items-center hover:bg-slate-50 transition-colors ${t.isInvoice ? 'bg-orange-50/40' : ''}`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${t.isInvoice ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice ? 'credit-card' : 'calendar'} size={24} /></div>
+                                                    <div><p className="font-black text-base uppercase leading-tight"><span className="text-red-500 mr-2">[{t.clearanceDate?.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p></div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <p className={`font-black text-lg ${t.isInvoice ? 'text-orange-600' : 'text-[#1A202C]'}`}>{formatMoney(t.amount)}</p>
+                                                    <button onClick={() => markAsPaid(t.id)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-green-600 transition-all"><Icon name="check" size={18} /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {pendingPaymentsConsolidated.length === 0 && <div className="p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">Tudo em dia para este período!</div>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'a_receber' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="stat-banner !border-green-500">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.4em] text-green-400 mb-2">Entradas Previstas ({filterMonth})</p>
+                                    <h3 className="text-4xl font-black text-white">{formatMoney(futureIncomes.reduce((acc, t) => acc + t.amount, 0))}</h3>
+                                </div>
+                                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                        {futureIncomes.map(t => (
+                                            <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={24} /></div>
+                                                    <div><p className="font-black text-base uppercase leading-tight"><span className="text-green-500 mr-2">[{t.date?.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p></div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <p className="font-black text-lg text-[#1A202C]">{formatMoney(t.amount)}</p>
+                                                    <button onClick={() => markAsPaid(t.id)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-green-600 transition-all"><Icon name="check" size={18} /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {futureIncomes.length === 0 && <div className="p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">Nenhuma entrada pendente para este mês.</div>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-12 animate-in zoom-in duration-300">
+                                <h2 className="text-2xl font-black uppercase text-center tracking-tighter">Gestão Individual de Faturas</h2>
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
+                                    const cardTotalPendente = cardTxs.reduce((acc, t) => {
+                                        const amt = parseFloat(t.amount) || 0;
+                                        if (t.type === 'saida') return acc + amt;
+                                        if (t.type === 'entrada') return acc - amt;
+                                        return acc;
+                                    }, 0);
+                                    const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotalPendente), sourceAccount: '' };
+                                    return (
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] space-y-8">
+                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
+                                                <div>
+                                                    <h3 className="text-2xl font-black uppercase text-[#1A202C]">{card.name}</h3>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p>
+                                                </div>
+                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Valor em Aberto ({filterMonth})</p>
+                                                    <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotalPendente)}</h3>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Pagar através de:</label>
+                                                    <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs" value={payInfo.sourceAccount} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, sourceAccount: e.target.value }})}>
+                                                        <option value="">Selecionar Conta Corrente...</option>
+                                                        {accounts.filter(acc => acc.type !== 'cartao').map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Valor Pagamento:</label>
+                                                    <input type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={payInfo.amountToPay} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: e.target.value }})}/>
+                                                </div>
+                                                <button onClick={() => handleIndividualCardPayment(card.name, cardTotalPendente)} className={`w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg ${cardTotalPendente > 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-slate-100 text-slate-300'}`}>Confirmar Pagamento</button>
+                                            </div>
+                                            <div className="overflow-hidden rounded-[2rem] border shadow-inner">
+                                                <div className="p-4 bg-slate-50 border-b font-black text-[9px] uppercase">Compras / Pagamentos do Mês</div>
+                                                <div className="max-h-[300px] overflow-y-auto divide-y">
+                                                    {cardTxs.map(t => (
+                                                        <div key={t.id} className="p-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors">
+                                                            <div>
+                                                                <p className="font-black text-[10px] uppercase">{t.description}</p>
+                                                                <p className="text-[8px] text-slate-400 uppercase font-bold">{t.date?.split('-').reverse().join('/')}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-4">
+                                                                <span className={`status-badge ${t.type === 'entrada' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{t.type === 'entrada' ? 'CRÉDITO' : t.status}</span>
+                                                                <p className="font-black text-xs">{t.type === 'entrada' ? "-" : ""}{formatMoney(t.amount)}</p>
+                                                                <button onClick={() => deleteTx(t.id)} className="text-red-200 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-center">Desempenho Financeiro: {filterMonth}</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Faturamento</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Total Custos</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
+                                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'}`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">CMV Est.</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.costsByCategory['CMV (Insumos)'] || 0)}</h3></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in duration-500">
+                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center tracking-tighter text-[#1A202C]">DRE Operacional - {filterMonth}</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black uppercase text-[10px] text-green-800"><span>(+) Receita Total</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="py-4 border-b">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Custos Operacionais</h3>
+                                        {Object.entries(stats.costsByCategory).map(([catName, amount]) => (
+                                            <div key={catName} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-b border-slate-50 last:border-0">
+                                                <span>(-) {catName}</span>
+                                                <span className="text-red-400 font-black">{formatMoney(amount)}</span>
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase">
+                                            <span>(-) Custos Variáveis (Motoboy/Entrega)</span>
+                                            <span className="text-red-400 font-black">{formatMoney(stats.custosVariaveis)}</span>
+                                        </div>
+                                    </div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}>
+                                        <h3 className="text-xl font-black uppercase tracking-widest">Resultado Líquido</h3>
+                                        <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'fornecedores' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-500">
+                                <div className="glass-card p-8 rounded-[3rem] h-fit shadow-lg">
+                                    <h2 className="text-sm font-black uppercase mb-6 flex items-center gap-2"><Icon name="truck" className="text-[#D97757]"/> Novo Fornecedor</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nome do Fornecedor" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <button onClick={async() => { if(!newItemName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: newItemName }); setNewItemName(''); }} className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Cadastrar Parceiro</button>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg max-h-[500px] overflow-y-auto no-scrollbar">
+                                    <h2 className="text-sm font-black uppercase mb-6">Lista de Fornecedores</h2>
+                                    <div className="space-y-2">
+                                        {suppliers.map(s => (
+                                            <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group hover:border-[#D97757] transition-all">
+                                                <span className="text-xs font-black uppercase text-slate-700">{s.name}</span>
+                                                <button onClick={() => { if(confirm('Eliminar fornecedor?')) db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete() }} className="text-red-200 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'ajustes' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom duration-500 pb-20">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg border-t-4 border-orange-500">
+                                    <h2 className="text-sm font-black uppercase mb-6">Bancos & Cartões</h2>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                            <input type="text" className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none mb-2" placeholder="Nome da Conta" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                            <div className="flex gap-2 mb-2">
+                                                <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border text-slate-400'}`}>Corrente</button>
+                                                <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black uppercase ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border text-slate-400'}`}>Cartão</button>
+                                            </div>
+                                            {newItemType === 'cartao' && (
+                                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                                    <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-1">Dia Fecho</label><input type="number" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} /></div>
+                                                    <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-1">Dia Vencimento</label><input type="number" className="w-full p-2 text-xs border rounded-lg font-bold" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} /></div>
+                                                </div>
+                                            )}
+                                            <button onClick={async() => { if(!newItemName) return; const path = `artifacts/${appId}/users/${user.uid}/accounts`; const data = { name: newItemName, type: newItemType, closingDay: newItemClosingDay || '25', dueDay: newItemDueDay || '10' }; if (editingAccountId) await db.doc(`${path}/${editingAccountId}`).set(data, { merge: true }); else await db.collection(path).add(data); setNewItemName(''); setEditingAccountId(null); }} className="w-full bg-[#1A202C] text-[#F8CC82] p-3 rounded-xl text-[10px] font-black uppercase shadow-lg">Gravar Configuração</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-600"><Icon name={a.type === 'cartao' ? 'credit-card' : 'landmark'} size={12}/><span>{a.name}</span></div><div className="flex gap-1"><button onClick={() => {setEditingAccountId(a.id); setNewItemName(a.name); setNewItemType(a.type); setNewItemClosingDay(a.closingDay); setNewItemDueDay(a.dueDay);}} className="text-slate-300 hover:text-blue-500"><Icon name="edit-2" size={12}/></button><button onClick={() => {if(confirm('Eliminar conta?')) db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()}} className="text-red-200 hover:text-red-500 transition-colors"><Icon name="trash-2" size={12}/></button></div></div>))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-lg border-t-4 border-[#1A202C]">
+                                    <h2 className="text-sm font-black uppercase mb-6">Categorias Operacionais</h2>
+                                    <div className="flex gap-2 mb-6"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" placeholder="Nova Categoria" value={cat} onChange={e => setCat(e.target.value)} /><button onClick={async() => { if(!cat) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat }); setCat(''); }} className="bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl transition-transform active:scale-90"><Icon name="plus" /></button></div>
+                                    <div className="space-y-2">
+                                        {categories.map(c => (<div key={c.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group"><span className="text-xs font-bold uppercase text-slate-600">{c.name}</span><button onClick={() => { if(confirm('Eliminar categoria?')) db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete() }} className="text-red-200 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={12}/></button></div>))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.20.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.21.0 (Sistema Integral)</footer>
                 </div>
             );
         }
