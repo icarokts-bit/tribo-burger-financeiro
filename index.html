@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v10.9.0</title>
+    <title>Tribo Burger | Gestão Total v10.10.0</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -177,24 +177,31 @@
 
             const pendingPaymentsConsolidated = useMemo(() => {
                 const p = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
-                // Itens pendentes normais
-                const items = transactions.filter(t => t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth));
-                const nonCard = items.filter(t => {
+                
+                // Itens pendentes normais (não cartão)
+                const nonCard = transactions.filter(t => {
                     const acc = accounts.find(a => a.name === t.account);
-                    return !acc || acc.type !== 'cartao';
+                    return t.type === 'saida' && 
+                           t.status === 'pendente' && 
+                           t.clearanceDate?.startsWith(filterMonth) && 
+                           (!acc || acc.type !== 'cartao');
                 });
                 
-                // Consolidação de Faturas de Cartão
+                // Consolidação de Faturas de Cartão baseada no ciclo total
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    // Soma tudo que vence neste mês para este cartão e ainda está pendente
-                    const sum = transactions.filter(t => 
+                    // Filtramos todas as transações deste ciclo (pelo clearanceDate)
+                    const cycleTxs = transactions.filter(t => 
                         t.account === card.name && 
-                        t.status === 'pendente' && 
                         t.clearanceDate?.startsWith(filterMonth)
-                    ).reduce((acc, t) => acc + p(t.amount), 0);
+                    );
+
+                    // Somamos o total do ciclo (assim garantimos os R$ 916,04 das imagens)
+                    const total = Math.round(cycleTxs.reduce((acc, t) => acc + p(t.amount), 0) * 100) / 100;
                     
-                    const total = Math.round(sum * 100) / 100;
-                    if (total <= 0) return null;
+                    // Só mostramos na aba A Pagar se a fatura ainda tiver itens pendentes
+                    const isStillUnpaid = cycleTxs.some(t => t.status === 'pendente');
+
+                    if (total <= 0 || !isStillUnpaid) return null;
                     
                     return { 
                         id: `invoice-${card.name}-${filterMonth}`, 
@@ -244,13 +251,10 @@
                 const numInstallments = cardInfo && type === 'saida' ? (parseInt(installments) || 1) : 1;
                 
                 const batch = db.batch();
-                
-                // Cálculo de parcelas com ajuste de centavos na última
                 const installmentBase = Math.floor((totalAmount / numInstallments) * 100) / 100;
                 
                 for(let i = 0; i < numInstallments; i++) {
                     const currentId = i === 0 && editingId ? editingId : Date.now().toString() + i;
-                    
                     const baseDate = new Date(date + 'T12:00:00');
                     baseDate.setMonth(baseDate.getMonth() + i);
                     const finalDateStr = baseDate.toISOString().split('T')[0];
@@ -259,20 +263,16 @@
                     let finalStatus = status;
 
                     if (cardInfo) {
-                        // Compras no cartão são SEMPRE pendentes até o pagamento da fatura
                         finalStatus = 'pendente';
                         const purchaseDate = new Date(finalDateStr + 'T12:00:00');
-                        // Se passar do dia de fechamento, vai para a fatura do mês seguinte
                         if (purchaseDate.getDate() > parseInt(cardInfo.closingDay)) {
                             purchaseDate.setMonth(purchaseDate.getMonth() + 1);
                         }
-                        // O vencimento é sempre no mês seguinte ao fechamento
                         purchaseDate.setMonth(purchaseDate.getMonth() + 1);
                         purchaseDate.setDate(parseInt(cardInfo.dueDay));
                         finalClearance = purchaseDate.toISOString().split('T')[0];
                     }
 
-                    // Ajuste da última parcela para bater o centavo
                     const currentAmount = (i === numInstallments - 1) 
                         ? Math.round((totalAmount - (installmentBase * (numInstallments - 1))) * 100) / 100
                         : installmentBase;
@@ -300,7 +300,6 @@
             
             const markAsPaid = async (tId) => {
                 if (!user) return;
-                // Se for uma fatura consolidada
                 if (tId.startsWith('invoice-')) {
                     const [, cardName, month] = tId.split('-');
                     const batch = db.batch();
@@ -314,7 +313,6 @@
                     await batch.commit(); 
                     return;
                 }
-                // Se for um item avulso
                 await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
             };
 
@@ -323,7 +321,7 @@
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
                     <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
-                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.9</p></div>
+                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Acesso Gerencial v10.10</p></div>
                         <form onSubmit={handleAuth} className="space-y-4">
                             <input type="email" required placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" required placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
@@ -629,7 +627,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.9.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v10.10.0</footer>
                 </div>
             );
         }
