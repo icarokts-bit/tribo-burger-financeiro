@@ -414,7 +414,12 @@
                                             <div className="font-black text-[10px] uppercase text-slate-400 flex items-center gap-2"><Icon name="wallet" size={14} /> Fluxo de Caixa Recente</div>
                                         </div>
                                         <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                            {transactions.filter(t => (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth))).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).map(t => (
+                                            {transactions.filter(t => {
+                                                const accInfo = accounts.find(a => a.name === t.account);
+                                                const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
+                                                // Regra: Filtrar para exibir apenas contas que não são de cartão (mostra a movimentação bancária de pagamento, mas oculta a compra interna do cartão)
+                                                return isDateMatch && accInfo?.type !== 'cartao';
+                                            }).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).map(t => (
                                                 <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors group">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div>
