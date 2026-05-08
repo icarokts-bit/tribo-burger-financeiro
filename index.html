@@ -218,7 +218,7 @@
                         if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
                         else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
                         else if (t.type === 'transferencia') { 
-                            balances[t.account] -= amt; balances[t.destinationAccount] += (balances[t.destinationAccount] || 0) + amt; 
+                            balances[t.account] -= amt; balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
                         }
                     }
                 });
@@ -323,16 +323,39 @@
                 const numInstallments = cardInfo ? installments : 1;
 
                 for (let i = 0; i < numInstallments; i++) {
-                    let finalDate = date;
+                    // Prepara objetos de data para manipulação
+                    const dObj = new Date(date + 'T00:00:00');
+                    dObj.setMonth(dObj.getMonth() + i);
+                    
+                    let finalDate = dObj.toISOString().split('T')[0];
                     let finalClearance = clearance;
                     let finalDesc = desc;
 
                     if (numInstallments > 1) {
-                        const dObj = new Date(date + 'T00:00:00');
-                        dObj.setMonth(dObj.getMonth() + i);
-                        finalDate = dObj.toISOString().split('T')[0];
                         finalDesc = `${desc} (${i + 1}/${numInstallments})`;
+                    }
+
+                    // LÓGICA DE COMPENSAÇÃO (VENCIMENTO)
+                    if (cardInfo) {
+                        // Cálculo para Cartão de Crédito baseado em dia de fechamento
+                        const closingDay = parseInt(cardInfo.closingDay) || 25;
+                        const dueDay = parseInt(cardInfo.dueDay) || 10;
+                        const purchaseDay = dObj.getDate();
                         
+                        let dueDate = new Date(dObj);
+                        
+                        if (purchaseDay <= closingDay) {
+                            // Ex: Compra dia 07 com fechamento dia 25. Vence no mês seguinte (mês + 1)
+                            dueDate.setMonth(dueDate.getMonth() + 1);
+                        } else {
+                            // Ex: Compra dia 26 com fechamento dia 25. Vence daqui a dois meses (mês + 2)
+                            dueDate.setMonth(dueDate.getMonth() + 2);
+                        }
+                        
+                        dueDate.setDate(dueDay);
+                        finalClearance = dueDate.toISOString().split('T')[0];
+                    } else {
+                        // Para contas normais, mantém a compensação manual ou aplica offset de parcelas
                         const cObj = new Date(clearance + 'T00:00:00');
                         cObj.setMonth(cObj.getMonth() + i);
                         finalClearance = cObj.toISOString().split('T')[0];
