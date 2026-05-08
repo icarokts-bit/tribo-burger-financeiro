@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.5 (FILTROS DE BUSCA)</title>
+    <title>Tribo Burger | Gestão Total v11.6.6 (SALDOS DINÂMICOS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -124,7 +124,6 @@
 
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             
-            // Novos estados para filtros do Dashboard
             const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
             const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
             
@@ -182,7 +181,6 @@
                     const accInfo = accounts.find(a => a.name === t.account);
                     const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
                     
-                    // Aplicação dos novos filtros
                     const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
                     const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
 
@@ -454,7 +452,6 @@
                                             <Icon name="history" size={12}/>
                                             <span>Histórico Recente</span>
                                         </div>
-                                        {/* Barra de Filtros de Busca */}
                                         <div className="flex flex-wrap gap-2">
                                             <select 
                                                 className="filter-select bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase outline-none text-[#D97757]"
@@ -508,13 +505,26 @@
                         )}
 
                         {activeTab === 'saldos' && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-2 animate-in fade-in">
-                                {['Mercado Pago', 'C6 Bank', 'iFood'].map(name => (
-                                    <div key={name} className={`bg-white p-8 rounded-[3.5rem] shadow-xl card-bank-${name.toLowerCase().split(' ')[0]} flex flex-col items-center transition-transform hover:scale-105`}>
-                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{name}</p>
-                                        <h3 className={`text-4xl font-black ${accountBalances[name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[name] || 0)}</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2 animate-in fade-in">
+                                {accounts.filter(acc => acc.type === 'corrente').map(acc => {
+                                    let borderClass = 'border-[#1A202C]';
+                                    const lowerName = acc.name.toLowerCase();
+                                    if (lowerName.includes('mercado')) borderClass = 'card-bank-mercado';
+                                    else if (lowerName.includes('c6')) borderClass = 'card-bank-c6';
+                                    else if (lowerName.includes('ifood')) borderClass = 'card-bank-ifood';
+
+                                    return (
+                                        <div key={acc.id} className={`bg-white p-8 rounded-[3.5rem] shadow-xl ${borderClass.startsWith('card') ? borderClass : `border-t-8 ${borderClass}`} flex flex-col items-center transition-transform hover:scale-105`}>
+                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                            <h3 className={`text-4xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                        </div>
+                                    );
+                                })}
+                                {accounts.filter(acc => acc.type === 'corrente').length === 0 && (
+                                    <div className="col-span-full p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">
+                                        Nenhuma conta corrente configurada.
                                     </div>
-                                ))}
+                                )}
                             </div>
                         )}
 
@@ -748,7 +758,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.5</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.6</footer>
                 </div>
             );
         }
