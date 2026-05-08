@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.7.2 (RESTORE: GRUPOS DE CONTAS)</title>
+    <title>Tribo Burger | Gestão Total v11.7.3 (FIX: EDITAR GRUPOS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -145,7 +145,7 @@
             // Estados para Gestão de Contas (Ajustes)
             const [newItemName, setNewItemName] = useState('');
             const [newItemType, setNewItemType] = useState('corrente');
-            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional'); // 'operacional', 'reserva', 'outros'
+            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional'); 
             const [newItemClosingDay, setNewItemClosingDay] = useState('25');
             const [newItemDueDay, setNewItemDueDay] = useState('10');
             const [editingAccountId, setEditingAccountId] = useState(null);
@@ -379,6 +379,16 @@
                 };
             }, [accounts]);
 
+            // Limpa o formulário de contas
+            const resetAccountForm = () => {
+                setEditingAccountId(null);
+                setNewItemName('');
+                setNewItemType('corrente');
+                setNewItemAccountGroup('operacional');
+                setNewItemClosingDay('25');
+                setNewItemDueDay('10');
+            };
+
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={48} /></div>;
 
             if (!user) return (
@@ -543,7 +553,7 @@
                                             <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button>
                                         </div>
 
-                                        {/* GRUPO DE EXIBIÇÃO - RESTAURADO AQUI */}
+                                        {/* GRUPO DE EXIBIÇÃO - FORÇADO A APARECER SE FOR 'CORRENTE' */}
                                         {newItemType === 'corrente' && (
                                             <div className="space-y-1 mb-2 fade-in">
                                                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Grupo de Exibição (Aba Saldos)</label>
@@ -584,16 +594,15 @@
                                                 };
                                                 if (editingAccountId) {
                                                     await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${editingAccountId}`).update(payload);
-                                                    setEditingAccountId(null);
                                                 } else {
                                                     await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add(payload); 
                                                 }
-                                                setNewItemName(''); 
+                                                resetAccountForm();
                                             }} className={`flex-1 ${editingAccountId ? 'bg-blue-600' : 'bg-black'} text-[#F8CC82] p-3 rounded-xl font-black uppercase text-[10px] shadow-lg transition-colors`}>
                                                 {editingAccountId ? 'Guardar Alterações' : 'Adicionar Conta'}
                                             </button>
                                             {editingAccountId && (
-                                                <button onClick={() => { setEditingAccountId(null); setNewItemName(''); }} className="bg-slate-200 p-3 rounded-xl font-black uppercase text-[10px]">X</button>
+                                                <button onClick={resetAccountForm} className="bg-slate-200 p-3 rounded-xl font-black uppercase text-[10px]">Cancelar</button>
                                             )}
                                         </div>
                                     </div>
@@ -652,7 +661,7 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={newItemName} setNewItemName={setNewItemName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.2</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.3</footer>
                 </div>
             );
         }
