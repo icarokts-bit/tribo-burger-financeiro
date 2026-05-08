@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.1</title>
+    <title>Tribo Burger | Gestão Total v13.0.2</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -261,6 +261,7 @@
                     return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
+                    // Filtra itens cujo VENCIMENTO REAL é neste mês
                     const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
                     const total = cardTxs.reduce((acc, t) => {
                         if (t.type === 'saida') return acc + p(t.amount);
@@ -328,6 +329,7 @@
                     
                     let finalDate = dObj.toISOString().split('T')[0];
                     let finalClearance = clearance;
+                    let billingMonth = finalDate.slice(0, 7); // Mês base da fatura
                     let finalDesc = desc;
 
                     if (numInstallments > 1) {
@@ -339,14 +341,19 @@
                         const dueDay = parseInt(cardInfo.dueDay) || 10;
                         const purchaseDay = dObj.getDate();
                         
-                        let dueDate = new Date(dObj);
-                        
-                        if (purchaseDay <= closingDay) {
-                            dueDate.setMonth(dueDate.getMonth() + 1);
-                        } else {
-                            dueDate.setMonth(dueDate.getMonth() + 2);
+                        // LÓGICA DE FATURA:
+                        // Se comprei até o dia de fechamento, pertence à fatura deste mês.
+                        // Se comprei depois, pertence à fatura do próximo mês.
+                        let billingDate = new Date(dObj);
+                        if (purchaseDay > closingDay) {
+                            billingDate.setMonth(billingDate.getMonth() + 1);
                         }
-                        
+                        billingMonth = billingDate.toISOString().slice(0, 7);
+
+                        // LÓGICA DE VENCIMENTO REAL:
+                        // O pagamento é SEMPRE no mês seguinte ao mês da fatura.
+                        let dueDate = new Date(billingDate);
+                        dueDate.setMonth(dueDate.getMonth() + 1);
                         dueDate.setDate(dueDay);
                         finalClearance = dueDate.toISOString().split('T')[0];
                     } else {
@@ -362,6 +369,7 @@
                         status: cardInfo ? 'pendente' : status, 
                         date: finalDate, 
                         clearanceDate: finalClearance, 
+                        billingMonth: billingMonth, // Campo auxiliar para filtrar na aba de Cartões
                         account, 
                         destinationAccount: destAccount,
                         category: type === 'transferencia' ? 'Transferência Interna' : (cat || 'Geral'), 
@@ -514,7 +522,7 @@
                                         {filteredDashboardTxs.map(t => (
                                             <div key={t.id} className={`p-4 flex justify-between items-center group hover:bg-slate-50 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
                                                 <div className="flex items-center gap-4">
-                                                    {/* DATA DE VENCIMENTO ANTES DO ÍCONE */}
+                                                    {/* DATA DE VENCIMENTO REAL NO FLUXO MENSAL */}
                                                     <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
                                                     
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -568,7 +576,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.1</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.2</footer>
                 </div>
             );
         }
@@ -601,8 +609,11 @@
         const CartoesTab = ({ accounts, transactions, filterMonth, formatMoney, Icon, deleteTx, db, appId, user, localPayments, setLocalPayments }) => (
             <div className="space-y-12 animate-in zoom-in duration-300">
                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth))
-                                       .sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+                    // FILTRAGEM CORRETA:
+                    // Na aba de cartões, filtramos pelo billingMonth (mês que a compra "caiu" na fatura)
+                    const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth))))
+                                       .sort((a,b) => a.date.localeCompare(b.date));
+                    
                     const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + t.amount : acc - t.amount, 0);
                     const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotal), sourceAccount: accounts.filter(acc => acc.type !== 'cartao')[0]?.name || '' };
                     return (
@@ -610,16 +621,22 @@
                             <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
                                 <div><h3 className="text-2xl font-black uppercase text-[#1A202C]">{card.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p></div>
                                 <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Valor em Aberto</p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
                                     <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotal)}</h3>
                                 </div>
                             </div>
                             <div className="space-y-3">
-                                <div className="flex items-center gap-2 px-2"><Icon name="list" size={14} className="text-slate-400" /><h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Itens da Fatura ({cardTxs.length})</h4></div>
+                                <div className="flex items-center gap-2 px-2"><Icon name="list" size={14} className="text-slate-400" /><h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Itens da Fatura de {filterMonth} ({cardTxs.length})</h4></div>
                                 <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
-                                    {cardTxs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase">Sem lançamentos</p> : cardTxs.map(t => (
+                                    {cardTxs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase">Sem lançamentos para este mês</p> : cardTxs.map(t => (
                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
-                                            <div className="flex items-center gap-4"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><Icon name="shopping-cart" size={14} /></div><div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.clearanceDate?.split('-').reverse().join('/')} • {t.category}</p></div></div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><Icon name="shopping-cart" size={14} /></div>
+                                                <div>
+                                                    <p className="font-black text-xs uppercase leading-none">{t.description}</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Compra: {t.date?.split('-').reverse().join('/')} • Vencimento: {t.clearanceDate?.split('-').reverse().join('/')}</p>
+                                                </div>
+                                            </div>
                                             <div className="flex items-center gap-4"><p className="font-black text-sm">{formatMoney(t.amount)}</p><button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14} /></button></div>
                                         </div>
                                     ))}
@@ -631,8 +648,10 @@
                                 <button onClick={async() => {
                                     const payAmt = parseFloat(payInfo.amountToPay); if (!payInfo.sourceAccount || payAmt <= 0) return;
                                     const batch = db.batch(); const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                                    // A saída do banco é hoje (pagamento)
                                     batch.set(db.doc(`${path}/PAY-OUT-${Date.now()}`), { description: `PAGAMENTO FATURA: ${card.name}`, amount: payAmt, type: 'saida', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: new Date().toISOString().split('T')[0], account: payInfo.sourceAccount, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
-                                    batch.set(db.doc(`${path}/PAY-IN-${Date.now()}`), { description: `ADIANTAMENTO / PAGAMENTO`, amount: payAmt, type: 'entrada', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: filterMonth + "-01", account: card.name, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
+                                    // A entrada no cartão abate a fatura visualmente no mês selecionado
+                                    batch.set(db.doc(`${path}/PAY-IN-${Date.now()}`), { description: `BAIXA FATURA`, amount: payAmt, type: 'entrada', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: filterMonth + "-01", billingMonth: filterMonth, account: card.name, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
                                     await batch.commit(); setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: 0 }});
                                 }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg bg-[#1A202C] text-[#F8CC82]">Confirmar Pagamento</button>
                             </div>
