@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.7.0 (GRUPOS PERSONALIZADOS)</title>
+    <title>Tribo Burger | Gestão Total v11.7.1 (EDIÇÃO DE CONTAS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -133,9 +133,10 @@
 
             const [newItemName, setNewItemName] = useState('');
             const [newItemType, setNewItemType] = useState('corrente');
-            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional'); // 'operacional', 'reserva', 'outros'
+            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional');
             const [newItemClosingDay, setNewItemClosingDay] = useState('25');
             const [newItemDueDay, setNewItemDueDay] = useState('10');
+            const [editingAccountId, setEditingAccountId] = useState(null);
             const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
 
             useEffect(() => {
@@ -341,7 +342,6 @@
                 return 'border-t-8 border-[#1A202C]';
             };
 
-            // Lógica de Agrupamento Dinâmica baseada na configuração do utilizador
             const groups = useMemo(() => {
                 const items = accounts.filter(acc => acc.type === 'corrente');
                 const operacionalKeys = ['mercado', 'c6', 'caixa', 'ifood'];
@@ -488,7 +488,6 @@
 
                         {activeTab === 'saldos' && (
                             <div className="space-y-12 animate-in fade-in">
-                                {/* Destaque Operacional */}
                                 <div className="space-y-4">
                                     <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-[#D97757] ml-2">Destaque Operacional</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-2">
@@ -501,7 +500,6 @@
                                     </div>
                                 </div>
 
-                                {/* Reservas e Aplicações */}
                                 <div className="space-y-4">
                                     <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-300 ml-2">Reservas & Aplicações</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
@@ -514,7 +512,6 @@
                                     </div>
                                 </div>
 
-                                {/* Outras Contas */}
                                 <div className="space-y-4">
                                     <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-100 ml-2">Outras Contas</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
@@ -532,9 +529,9 @@
                         {activeTab === 'ajustes' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500">
-                                    <h2 className="text-sm font-black uppercase mb-6">Contas & Bancos</h2>
-                                    <div className="p-4 bg-slate-50 rounded-2xl border border-dashed mb-4">
-                                        <input type="text" className="w-full p-3 border rounded-xl mb-2 font-bold text-xs" placeholder="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                    <h2 className="text-sm font-black uppercase mb-6">{editingAccountId ? 'Editar Conta' : 'Contas & Bancos'}</h2>
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-dashed mb-4 transition-all">
+                                        <input type="text" className="w-full p-3 border rounded-xl mb-2 font-bold text-xs outline-none" placeholder="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
                                         <div className="flex gap-2 mb-2">
                                             <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button>
                                             <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button>
@@ -551,35 +548,69 @@
                                         )}
                                         {newItemType === 'cartao' && (
                                             <div className="grid grid-cols-2 gap-2 mb-2">
-                                                <input type="number" placeholder="Fecho" className="p-2 border rounded-lg text-xs font-bold" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
-                                                <input type="number" placeholder="Vence" className="p-2 border rounded-lg text-xs font-bold" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
+                                                <input type="number" placeholder="Fecho" className="p-2 border rounded-lg text-xs font-bold outline-none" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
+                                                <input type="number" placeholder="Vence" className="p-2 border rounded-lg text-xs font-bold outline-none" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
                                             </div>
                                         )}
-                                        <button onClick={async() => { 
-                                            if(!newItemName) return; 
-                                            await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ 
-                                                name: newItemName, 
-                                                type: newItemType, 
-                                                group: newItemType === 'corrente' ? newItemAccountGroup : 'cartao',
-                                                closingDay: newItemClosingDay, 
-                                                dueDay: newItemDueDay 
-                                            }); 
-                                            setNewItemName(''); 
-                                        }} className="w-full bg-black text-[#F8CC82] p-3 rounded-xl font-black uppercase text-[10px]">Adicionar Conta</button>
+                                        <div className="flex gap-2">
+                                            <button onClick={async() => { 
+                                                if(!newItemName) return; 
+                                                const payload = { 
+                                                    name: newItemName, 
+                                                    type: newItemType, 
+                                                    group: newItemType === 'corrente' ? newItemAccountGroup : 'cartao',
+                                                    closingDay: newItemClosingDay, 
+                                                    dueDay: newItemDueDay 
+                                                };
+                                                if (editingAccountId) {
+                                                    await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${editingAccountId}`).update(payload);
+                                                    setEditingAccountId(null);
+                                                } else {
+                                                    await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add(payload); 
+                                                }
+                                                setNewItemName(''); 
+                                            }} className={`flex-1 ${editingAccountId ? 'bg-blue-600' : 'bg-black'} text-[#F8CC82] p-3 rounded-xl font-black uppercase text-[10px] shadow-lg transition-colors`}>
+                                                {editingAccountId ? 'Guardar Alterações' : 'Adicionar Conta'}
+                                            </button>
+                                            {editingAccountId && (
+                                                <button onClick={() => { setEditingAccountId(null); setNewItemName(''); }} className="bg-slate-200 p-3 rounded-xl font-black uppercase text-[10px]">X</button>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
-                                        {accounts.map(a => (<div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white transition-all hover:bg-slate-50"><div className="flex flex-col"><span className="text-[10px] font-black uppercase">{a.name}</span><span className="text-[8px] text-slate-400 font-bold uppercase">{a.group || a.type}</span></div><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></div>))}
+                                        {accounts.map(a => (
+                                            <div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white transition-all hover:bg-slate-50 group">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black uppercase">{a.name}</span>
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">{a.group || a.type}</span>
+                                                </div>
+                                                <div className="flex gap-2 items-center">
+                                                    <button onClick={() => {
+                                                        setEditingAccountId(a.id);
+                                                        setNewItemName(a.name);
+                                                        setNewItemType(a.type);
+                                                        setNewItemAccountGroup(a.group || 'operacional');
+                                                        setNewItemClosingDay(a.closingDay || '25');
+                                                        setNewItemDueDay(a.dueDay || '10');
+                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                    }} className="text-blue-400 hover:text-blue-600 transition-colors">
+                                                        <Icon name="edit-2" size={14}/>
+                                                    </button>
+                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500 transition-colors">
+                                                        <Icon name="trash-2" size={14}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] border-t-4 border-[#1A202C]">
                                     <h2 className="text-sm font-black uppercase mb-6">Categorias</h2>
-                                    <div className="flex gap-2 mb-4"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs" value={cat} onChange={e => setCat(e.target.value)} /><button onClick={async() => { if(!cat) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat }); setCat(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={14}/></button></div>
+                                    <div className="flex gap-2 mb-4"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" value={cat} onChange={e => setCat(e.target.value)} /><button onClick={async() => { if(!cat) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat }); setCat(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={14}/></button></div>
                                     <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><span className="text-[10px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-300"><Icon name="trash-2" size={14}/></button></div>))}</div>
                                 </div>
                             </div>
                         )}
                         
-                        {/* Mantendo as outras abas existentes */}
                         {activeTab === 'planilha' && <PlanilhaTab dailyRecords={dailyRecords} user={user} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} appId={appId} db={db} />}
                         {activeTab === 'a_pagar' && <APagarTab pendingPaymentsConsolidated={pendingPaymentsConsolidated} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} markAsPaid={markAsPaid} />}
                         {activeTab === 'a_receber' && <AReceberTab futureIncomes={futureIncomes} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} markAsPaid={markAsPaid} />}
@@ -589,12 +620,11 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={newItemName} setNewItemName={setNewItemName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.1</footer>
                 </div>
             );
         }
 
-        // Sub-componentes para manter o código organizado (simplificados para o exemplo)
         const PlanilhaTab = ({ dailyRecords, user, filterMonth, formatMoney, Icon, appId, db }) => {
             const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
             return (
