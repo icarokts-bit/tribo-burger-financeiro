@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.8.4 (FILTROS DASHBOARD)</title>
+    <title>Tribo Burger | Gestão Total v12.0.0 (SISTEMA BASE)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -117,7 +117,6 @@
             const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
             const [localPayments, setLocalPayments] = useState({});
 
-            // Estados do formulário de transações
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
@@ -131,7 +130,6 @@
             const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
             const [editingId, setEditingId] = useState(null);
 
-            // Estados do formulário de Contas
             const [accName, setAccName] = useState('');
             const [accType, setAccType] = useState('corrente');
             const [accGroup, setAccGroup] = useState('operacional'); 
@@ -468,7 +466,6 @@
                                     <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex flex-col md:flex-row justify-between items-center gap-3">
                                         <span>Histórico Mensal</span>
                                         <div className="flex gap-2 w-full md:w-auto">
-                                            {/* FILTROS POR CONTA E CATEGORIA NA ABA LANÇAMENTO */}
                                             <select className="filter-select flex-1 md:flex-none text-[8px] p-2 border rounded-lg bg-white outline-none" value={dashboardFilterAccount} onChange={e=>setDashboardFilterAccount(e.target.value)}>
                                                 <option value="">Todas Contas</option>
                                                 {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
@@ -587,7 +584,7 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={accName} setNewItemName={setAccName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.8.4</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v12.0.0</footer>
                 </div>
             );
         }
