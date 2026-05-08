@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.1 (LISTA CARTÃO RESTAURADA)</title>
+    <title>Tribo Burger | Gestão Total v11.6.2 (FIX: HISTÓRICO VISÍVEL)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -136,23 +136,44 @@
             useEffect(() => {
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
-                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                
+                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => {
+                    setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                }, err => console.error("Erro Transações:", err));
+
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
                     const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
                     setDailyRecords(recs);
                 });
+
                 const unsubAccounts = db.collection(`${path}/accounts`).onSnapshot(snap => {
                     const accList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setAccounts(accList);
                     if (accList.length > 0 && !account) setAccount(accList[0].name);
                 });
-                const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+                const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
+                    setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+
+                const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => {
+                    setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
 
                 return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); };
-            }, [user, filterMonth]);
+            }, [user]);
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            const filteredDashboardTxs = useMemo(() => {
+                return transactions.filter(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
+                    // Mostra se a data coincide e NÃO é uma conta de cartão (cartão tem aba própria)
+                    // Se accInfo não existir, mostra por precaução para não sumir dados
+                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao');
+                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+            }, [transactions, accounts, filterMonth]);
 
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
@@ -214,7 +235,6 @@
             }, [transactions, filterMonth, accounts]);
 
             const criticalPayments = useMemo(() => {
-                const todayStr = new Date().toLocaleDateString('en-CA');
                 const limitDate = new Date();
                 limitDate.setDate(limitDate.getDate() + 2);
                 const limitStr = limitDate.toLocaleDateString('en-CA');
@@ -411,12 +431,12 @@
                                     </div>
                                 </form>
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col border">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400">Histórico Recente</div>
+                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex items-center justify-between">
+                                        <span>Histórico Recente</span>
+                                        <span className="text-[8px] opacity-50">{filteredDashboardTxs.length} lançamentos</span>
+                                    </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {transactions.filter(t => {
-                                            const accInfo = accounts.find(a => a.name === t.account);
-                                            return (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && accInfo?.type !== 'cartao';
-                                        }).sort((a,b)=>b.timestamp?.localeCompare(a.timestamp)).map(t => (
+                                        {filteredDashboardTxs.map(t => (
                                             <div key={t.id} className={`p-4 flex justify-between items-center hover:bg-slate-50 transition-colors group ${editingId === t.id ? 'bg-blue-50' : ''}`}>
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div>
@@ -430,6 +450,11 @@
                                                 </div>
                                             </div>
                                         ))}
+                                        {filteredDashboardTxs.length === 0 && (
+                                            <div className="p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">
+                                                Nenhum lançamento encontrado para este período.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -676,7 +701,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.1</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.2</footer>
                 </div>
             );
         }
