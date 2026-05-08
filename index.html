@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.2</title>
+    <title>Tribo Burger | Gestão Total v13.0.3</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -237,6 +237,8 @@
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
                 let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
+                
+                // LÓGICA ATUALIZADA: rb (Faturamento) vem apenas da planilha diária de vendas
                 Object.keys(dailyRecords).forEach(day => {
                     if (day.startsWith(filterMonth)) {
                         const r = dailyRecords[day];
@@ -244,12 +246,17 @@
                         custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
                     }
                 });
+
                 transactions.forEach(t => {
                     if ((t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && t.status === 'pago') {
-                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
-                        else if (t.type === 'entrada') rb += p(t.amount);
+                        // Apenas saídas são contabilizadas no custo do DRE
+                        if (t.type === 'saida') {
+                            costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
+                        }
+                        // Entradas manuais (t.type === 'entrada') são ignoradas no rb do DRE para manter foco em vendas puras
                     }
                 });
+
                 const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
                 return { rb, custosVariaveis, totalOperating, lucro: rb - (custosVariaveis + totalOperating), costsByCategory };
             }, [transactions, dailyRecords, filterMonth]);
@@ -261,7 +268,6 @@
                     return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    // Filtra itens cujo VENCIMENTO REAL é neste mês
                     const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
                     const total = cardTxs.reduce((acc, t) => {
                         if (t.type === 'saida') return acc + p(t.amount);
@@ -329,7 +335,7 @@
                     
                     let finalDate = dObj.toISOString().split('T')[0];
                     let finalClearance = clearance;
-                    let billingMonth = finalDate.slice(0, 7); // Mês base da fatura
+                    let billingMonth = finalDate.slice(0, 7); 
                     let finalDesc = desc;
 
                     if (numInstallments > 1) {
@@ -341,17 +347,12 @@
                         const dueDay = parseInt(cardInfo.dueDay) || 10;
                         const purchaseDay = dObj.getDate();
                         
-                        // LÓGICA DE FATURA:
-                        // Se comprei até o dia de fechamento, pertence à fatura deste mês.
-                        // Se comprei depois, pertence à fatura do próximo mês.
                         let billingDate = new Date(dObj);
                         if (purchaseDay > closingDay) {
                             billingDate.setMonth(billingDate.getMonth() + 1);
                         }
                         billingMonth = billingDate.toISOString().slice(0, 7);
 
-                        // LÓGICA DE VENCIMENTO REAL:
-                        // O pagamento é SEMPRE no mês seguinte ao mês da fatura.
                         let dueDate = new Date(billingDate);
                         dueDate.setMonth(dueDate.getMonth() + 1);
                         dueDate.setDate(dueDay);
@@ -369,7 +370,7 @@
                         status: cardInfo ? 'pendente' : status, 
                         date: finalDate, 
                         clearanceDate: finalClearance, 
-                        billingMonth: billingMonth, // Campo auxiliar para filtrar na aba de Cartões
+                        billingMonth: billingMonth, 
                         account, 
                         destinationAccount: destAccount,
                         category: type === 'transferencia' ? 'Transferência Interna' : (cat || 'Geral'), 
@@ -522,7 +523,6 @@
                                         {filteredDashboardTxs.map(t => (
                                             <div key={t.id} className={`p-4 flex justify-between items-center group hover:bg-slate-50 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
                                                 <div className="flex items-center gap-4">
-                                                    {/* DATA DE VENCIMENTO REAL NO FLUXO MENSAL */}
                                                     <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
                                                     
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -576,7 +576,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.2</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.3</footer>
                 </div>
             );
         }
@@ -609,8 +609,6 @@
         const CartoesTab = ({ accounts, transactions, filterMonth, formatMoney, Icon, deleteTx, db, appId, user, localPayments, setLocalPayments }) => (
             <div className="space-y-12 animate-in zoom-in duration-300">
                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                    // FILTRAGEM CORRETA:
-                    // Na aba de cartões, filtramos pelo billingMonth (mês que a compra "caiu" na fatura)
                     const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth))))
                                        .sort((a,b) => a.date.localeCompare(b.date));
                     
@@ -648,9 +646,7 @@
                                 <button onClick={async() => {
                                     const payAmt = parseFloat(payInfo.amountToPay); if (!payInfo.sourceAccount || payAmt <= 0) return;
                                     const batch = db.batch(); const path = `artifacts/${appId}/users/${user.uid}/transactions`;
-                                    // A saída do banco é hoje (pagamento)
                                     batch.set(db.doc(`${path}/PAY-OUT-${Date.now()}`), { description: `PAGAMENTO FATURA: ${card.name}`, amount: payAmt, type: 'saida', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: new Date().toISOString().split('T')[0], account: payInfo.sourceAccount, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
-                                    // A entrada no cartão abate a fatura visualmente no mês selecionado
                                     batch.set(db.doc(`${path}/PAY-IN-${Date.now()}`), { description: `BAIXA FATURA`, amount: payAmt, type: 'entrada', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: filterMonth + "-01", billingMonth: filterMonth, account: card.name, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
                                     await batch.commit(); setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: 0 }});
                                 }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg bg-[#1A202C] text-[#F8CC82]">Confirmar Pagamento</button>
@@ -663,28 +659,57 @@
 
         const ResultadosTab = ({ stats, filterMonth, formatMoney }) => (
             <div className="space-y-8 animate-in fade-in">
-                <h2 className="text-xl font-black uppercase text-center">Desempenho: {filterMonth}</h2>
+                <h2 className="text-xl font-black uppercase text-center">Desempenho Operacional: {filterMonth}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Faturamento</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Total Custos</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
-                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'} text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">CMV Est.</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.costsByCategory['CMV (Insumos)'] || 0)}</h3></div>
+                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Receita de Vendas</p>
+                        <h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3>
+                    </div>
+                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Custos + Despesas</p>
+                        <h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3>
+                    </div>
+                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'} text-center`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Operacional</p>
+                        <h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3>
+                    </div>
+                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">CMV Est.</p>
+                        <h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.costsByCategory['CMV (Insumos)'] || 0)}</h3>
+                    </div>
                 </div>
             </div>
         );
 
         const DRETab = ({ stats, filterMonth, formatMoney }) => (
             <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
-                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
+                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional (Vendas) - {filterMonth}</h2>
                 <div className="space-y-4">
-                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Total</span><span>{formatMoney(stats.rb)}</span></div>
-                    <div className="py-4 border-b">
-                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Custos</h3>
-                        {Object.entries(stats.costsByCategory).map(([cat, amt]) => <div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-b border-slate-50 last:border-0"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(amt)}</span></div>)}
-                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) Custos Variáveis (Entrega)</span><span className="text-red-400 font-black">{formatMoney(stats.custosVariaveis)}</span></div>
+                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase">
+                        <span>(+) Receita Operacional (Vendas Planilha)</span>
+                        <span>{formatMoney(stats.rb)}</span>
                     </div>
-                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase">Resultado</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                    <div className="py-4 border-b">
+                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas Operacionais</h3>
+                        {Object.entries(stats.costsByCategory).map(([cat, amt]) => (
+                            <div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-b border-slate-50 last:border-0">
+                                <span>(-) {cat}</span>
+                                <span className="text-red-400 font-black">{formatMoney(amt)}</span>
+                            </div>
+                        ))}
+                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase">
+                            <span>(-) Custos Variáveis (Logística/Taxas)</span>
+                            <span className="text-red-400 font-black">{formatMoney(stats.custosVariaveis)}</span>
+                        </div>
+                    </div>
+                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}>
+                        <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                        <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
+                    </div>
                 </div>
+                <p className="mt-6 text-[8px] text-center text-slate-400 uppercase font-bold tracking-widest">
+                    * Entradas manuais de capital não operacional são ignoradas neste demonstrativo.
+                </p>
             </div>
         );
 
