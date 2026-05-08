@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.2 (FIX: HISTÓRICO VISÍVEL)</title>
+    <title>Tribo Burger | Gestão Total v11.6.4 (FIX: SALDOS MANUAIS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -169,8 +169,6 @@
                 return transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    // Mostra se a data coincide e NÃO é uma conta de cartão (cartão tem aba própria)
-                    // Se accInfo não existir, mostra por precaução para não sumir dados
                     return isDateMatch && (!accInfo || accInfo.type !== 'cartao');
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
             }, [transactions, accounts, filterMonth]);
@@ -248,10 +246,15 @@
             }, [transactions, filterMonth]);
 
             const accountBalances = useMemo(() => {
-                const balances = {}; accounts.forEach(acc => balances[acc.name] = 0);
+                const balances = {}; 
+                accounts.forEach(acc => balances[acc.name] = 0);
+                const p = (v) => parseFloat(v) || 0;
+
+                // CÁLCULO DE SALDO: Baseado estritamente em Transações Manuais
+                // (Ignora os valores da aba de vendas para manter o saldo real de caixa/banco)
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
-                        const amt = parseFloat(t.amount) || 0;
+                        const amt = p(t.amount);
                         if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
                         else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
                         else if (t.type === 'transferencia') { 
@@ -580,15 +583,15 @@
                                                     <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotalPendente)}</h3>
                                                 </div>
                                             </div>
-                                            <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                                                <div className="space-y-1">
+                                            <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:flex-row gap-6 items-end">
+                                                <div className="space-y-1 flex-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Pagar através de:</label>
                                                     <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none" value={payInfo.sourceAccount} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, sourceAccount: e.target.value }})}>
                                                         <option value="">Selecionar Conta Corrente...</option>
                                                         {accounts.filter(acc => acc.type !== 'cartao').map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
                                                     </select>
                                                 </div>
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 flex-1">
                                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Valor Pagamento:</label>
                                                     <input type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={payInfo.amountToPay} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: e.target.value }})}/>
                                                 </div>
@@ -701,7 +704,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.2</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.4</footer>
                 </div>
             );
         }
