@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v12.1.0 (STATUS LANÇAMENTOS)</title>
+    <title>Tribo Burger | Gestão Total v12.2.0 (SUGESTÕES INTELIGENTES)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -181,6 +181,19 @@
             }, [user]);
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            // Gera lista de descrições únicas para sugestões
+            const uniqueDescriptions = useMemo(() => {
+                const seen = new Set();
+                return transactions
+                    .map(t => t.description)
+                    .filter(d => {
+                        if (!d || seen.has(d.trim().toLowerCase())) return false;
+                        seen.add(d.trim().toLowerCase());
+                        return true;
+                    })
+                    .sort();
+            }, [transactions]);
 
             const filteredDashboardTxs = useMemo(() => {
                 return transactions.filter(t => {
@@ -439,7 +452,25 @@
                                 <form onSubmit={saveTx} className={`lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 h-fit transition-all ${editingId ? 'border-blue-500 bg-blue-50/10' : 'border-[#1A202C]'}`}>
                                     <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t.slice(0, 5)}</button>))}</div>
-                                    {type !== 'transferencia' && (<input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />)}
+                                    
+                                    {/* INPUT DE DESCRIÇÃO COM SUGESTÕES (DATALIST) */}
+                                    {type !== 'transferencia' && (
+                                        <div className="relative">
+                                            <input 
+                                                type="text" 
+                                                list="desc-suggestions"
+                                                placeholder="Descrição (ex: Aluguer, Carne, Luz...)" 
+                                                required 
+                                                className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none focus:border-orange-400 transition-colors" 
+                                                value={desc} 
+                                                onChange={e => setDesc(e.target.value)} 
+                                            />
+                                            <datalist id="desc-suggestions">
+                                                {uniqueDescriptions.map(d => <option key={d} value={d} />)}
+                                            </datalist>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" placeholder="Valor Total" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
@@ -465,7 +496,6 @@
                                         </div>
                                     )}
 
-                                    {/* SELETOR DE STATUS NO LANÇAMENTO */}
                                     {type !== 'transferencia' && (
                                         <div className="space-y-1 fade-in">
                                             <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Status do Pagamento</label>
@@ -505,7 +535,6 @@
                                                     <div>
                                                         <div className="flex items-center gap-2">
                                                             <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                            {/* MARCAÇÃO DE STATUS NA LISTA */}
                                                             <span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                                                 {t.status || 'pago'}
                                                             </span>
@@ -625,7 +654,7 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={accName} setNewItemName={setAccName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v12.1.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v12.2.0</footer>
                 </div>
             );
         }
