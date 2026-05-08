@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.7.1 (EDIÇÃO DE CONTAS)</title>
+    <title>Tribo Burger | Gestão Total v11.7.2 (RESTORE: GRUPOS DE CONTAS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -54,6 +54,17 @@
             background-position: right 0.75rem center;
             padding-right: 2rem;
         }
+
+        .group-badge {
+            font-size: 8px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+        .bg-operacional { background-color: #E0F2FE; color: #0369A1; }
+        .bg-reserva { background-color: #FEF3C7; color: #92400E; }
+        .bg-outros { background-color: #F1F5F9; color: #475569; }
     </style>
 </head>
 <body class="antialiased">
@@ -131,12 +142,14 @@
             
             const [localPayments, setLocalPayments] = useState({});
 
+            // Estados para Gestão de Contas (Ajustes)
             const [newItemName, setNewItemName] = useState('');
             const [newItemType, setNewItemType] = useState('corrente');
-            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional');
+            const [newItemAccountGroup, setNewItemAccountGroup] = useState('operacional'); // 'operacional', 'reserva', 'outros'
             const [newItemClosingDay, setNewItemClosingDay] = useState('25');
             const [newItemDueDay, setNewItemDueDay] = useState('10');
             const [editingAccountId, setEditingAccountId] = useState(null);
+            
             const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
 
             useEffect(() => {
@@ -153,7 +166,7 @@
                 
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => {
                     setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error("Erro Transações:", err));
+                });
 
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
                     const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
@@ -456,14 +469,6 @@
                                                 <option value="">Todas Categorias</option>
                                                 {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
                                             </select>
-                                            {(dashboardFilterAccount || dashboardFilterCategory) && (
-                                                <button 
-                                                    onClick={() => { setDashboardFilterAccount(''); setDashboardFilterCategory(''); }}
-                                                    className="bg-slate-200 hover:bg-slate-300 p-1 px-2 rounded-lg text-[8px] font-black"
-                                                >
-                                                    LIMPAR
-                                                </button>
-                                            )}
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
@@ -531,28 +536,43 @@
                                 <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500">
                                     <h2 className="text-sm font-black uppercase mb-6">{editingAccountId ? 'Editar Conta' : 'Contas & Bancos'}</h2>
                                     <div className="p-4 bg-slate-50 rounded-2xl border border-dashed mb-4 transition-all">
-                                        <input type="text" className="w-full p-3 border rounded-xl mb-2 font-bold text-xs outline-none" placeholder="Nome" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        <input type="text" className="w-full p-3 border rounded-xl mb-2 font-bold text-xs outline-none" placeholder="Nome da Conta" value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                                        
                                         <div className="flex gap-2 mb-2">
                                             <button onClick={() => setNewItemType('corrente')} className={`flex-1 p-2 rounded-lg text-[9px] font-black ${newItemType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button>
                                             <button onClick={() => setNewItemType('cartao')} className={`flex-1 p-2 rounded-lg text-[9px] font-black ${newItemType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button>
                                         </div>
+
+                                        {/* GRUPO DE EXIBIÇÃO - RESTAURADO AQUI */}
                                         {newItemType === 'corrente' && (
-                                            <div className="space-y-1 mb-2">
+                                            <div className="space-y-1 mb-2 fade-in">
                                                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Grupo de Exibição (Aba Saldos)</label>
-                                                <select className="w-full p-3 bg-white border rounded-xl text-[10px] font-black uppercase outline-none" value={newItemAccountGroup} onChange={e => setNewItemAccountGroup(e.target.value)}>
+                                                <select 
+                                                    className="w-full p-3 bg-white border rounded-xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-blue-100" 
+                                                    value={newItemAccountGroup} 
+                                                    onChange={e => setNewItemAccountGroup(e.target.value)}
+                                                >
                                                     <option value="operacional">Destaque Operacional</option>
                                                     <option value="reserva">Reservas & Aplicações</option>
                                                     <option value="outros">Outras Contas</option>
                                                 </select>
                                             </div>
                                         )}
+
                                         {newItemType === 'cartao' && (
-                                            <div className="grid grid-cols-2 gap-2 mb-2">
-                                                <input type="number" placeholder="Fecho" className="p-2 border rounded-lg text-xs font-bold outline-none" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
-                                                <input type="number" placeholder="Vence" className="p-2 border rounded-lg text-xs font-bold outline-none" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
+                                            <div className="grid grid-cols-2 gap-2 mb-2 fade-in">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Fecho</label>
+                                                    <input type="number" className="w-full p-2 border rounded-lg text-xs font-bold outline-none" value={newItemClosingDay} onChange={e => setNewItemClosingDay(e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Dia Vence</label>
+                                                    <input type="number" className="w-full p-2 border rounded-lg text-xs font-bold outline-none" value={newItemDueDay} onChange={e => setNewItemDueDay(e.target.value)} />
+                                                </div>
                                             </div>
                                         )}
-                                        <div className="flex gap-2">
+
+                                        <div className="flex gap-2 mt-4">
                                             <button onClick={async() => { 
                                                 if(!newItemName) return; 
                                                 const payload = { 
@@ -577,12 +597,20 @@
                                             )}
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
+
+                                    <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar">
                                         {accounts.map(a => (
                                             <div key={a.id} className="flex justify-between items-center p-3 border rounded-xl bg-white transition-all hover:bg-slate-50 group">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black uppercase">{a.name}</span>
-                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">{a.group || a.type}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-black uppercase">{a.name}</span>
+                                                        {a.type === 'corrente' && (
+                                                            <span className={`group-badge bg-${a.group || 'outros'}`}>
+                                                                {a.group === 'operacional' ? 'Destaque' : a.group === 'reserva' ? 'Reserva' : 'Outros'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">{a.type === 'cartao' ? 'Cartão de Crédito' : 'Conta Corrente'}</span>
                                                 </div>
                                                 <div className="flex gap-2 items-center">
                                                     <button onClick={() => {
@@ -603,9 +631,13 @@
                                         ))}
                                     </div>
                                 </div>
+                                
                                 <div className="glass-card p-8 rounded-[3rem] border-t-4 border-[#1A202C]">
                                     <h2 className="text-sm font-black uppercase mb-6">Categorias</h2>
-                                    <div className="flex gap-2 mb-4"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" value={cat} onChange={e => setCat(e.target.value)} /><button onClick={async() => { if(!cat) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat }); setCat(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={14}/></button></div>
+                                    <div className="flex gap-2 mb-4">
+                                        <input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" value={cat} onChange={e => setCat(e.target.value)} />
+                                        <button onClick={async() => { if(!cat) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat }); setCat(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={14}/></button>
+                                    </div>
                                     <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex justify-between items-center p-3 border rounded-xl bg-white"><span className="text-[10px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-300"><Icon name="trash-2" size={14}/></button></div>))}</div>
                                 </div>
                             </div>
@@ -620,7 +652,7 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={newItemName} setNewItemName={setNewItemName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.1</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.2</footer>
                 </div>
             );
         }
