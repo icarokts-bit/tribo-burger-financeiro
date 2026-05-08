@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.7.4 (FIX: EDITAR GRUPOS DEFINITIVO)</title>
+    <title>Tribo Burger | Gestão Total v11.7.5 (CONTROLO TOTAL DE GRUPOS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -109,7 +109,6 @@
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
             const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
-            const [localPayments, setLocalPayments] = useState({});
 
             // Estados do formulário de transações
             const [desc, setDesc] = useState('');
@@ -195,6 +194,16 @@
                 return balances;
             }, [transactions, accounts]);
 
+            const groups = useMemo(() => {
+                const items = accounts.filter(acc => acc.type === 'corrente');
+                // Agora filtramos estritamente pela escolha manual do utilizador
+                return {
+                    operacional: items.filter(acc => acc.group === 'operacional' || !acc.group),
+                    reservas: items.filter(acc => acc.group === 'reserva'),
+                    outras: items.filter(acc => acc.group === 'outros')
+                };
+            }, [accounts]);
+
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
                 let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
@@ -213,15 +222,6 @@
                 });
                 return { rb, custosVariaveis, lucro: rb - (custosVariaveis + Object.values(costsByCategory).reduce((a,b)=>a+b,0)), costsByCategory };
             }, [transactions, dailyRecords, filterMonth]);
-
-            const groups = useMemo(() => {
-                const items = accounts.filter(acc => acc.type === 'corrente');
-                return {
-                    operacional: items.filter(acc => acc.group === 'operacional' || (!acc.group && ['mercado','c6','caixa','ifood'].some(k=>acc.name.toLowerCase().includes(k)))),
-                    reservas: items.filter(acc => acc.group === 'reserva' || (!acc.group && ['fundo','aplic'].some(k=>acc.name.toLowerCase().includes(k)))),
-                    outras: items.filter(acc => acc.group === 'outros' || (!acc.group && !['mercado','c6','caixa','ifood','fundo','aplic'].some(k=>acc.name.toLowerCase().includes(k))))
-                };
-            }, [accounts]);
 
             // Handlers Autenticação
             const handleAuth = async (e) => {
@@ -248,7 +248,7 @@
                 setEditingId(null); setDesc(''); setVal('');
             };
 
-            // Handlers Contas (Ajustes) - LÓGICA DE EDIÇÃO REFORÇADA
+            // Handlers Contas (Ajustes)
             const resetAccForm = () => {
                 setEditingAccId(null); setAccName(''); setAccType('corrente'); setAccGroup('operacional'); setAccClosing('25'); setAccDue('10');
             };
@@ -347,7 +347,11 @@
 
                         {activeTab === 'saldos' && (
                             <div className="space-y-12 animate-in fade-in">
-                                {[{title: 'Destaque Operacional', list: groups.operacional, color: 'border-[#D97757]'}, {title: 'Reservas & Aplicações', list: groups.reservas, color: 'border-slate-300'}, {title: 'Outras Contas', list: groups.outras, color: 'border-slate-100'}].map(g => (
+                                {[
+                                    {title: 'Destaque Operacional', list: groups.operacional, color: 'border-[#D97757]'}, 
+                                    {title: 'Reservas & Aplicações', list: groups.reservas, color: 'border-slate-300'}, 
+                                    {title: 'Outras Contas', list: groups.outras, color: 'border-slate-100'}
+                                ].map(g => (
                                     <div key={g.title} className="space-y-4">
                                         <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-400 ml-2">{g.title}</h2>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-2">
@@ -370,11 +374,11 @@
                                     <div className="p-6 bg-slate-50 rounded-3xl border border-dashed space-y-4">
                                         <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
                                         <div className="flex gap-2">
-                                            <button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button>
-                                            <button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button>
+                                            <button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CONTA CORRENTE</button>
+                                            <button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO CRÉDITO</button>
                                         </div>
 
-                                        {/* SELETOR DE GRUPO - SEMPRE VISÍVEL QUANDO TIPO É CORRENTE, INCLUSIVE NA EDIÇÃO */}
+                                        {/* SELETOR DE GRUPO - DISPONÍVEL PARA TODAS AS CONTAS QUE NÃO SÃO CARTÃO */}
                                         {accType === 'corrente' && (
                                             <div className="space-y-1 fade-in">
                                                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Grupo de Exibição (Aba Saldos)</label>
@@ -397,24 +401,28 @@
                                             <button onClick={saveAccount} className={`flex-1 ${editingAccId ? 'bg-blue-600' : 'bg-black'} text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg`}>
                                                 {editingAccId ? 'Guardar Alterações' : 'Criar Conta'}
                                             </button>
-                                            {editingAccId && <button onClick={resetAccForm} className="bg-slate-200 p-4 rounded-2xl font-black uppercase text-[10px]">X</button>}
+                                            {editingAccId && <button onClick={resetAccForm} className="bg-slate-200 p-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
                                         </div>
                                     </div>
 
                                     <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar pt-4">
                                         <h3 className="text-[9px] font-black uppercase text-slate-400 ml-2 mb-2">Contas Existentes</h3>
                                         {accounts.map(a => (
-                                            <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white hover:bg-slate-50 group">
+                                            <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white hover:bg-slate-50 group transition-all">
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-black uppercase">{a.name}</span>
-                                                        {a.type === 'corrente' && <span className={`group-badge bg-${a.group || 'outros'}`}>{a.group || 'outros'}</span>}
+                                                        {a.type === 'corrente' && (
+                                                            <span className={`group-badge bg-${a.group || 'operacional'}`}>
+                                                                {a.group === 'operacional' ? 'Destaque' : a.group === 'reserva' ? 'Reserva' : 'Outros'}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">{a.type}</span>
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">{a.type === 'cartao' ? 'Crédito' : 'Corrente'}</span>
                                                 </div>
                                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => startEditAccount(a)} className="text-blue-500"><Icon name="edit-2" size={14}/></button>
-                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button>
+                                                    <button onClick={() => startEditAccount(a)} className="text-blue-500 hover:scale-110"><Icon name="edit-2" size={14}/></button>
+                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 hover:text-red-500 hover:scale-110"><Icon name="trash-2" size={14}/></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -430,7 +438,7 @@
                             </div>
                         )}
 
-                        {/* OUTRAS ABAS (Planilha, Resultados, etc.) - Simplificadas para manter performance */}
+                        {/* OUTRAS ABAS (Planilha, Resultados, etc.) */}
                         {activeTab === 'planilha' && (
                             <div className="glass-card p-8 rounded-[3rem] border overflow-x-auto no-scrollbar">
                                 <h2 className="text-xs font-black uppercase mb-4">Vendas Diárias ({filterMonth})</h2>
@@ -440,14 +448,14 @@
                                         {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b)=>b.localeCompare(a)).map(d => {
                                             const r = dailyRecords[d] || {};
                                             const total = ['pix','pixOnline','dinheiro','ifood','debito','credito'].reduce((acc,f)=>acc+(parseFloat(r[f])||0),0);
-                                            return (<tr key={d} className="h-10"><td>{d.split('-').reverse().join('/')}</td><td className="font-black">{formatMoney(total)}</td><td>{formatMoney(r.pix)}</td><td>{formatMoney(r.dinheiro)}</td><td>{formatMoney(r.ifood)}</td><td className="text-red-500 font-bold">{formatMoney(r.motoboy)}</td></tr>);
+                                            return (<tr key={d} className="h-10 hover:bg-slate-50 transition-colors"><td>{d.split('-').reverse().join('/')}</td><td className="font-black">{formatMoney(total)}</td><td>{formatMoney(r.pix)}</td><td>{formatMoney(r.dinheiro)}</td><td>{formatMoney(r.ifood)}</td><td className="text-red-500 font-bold">{formatMoney(r.motoboy)}</td></tr>);
                                         })}
                                     </tbody>
                                 </table>
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.4</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.7.5</footer>
                 </div>
             );
         }
