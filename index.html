@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.0 (PADRÃO FINAL)</title>
+    <title>Tribo Burger | Gestão Total v13.0.1</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -323,7 +323,6 @@
                 const numInstallments = cardInfo ? installments : 1;
 
                 for (let i = 0; i < numInstallments; i++) {
-                    // Prepara objetos de data para manipulação
                     const dObj = new Date(date + 'T00:00:00');
                     dObj.setMonth(dObj.getMonth() + i);
                     
@@ -335,9 +334,7 @@
                         finalDesc = `${desc} (${i + 1}/${numInstallments})`;
                     }
 
-                    // LÓGICA DE COMPENSAÇÃO (VENCIMENTO)
                     if (cardInfo) {
-                        // Cálculo para Cartão de Crédito baseado em dia de fechamento
                         const closingDay = parseInt(cardInfo.closingDay) || 25;
                         const dueDay = parseInt(cardInfo.dueDay) || 10;
                         const purchaseDay = dObj.getDate();
@@ -345,17 +342,14 @@
                         let dueDate = new Date(dObj);
                         
                         if (purchaseDay <= closingDay) {
-                            // Ex: Compra dia 07 com fechamento dia 25. Vence no mês seguinte (mês + 1)
                             dueDate.setMonth(dueDate.getMonth() + 1);
                         } else {
-                            // Ex: Compra dia 26 com fechamento dia 25. Vence daqui a dois meses (mês + 2)
                             dueDate.setMonth(dueDate.getMonth() + 2);
                         }
                         
                         dueDate.setDate(dueDay);
                         finalClearance = dueDate.toISOString().split('T')[0];
                     } else {
-                        // Para contas normais, mantém a compensação manual ou aplica offset de parcelas
                         const cObj = new Date(clearance + 'T00:00:00');
                         cObj.setMonth(cObj.getMonth() + i);
                         finalClearance = cObj.toISOString().split('T')[0];
@@ -520,9 +514,17 @@
                                         {filteredDashboardTxs.map(t => (
                                             <div key={t.id} className={`p-4 flex justify-between items-center group hover:bg-slate-50 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div>
+                                                    {/* DATA DE VENCIMENTO ANTES DO ÍCONE */}
+                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
+                                                    
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        <Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} />
+                                                    </div>
                                                     <div>
-                                                        <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status}</span></div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-black text-sm uppercase leading-none">{t.description}</p>
+                                                            <span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status}</span>
+                                                        </div>
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                     </div>
                                                 </div>
@@ -566,7 +568,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.1</footer>
                 </div>
             );
         }
@@ -577,7 +579,7 @@
                 <div className="space-y-6 animate-in fade-in">
                     <div className="stat-banner"><p className="text-[9px] font-black uppercase text-[#F8CC82] mb-2">Vendas Totais {filterMonth}</p><h3 className="text-4xl font-black">{formatMoney(Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).reduce((acc, d) => acc + ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((t,f)=>t+(parseFloat(dailyRecords[d][f])||0), 0), 0))}</h3></div>
                     <div className="flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm"><div className="flex items-center gap-2 font-black uppercase text-[10px] text-[#1A202C]"><Icon name="table" /><span>Planilha Diária</span></div><div className="flex gap-2"><input type="date" className="p-2 border rounded-xl text-xs font-bold outline-none" value={newDay} onChange={e => setNewDay(e.target.value)} /><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Novo Dia</button></div></div>
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total Dia</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4 text-red-400">Motoboy</th><th className="p-4">Ações</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => b.localeCompare(a)).map(d => { const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(dailyRecords[d][f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','motoboy'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" /></td>))}<td className="p-4"><button onClick={() => { if(confirm('Eliminar dia?')) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()}} className="text-red-200"><Icon name="trash-2" size={14}/></button></td></tr>);})}</tbody></table></div>
+                    <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar"><table className="w-full text-center text-[11px] min-w-[1400px]"><thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total Dia</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4 text-red-400">Motoboy</th><th className="p-4">Ações</th></tr></thead><tbody className="divide-y font-bold">{Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(dailyRecords[d][f])||0), 0); return (<tr key={d} className="hover:bg-slate-50 h-12"><td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td><td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>{['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','motoboy'].map(f => (<td key={f} className="p-0 border-r"><input className="table-input" value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" /></td>))}<td className="p-4"><button onClick={() => { if(confirm('Eliminar dia?')) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()}} className="text-red-200"><Icon name="trash-2" size={14}/></button></td></tr>);})}</tbody></table></div>
                 </div>
             );
         };
