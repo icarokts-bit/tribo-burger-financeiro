@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.4 (FIX: SALDOS MANUAIS)</title>
+    <title>Tribo Burger | Gestão Total v11.6.5 (FILTROS DE BUSCA)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -44,6 +44,14 @@
         .card-bank-mercado { border-top: 8px solid #009EE3; }
         .card-bank-c6 { border-top: 8px solid #000000; }
         .card-bank-ifood { border-top: 8px solid #EA1D2C; }
+
+        select.filter-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23D97757' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            padding-right: 2rem;
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -116,6 +124,10 @@
 
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             
+            // Novos estados para filtros do Dashboard
+            const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
+            const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
+            
             const [localPayments, setLocalPayments] = useState({});
 
             const [newItemName, setNewItemName] = useState('');
@@ -169,9 +181,14 @@
                 return transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao');
+                    
+                    // Aplicação dos novos filtros
+                    const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
+                    const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
+
+                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao') && isAccountMatch && isCategoryMatch;
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, accounts, filterMonth]);
+            }, [transactions, accounts, filterMonth, dashboardFilterAccount, dashboardFilterCategory]);
 
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(v) || 0;
@@ -250,8 +267,6 @@
                 accounts.forEach(acc => balances[acc.name] = 0);
                 const p = (v) => parseFloat(v) || 0;
 
-                // CÁLCULO DE SALDO: Baseado estritamente em Transações Manuais
-                // (Ignora os valores da aba de vendas para manter o saldo real de caixa/banco)
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
@@ -434,9 +449,38 @@
                                     </div>
                                 </form>
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm overflow-hidden h-[600px] flex flex-col border">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex items-center justify-between">
-                                        <span>Histórico Recente</span>
-                                        <span className="text-[8px] opacity-50">{filteredDashboardTxs.length} lançamentos</span>
+                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="history" size={12}/>
+                                            <span>Histórico Recente</span>
+                                        </div>
+                                        {/* Barra de Filtros de Busca */}
+                                        <div className="flex flex-wrap gap-2">
+                                            <select 
+                                                className="filter-select bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase outline-none text-[#D97757]"
+                                                value={dashboardFilterAccount}
+                                                onChange={e => setDashboardFilterAccount(e.target.value)}
+                                            >
+                                                <option value="">Todas as Contas</option>
+                                                {accounts.map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}
+                                            </select>
+                                            <select 
+                                                className="filter-select bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase outline-none text-[#D97757]"
+                                                value={dashboardFilterCategory}
+                                                onChange={e => setDashboardFilterCategory(e.target.value)}
+                                            >
+                                                <option value="">Todas Categorias</option>
+                                                {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                                            </select>
+                                            {(dashboardFilterAccount || dashboardFilterCategory) && (
+                                                <button 
+                                                    onClick={() => { setDashboardFilterAccount(''); setDashboardFilterCategory(''); }}
+                                                    className="bg-slate-200 hover:bg-slate-300 p-1 px-2 rounded-lg text-[8px] font-black"
+                                                >
+                                                    LIMPAR
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredDashboardTxs.map(t => (
@@ -455,7 +499,7 @@
                                         ))}
                                         {filteredDashboardTxs.length === 0 && (
                                             <div className="p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">
-                                                Nenhum lançamento encontrado para este período.
+                                                Nenhum lançamento encontrado para os filtros selecionados.
                                             </div>
                                         )}
                                     </div>
@@ -704,7 +748,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.4</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.5</footer>
                 </div>
             );
         }
