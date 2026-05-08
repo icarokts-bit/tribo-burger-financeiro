@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.6 (SALDOS DINÂMICOS)</title>
+    <title>Tribo Burger | Gestão Total v11.6.7 (SALDOS ORGANIZADOS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -44,6 +44,8 @@
         .card-bank-mercado { border-top: 8px solid #009EE3; }
         .card-bank-c6 { border-top: 8px solid #000000; }
         .card-bank-ifood { border-top: 8px solid #EA1D2C; }
+        .card-bank-caixa { border-top: 8px solid #10B981; }
+        .card-bank-fundo { border-top: 8px solid #94A3B8; }
 
         select.filter-select {
             appearance: none;
@@ -379,6 +381,16 @@
 
             const deleteTx = async (id) => { if (confirm('Eliminar lançamento?')) await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${id}`).delete(); };
 
+            const getAccountStyle = (name) => {
+                const lower = name.toLowerCase();
+                if (lower.includes('mercado')) return 'card-bank-mercado';
+                if (lower.includes('c6')) return 'card-bank-c6';
+                if (lower.includes('ifood')) return 'card-bank-ifood';
+                if (lower.includes('caixa')) return 'card-bank-caixa';
+                if (lower.includes('fundo') || lower.includes('aplicação') || lower.includes('rico')) return 'card-bank-fundo';
+                return 'border-t-8 border-[#1A202C]';
+            };
+
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={48} /></div>;
 
             if (!user) return (
@@ -505,24 +517,45 @@
                         )}
 
                         {activeTab === 'saldos' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2 animate-in fade-in">
-                                {accounts.filter(acc => acc.type === 'corrente').map(acc => {
-                                    let borderClass = 'border-[#1A202C]';
-                                    const lowerName = acc.name.toLowerCase();
-                                    if (lowerName.includes('mercado')) borderClass = 'card-bank-mercado';
-                                    else if (lowerName.includes('c6')) borderClass = 'card-bank-c6';
-                                    else if (lowerName.includes('ifood')) borderClass = 'card-bank-ifood';
+                            <div className="space-y-12 animate-in fade-in">
+                                {/* Destaque Operacional */}
+                                <div className="space-y-4">
+                                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-[#D97757] ml-2">Destaque Operacional</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-2">
+                                        {accounts.filter(acc => acc.type === 'corrente' && ['Mercado Pago', 'C6 Bank', 'Caixa Loja', 'iFood'].includes(acc.name)).map(acc => (
+                                            <div key={acc.id} className={`bg-white p-8 rounded-[3.5rem] shadow-xl ${getAccountStyle(acc.name)} flex flex-col items-center transition-transform hover:scale-105`}>
+                                                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                                <h3 className={`text-3xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
 
-                                    return (
-                                        <div key={acc.id} className={`bg-white p-8 rounded-[3.5rem] shadow-xl ${borderClass.startsWith('card') ? borderClass : `border-t-8 ${borderClass}`} flex flex-col items-center transition-transform hover:scale-105`}>
-                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
-                                            <h3 className={`text-4xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                {/* Reservas e Aplicações */}
+                                <div className="space-y-4">
+                                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-300 ml-2">Reservas & Aplicações</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
+                                        {accounts.filter(acc => acc.type === 'corrente' && ['Fundo Aluguel', 'Fundo MP', 'Fundo Rico', 'Fundo C6', 'Aplicação'].includes(acc.name)).map(acc => (
+                                            <div key={acc.id} className={`bg-white p-6 rounded-[2.5rem] shadow-lg ${getAccountStyle(acc.name)} flex flex-col items-center transition-transform hover:scale-105`}>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                                <h3 className={`text-2xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-700' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Outras Contas (Caso existam) */}
+                                {accounts.filter(acc => acc.type === 'corrente' && !['Mercado Pago', 'C6 Bank', 'Caixa Loja', 'iFood', 'Fundo Aluguel', 'Fundo MP', 'Fundo Rico', 'Fundo C6', 'Aplicação'].includes(acc.name)).length > 0 && (
+                                    <div className="space-y-4">
+                                        <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-100 ml-2">Outras Contas</h2>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
+                                            {accounts.filter(acc => acc.type === 'corrente' && !['Mercado Pago', 'C6 Bank', 'Caixa Loja', 'iFood', 'Fundo Aluguel', 'Fundo MP', 'Fundo Rico', 'Fundo C6', 'Aplicação'].includes(acc.name)).map(acc => (
+                                                <div key={acc.id} className={`bg-white p-6 rounded-[2.5rem] shadow-md ${getAccountStyle(acc.name)} flex flex-col items-center`}>
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                                    <h3 className={`text-xl font-black text-slate-800`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                                </div>
+                                            ))}
                                         </div>
-                                    );
-                                })}
-                                {accounts.filter(acc => acc.type === 'corrente').length === 0 && (
-                                    <div className="col-span-full p-20 text-center opacity-30 font-black uppercase text-sm tracking-widest">
-                                        Nenhuma conta corrente configurada.
                                     </div>
                                 )}
                             </div>
@@ -758,7 +791,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.6</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.7</footer>
                 </div>
             );
         }
