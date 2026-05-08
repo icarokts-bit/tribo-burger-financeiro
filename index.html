@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.8.2 (FIX: PARCELAMENTO CARTÃO)</title>
+    <title>Tribo Burger | Gestão Total v11.8.3 (DETALHES DA FATURA)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -285,7 +285,7 @@
                 setEditingId(t.id); setDesc(t.description || ''); setVal(t.amount.toString().replace('.', ','));
                 setType(t.type || 'saida'); setAccount(t.account || ''); setDestAccount(t.destinationAccount || '');
                 setCat(t.category || ''); setSupplier(t.supplier || ''); setStatus(t.status || 'pago');
-                setInstallments(1); // Edição não suporta mudar parcelamento retroativo
+                setInstallments(1); 
                 setDate(t.date || ''); setClearance(t.clearanceDate || ''); window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
@@ -305,14 +305,12 @@
                     let finalClearance = clearance;
                     let finalDesc = desc;
 
-                    // Lógica para parcelas
                     if (numInstallments > 1) {
                         const dObj = new Date(date + 'T00:00:00');
                         dObj.setMonth(dObj.getMonth() + i);
                         finalDate = dObj.toISOString().split('T')[0];
                         finalDesc = `${desc} (${i + 1}/${numInstallments})`;
                         
-                        // Compensação também pula meses
                         const cObj = new Date(clearance + 'T00:00:00');
                         cObj.setMonth(cObj.getMonth() + i);
                         finalClearance = cObj.toISOString().split('T')[0];
@@ -440,7 +438,6 @@
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                     </div>
 
-                                    {/* OPÇÃO DE PARCELAMENTO - SOMENTE PARA CARTÃO DE CRÉDITO */}
                                     {accounts.find(a => a.name === account)?.type === 'cartao' && (
                                         <div className="space-y-1 fade-in">
                                             <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Parcelas</label>
@@ -582,7 +579,7 @@
                         {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} newItemName={accName} setNewItemName={setAccName} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.8.2</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.8.3</footer>
                 </div>
             );
         }
@@ -615,12 +612,58 @@
         const CartoesTab = ({ accounts, transactions, filterMonth, formatMoney, Icon, deleteTx, db, appId, user, localPayments, setLocalPayments }) => (
             <div className="space-y-12 animate-in zoom-in duration-300">
                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
+                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth))
+                                       .sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
                     const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + t.amount : acc - t.amount, 0);
                     const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotal), sourceAccount: '' };
                     return (
                         <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] space-y-8">
-                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8"><div><h3 className="text-2xl font-black uppercase text-[#1A202C]">{card.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p></div><div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner"><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Valor em Aberto</p><h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotal)}</h3></div></div>
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
+                                <div>
+                                    <h3 className="text-2xl font-black uppercase text-[#1A202C]">{card.name}</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p>
+                                </div>
+                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Valor em Aberto</p>
+                                    <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotal)}</h3>
+                                </div>
+                            </div>
+
+                            {/* LISTA DETALHADA DE ITENS DA FATURA */}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-2">
+                                    <Icon name="list" size={14} className="text-slate-400" />
+                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Itens da Fatura ({cardTxs.length})</h4>
+                                </div>
+                                <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
+                                    {cardTxs.length === 0 ? (
+                                        <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase tracking-tighter">Nenhum lançamento para este período</p>
+                                    ) : (
+                                        cardTxs.map(t => (
+                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center">
+                                                        <Icon name="shopping-cart" size={14} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-black text-xs uppercase leading-none">{t.description}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                                            {t.clearanceDate?.split('-').reverse().join('/')} • {t.category}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <p className="font-black text-sm">{formatMoney(t.amount)}</p>
+                                                    <button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 hover:text-red-500">
+                                                        <Icon name="trash-2" size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                                 <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-2">Pagar de:</label><select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none" value={payInfo.sourceAccount} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, sourceAccount: e.target.value }})}>{accounts.filter(acc => acc.type !== 'cartao').map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}</select></div>
                                 <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-2">Valor:</label><input type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={payInfo.amountToPay} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: e.target.value }})}/></div>
