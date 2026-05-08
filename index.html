@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.8 (FIX: GRUPOS DE SALDO)</title>
+    <title>Tribo Burger | Gestão Total v11.6.9 (FIX: BUSCA DE CONTAS)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -387,14 +387,14 @@
                 if (lower.includes('c6')) return 'card-bank-c6';
                 if (lower.includes('ifood')) return 'card-bank-ifood';
                 if (lower.includes('caixa')) return 'card-bank-caixa';
-                if (lower.includes('fundo') || lower.includes('aplicação') || lower.includes('rico')) return 'card-bank-fundo';
+                if (lower.includes('fundo') || lower.includes('aplicação') || lower.includes('rico') || lower.includes('aplicacao')) return 'card-bank-fundo';
                 return 'border-t-8 border-[#1A202C]';
             };
 
-            // Lógica de Agrupamento Robusta
+            // Lógica de Agrupamento Ajustada (mais permissiva)
             const groups = useMemo(() => {
-                const operacionalKeys = ['mercado pago', 'c6 bank', 'caixa loja', 'ifood'];
-                const reservasKeys = ['fundo aluguel', 'fundo mp', 'fundo rico', 'fundo c6', 'aplicação', 'aplicacao'];
+                const operacionalKeys = ['mercado', 'c6', 'caixa', 'ifood'];
+                const reservasKeys = ['fundo', 'aplicação', 'aplicacao', 'rico', 'aluguel'];
                 
                 const items = accounts.filter(acc => acc.type === 'corrente');
                 
@@ -564,19 +564,18 @@
                                 </div>
 
                                 {/* Outras Contas */}
-                                {groups.outras.length > 0 && (
-                                    <div className="space-y-4">
-                                        <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-100 ml-2">Outras Contas</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
-                                            {groups.outras.map(acc => (
-                                                <div key={acc.id} className={`bg-white p-6 rounded-[2.5rem] shadow-md ${getAccountStyle(acc.name)} flex flex-col items-center`}>
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
-                                                    <h3 className={`text-xl font-black text-slate-800`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
-                                                </div>
-                                            ))}
-                                        </div>
+                                <div className="space-y-4">
+                                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-100 ml-2">Outras Contas</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
+                                        {groups.outras.map(acc => (
+                                            <div key={acc.id} className={`bg-white p-6 rounded-[2.5rem] shadow-md ${getAccountStyle(acc.name)} flex flex-col items-center`}>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                                <h3 className={`text-xl font-black text-slate-800`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                            </div>
+                                        ))}
+                                        {groups.outras.length === 0 && <p className="text-[10px] opacity-20 uppercase font-black p-4">Nenhuma outra conta encontrada</p>}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         )}
 
@@ -810,7 +809,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.8</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.9</footer>
                 </div>
             );
         }
