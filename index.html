@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v11.6.0 (SISTEMA RESTAURADO)</title>
+    <title>Tribo Burger | Gestão Total v11.6.1 (LISTA CARTÃO RESTAURADA)</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -569,6 +569,24 @@
                                                 </div>
                                                 <button onClick={() => handleIndividualCardPayment(card.name, cardTotalPendente)} className={`w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg ${cardTotalPendente > 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-slate-100 text-slate-300'}`}>Confirmar Pagamento</button>
                                             </div>
+                                            <div className="overflow-hidden rounded-[2rem] border shadow-inner">
+                                                <div className="p-4 bg-slate-50 border-b font-black text-[9px] uppercase">Compras / Pagamentos do Mês</div>
+                                                <div className="max-h-[300px] overflow-y-auto divide-y no-scrollbar">
+                                                    {cardTxs.map(t => (
+                                                        <div key={t.id} className="p-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors">
+                                                            <div>
+                                                                <p className="font-black text-[10px] uppercase">{t.description}</p>
+                                                                <p className="text-[8px] text-slate-400 uppercase font-bold">{t.date?.split('-').reverse().join('/')}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-4">
+                                                                <span className={`status-badge ${t.type === 'entrada' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{t.type === 'entrada' ? 'CRÉDITO' : t.status}</span>
+                                                                <p className="font-black text-xs">{t.type === 'entrada' ? "-" : ""}{formatMoney(t.amount)}</p>
+                                                                <button onClick={() => deleteTx(t.id)} className="text-red-200 hover:text-red-500 transition-colors"><Icon name="trash-2" size={14}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -658,7 +676,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v11.6.1</footer>
                 </div>
             );
         }
