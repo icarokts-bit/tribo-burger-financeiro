@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.6</title>
+    <title>Tribo Burger | Gestão Total v13.0.7</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -517,7 +517,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.6</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.7</footer>
                 </div>
             );
         }
@@ -580,20 +580,17 @@
         const APagarTab = ({ pendingPaymentsConsolidated, filterMonth, formatMoney, Icon, markAsPaid }) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-
             const urgentPayments = pendingPaymentsConsolidated.filter(t => {
                 const dueDate = new Date(t.clearanceDate + 'T00:00:00');
                 const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
                 return diffDays <= 2;
             });
-
             return (
                 <div className="space-y-6 animate-in fade-in">
                     <div className="stat-banner !border-red-500">
                         <p className="text-[9px] font-black uppercase text-red-400 mb-2">Vencimentos Pendentes {filterMonth}</p>
                         <h3 className="text-4xl font-black">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3>
                     </div>
-
                     {urgentPayments.length > 0 && (
                         <div className="bg-red-50 border-2 border-red-200 p-4 rounded-3xl flex items-center gap-4 animate-pulse">
                             <div className="bg-red-500 text-white p-2 rounded-xl"><Icon name="alert-triangle" size={18} /></div>
@@ -603,14 +600,12 @@
                             </div>
                         </div>
                     )}
-
                     <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
                         {pendingPaymentsConsolidated.map(t => {
                             const dueDate = new Date(t.clearanceDate + 'T00:00:00');
                             const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
                             const isUrgent = diffDays <= 2;
                             const isOverdue = diffDays < 0;
-
                             return (
                                 <div key={t.id} className={`p-6 flex justify-between items-center hover:bg-slate-50 transition-all ${isUrgent ? 'bg-red-50/30' : ''}`}>
                                     <div className="flex items-center gap-4">
@@ -670,13 +665,20 @@
                                     {cardTxs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase">Sem lançamentos para este mês</p> : cardTxs.map(t => (
                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><Icon name="shopping-cart" size={14} /></div>
+                                                {/* ÍCONE DINÂMICO CONFORME TIPO */}
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} />
+                                                </div>
                                                 <div>
                                                     <p className="font-black text-xs uppercase leading-none">{t.description}</p>
                                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Compra: {t.date?.split('-').reverse().join('/')} • Vencimento: {t.clearanceDate?.split('-').reverse().join('/')}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4"><p className="font-black text-sm">{formatMoney(t.amount)}</p><button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14} /></button></div>
+                                            {/* VALOR COLORIDO: VERDE PARA PAGAMENTOS, VERMELHO PARA COMPRAS */}
+                                            <div className="flex items-center gap-4">
+                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                <button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14} /></button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
