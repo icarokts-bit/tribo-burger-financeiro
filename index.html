@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.7</title>
+    <title>Tribo Burger | Gestão Total v13.0.8</title>
     
     <link rel="icon" type="image/png" href="logo.png">
     
@@ -214,6 +214,12 @@
                 });
                 return balances;
             }, [transactions, accounts]);
+
+            const totalGeneralBalance = useMemo(() => {
+                return accounts
+                    .filter(acc => acc.type === 'corrente')
+                    .reduce((total, acc) => total + (accountBalances[acc.name] || 0), 0);
+            }, [accounts, accountBalances]);
 
             const groups = useMemo(() => {
                 const items = accounts.filter(acc => acc.type === 'corrente');
@@ -487,6 +493,16 @@
 
                         {activeTab === 'saldos' && (
                             <div className="space-y-12 animate-in fade-in">
+                                {/* NOVO BANNER: SOMA TOTAL DE TODAS AS CONTAS */}
+                                <div className="stat-banner !border-[#1A202C] !bg-[#D97757] !text-white !p-12">
+                                    <div className="flex items-center justify-center gap-3 mb-2">
+                                        <Icon name="landmark" size={24} className="text-white opacity-80" />
+                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-white/90">Património Líquido Total</p>
+                                    </div>
+                                    <h3 className="text-5xl font-black drop-shadow-lg">{formatMoney(totalGeneralBalance)}</h3>
+                                    <p className="text-[9px] font-bold uppercase mt-4 opacity-70 tracking-widest">Soma de todas as contas correntes e aplicações</p>
+                                </div>
+
                                 {[
                                     {title: 'Destaque Operacional', list: groups.operacional}, 
                                     {title: 'Reservas & Aplicações', list: groups.reservas}, 
@@ -517,7 +533,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.7</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.8</footer>
                 </div>
             );
         }
@@ -665,7 +681,6 @@
                                     {cardTxs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase">Sem lançamentos para este mês</p> : cardTxs.map(t => (
                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
                                             <div className="flex items-center gap-4">
-                                                {/* ÍCONE DINÂMICO CONFORME TIPO */}
                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                     <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} />
                                                 </div>
@@ -674,7 +689,6 @@
                                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Compra: {t.date?.split('-').reverse().join('/')} • Vencimento: {t.clearanceDate?.split('-').reverse().join('/')}</p>
                                                 </div>
                                             </div>
-                                            {/* VALOR COLORIDO: VERDE PARA PAGAMENTOS, VERMELHO PARA COMPRAS */}
                                             <div className="flex items-center gap-4">
                                                 <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
                                                 <button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14} /></button>
