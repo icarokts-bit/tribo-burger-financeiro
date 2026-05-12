@@ -3,783 +3,536 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.0.8</title>
+    <title>R.I Investimentos - Sistema Tribo</title>
     
-    <link rel="icon" type="image/png" href="logo.png">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Frameworks e Estilos -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+        window.FirebaseSDK = { 
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, 
+            signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot, 
+            collection, deleteDoc, updateDoc 
+        };
+    </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; overflow-x: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
         
-        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
-        .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
-        .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
-        
-        .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
-        .bg-watermark { position: fixed; bottom: -50px; right: -50px; opacity: 0.03; z-index: -1; transform: rotate(-15deg); pointer-events: none; }
-        
-        .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
-        
-        .card-bank-mercado { border-top: 8px solid #009EE3; }
-        .card-bank-c6 { border-top: 8px solid #000000; }
-        .card-bank-ifood { border-top: 8px solid #EA1D2C; }
-        .card-bank-caixa { border-top: 8px solid #10B981; }
-        .card-bank-fundo { border-top: 8px solid #94A3B8; }
-
-        .group-badge { font-size: 8px; font-weight: 800; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
-        .bg-operacional { background-color: #E0F2FE; color: #0369A1; }
-        .bg-reserva { background-color: #FEF3C7; color: #92400E; }
-        .bg-outros { background-color: #F1F5F9; color: #475569; }
-
-        select.filter-select {
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23D97757' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.75rem center;
-            padding-right: 2rem;
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050505;
+            color: #f4f4f5;
+            margin: 0;
+            overflow-x: hidden;
         }
 
-        .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .premium-shadow {
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .donut-animation {
+            transition: stroke-dashoffset 1s ease-in-out;
+        }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes pulse-cyan {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-cyan {
+            animation: pulse-cyan 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        .suggestion-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .suggestion-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .suggestion-list::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 10px;
+        }
     </style>
 </head>
-<body class="antialiased">
-
+<body>
     <div id="root"></div>
 
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+        
+        const Icons = {
+            TrendingUp: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            ),
+            Building2: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path></svg>
+            ),
+            Globe: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            ),
+            Coins: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><circle cx="8" cy="8" r="6"></circle><path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path></svg>
+            ),
+            Trash2: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+            ),
+            RefreshCw: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
+            ),
+            Loader2: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${props.className} animate-spin`}><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+            ),
+            Edit3: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            ),
+            Check: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={props.className}><polyline points="20 6 9 17 4 12"></polyline></svg>
+            ),
+            LayoutGrid: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            ),
+            ArrowUpRight: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+            ),
+            ArrowDownRight: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}><line x1="7" y1="7" x2="17" y2="17"></line><polyline points="17 7 17 17 7 17"></polyline></svg>
+            ),
+            Cloud: (props) => (
+                <svg width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5 0-2.4-1.8-4.3-4.2-4.5C17.4 6.7 14.6 4 11 4 8.2 4 5.9 5.8 5.1 8.3 2.7 8.9 1 11.1 1 13.5 1 16.5 3.5 19 6.5 19Z"></path></svg>
+            ),
+            Search: (props) => (
+                <svg width={props.size || 20} height={props.size || 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            ),
+            AlertCircle: (props) => (
+                <svg width={props.size || 20} height={props.size || 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            )
+        };
 
         const firebaseConfig = {
-            apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
-            authDomain: "tribo-burger-app.firebaseapp.com",
-            projectId: "tribo-burger-app",
-            storageBucket: "tribo-burger-app.firebasestorage.app",
-            messagingSenderId: "490245681469",
-            appId: "1:490245681469:web:189b1d2e35bd142cc31554"
+            apiKey: "AIzaSyBPLsJazn6fJuXKi3dRamG7xGDyYDyu744",
+            authDomain: "ri-investimentos.firebaseapp.com",
+            projectId: "ri-investimentos",
+            storageBucket: "ri-investimentos.firebasestorage.app",
+            messagingSenderId: "948689870153",
+            appId: "1:948689870153:web:1e457b82d2857b60308e98",
+            measurementId: "G-DW2E81Q623"
         };
 
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = 'tribo-burger-financeiro';
+        const appId = "ri-investimentos-final-tribo";
+        
+        // --- CONFIGURAÇÃO DADOS DE MERCADO ---
+        const DM_API_BASE = "https://api.dadosdemercado.com.br/v1";
+        const DM_TOKEN = "kV6yXxdJXBydFXERkYgfSf"; 
 
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const containerRef = useRef(null);
-            useEffect(() => {
-                if (window.lucide && containerRef.current) {
-                    containerRef.current.innerHTML = `<i data-lucide="${name}"></i>`;
-                    window.lucide.createIcons({
-                        node: containerRef.current,
-                        attrs: { width: size, height: size, class: className }
-                    });
-                }
-            }, [name, size, className]);
-            return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
-        };
+        const STRATEGY = [
+            { id: 'acoes', label: 'A - AÇÕES', color: '#00D4C5', icon: Icons.TrendingUp, desc: 'Bolsa Brasileira' },
+            { id: 'realestate', label: 'R - REAL ESTATE', color: '#0088FE', icon: Icons.Building2, desc: 'FIIs e Imóveis' },
+            { id: 'caixa', label: 'C - CAIXA', color: '#4ADE80', icon: Icons.Coins, desc: 'Liquidez/Renda Fixa' },
+            { id: 'internacional', label: 'A - ALTERNATIVOS', color: '#EF4444', icon: Icons.Globe, desc: 'Mercado Global' }
+        ];
 
         function App() {
             const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [activeTab, setActiveTab] = useState('dashboard');
+            const [activeTab, setActiveTab] = useState('home');
+            const [assets, setAssets] = useState([]);
+            const [totalGoal, setTotalGoal] = useState(0);
+            const [tempGoal, setTempGoal] = useState("");
+            const [isEditGoal, setIsEditGoal] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
+            const [syncError, setSyncError] = useState(null);
+            const [newAsset, setNewAsset] = useState({ name: '', qty: '', avgPrice: '', currentPrice: '' });
             
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [isRegistering, setIsRegistering] = useState(false);
+            const [apiTickers, setApiTickers] = useState([]);
+            const [suggestions, setSuggestions] = useState([]);
+            const [showSuggestions, setShowSuggestions] = useState(false);
+            const suggestionRef = useRef(null);
 
-            const [transactions, setTransactions] = useState([]);
-            const [dailyRecords, setDailyRecords] = useState({});
-            const [accounts, setAccounts] = useState([]);
-            const [categories, setCategories] = useState([]);
-            const [suppliers, setSuppliers] = useState([]);
-            
-            const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
-            const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
-            const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
-            const [localPayments, setLocalPayments] = useState({});
+            const FSDK = window.FirebaseSDK;
+            const db = useMemo(() => FSDK.getFirestore(FSDK.initializeApp(firebaseConfig)), [FSDK]);
+            const auth = useMemo(() => FSDK.getAuth(FSDK.initializeApp(firebaseConfig)), [FSDK]);
 
-            const [desc, setDesc] = useState('');
-            const [val, setVal] = useState('');
-            const [type, setType] = useState('saida'); 
-            const [account, setAccount] = useState('');
-            const [destAccount, setDestAccount] = useState(''); 
-            const [cat, setCat] = useState('');
-            const [supplier, setSupplier] = useState(''); 
-            const [status, setStatus] = useState('pago'); 
-            const [installments, setInstallments] = useState(1);
-            const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
-            const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
-            const [editingId, setEditingId] = useState(null);
-
-            const [accName, setAccName] = useState('');
-            const [accType, setAccType] = useState('corrente');
-            const [accGroup, setAccGroup] = useState('operacional'); 
-            const [accClosing, setAccClosing] = useState('25');
-            const [accDue, setAccDue] = useState('10');
-            const [editingAccId, setEditingAccId] = useState(null);
-
+            // --- CARREGAR TICKERS DA DADOS DE MERCADO ---
             useEffect(() => {
-                const unsub = auth.onAuthStateChanged((u) => {
-                    setUser(u);
-                    setLoading(false);
-                });
-                return () => unsub();
+                const fetchMarketData = async () => {
+                    try {
+                        const headers = { "Authorization": `Bearer ${DM_TOKEN}` };
+                        
+                        // Busca tickers, empresas e FIIs
+                        const [resTickers, resCompanies, resReits] = await Promise.all([
+                            fetch(`${DM_API_BASE}/tickers`, { headers }),
+                            fetch(`${DM_API_BASE}/companies`, { headers }),
+                            fetch(`${DM_API_BASE}/reits`, { headers })
+                        ]);
+
+                        if (resTickers.ok) {
+                            const tickers = await resTickers.json();
+                            const companies = resCompanies.ok ? await resCompanies.json() : [];
+                            const reits = resReits.ok ? await resReits.json() : [];
+
+                            const masterList = tickers.map(t => {
+                                const info = companies.find(c => c.ticker === t.ticker) || 
+                                             reits.find(r => r.ticker === t.ticker) || 
+                                             { name: t.name || 'Ativo B3' };
+                                return { ticker: t.ticker, name: info.name };
+                            });
+
+                            setApiTickers(masterList);
+                        }
+                    } catch (e) { console.error("Erro no carregamento de dados:", e); }
+                };
+                fetchMarketData();
             }, []);
 
             useEffect(() => {
+                const initAuth = async () => {
+                    if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+                        try { await FSDK.signInWithCustomToken(auth, window.__initial_auth_token); } 
+                        catch (e) { await FSDK.signInAnonymously(auth); }
+                    } else { await FSDK.signInAnonymously(auth); }
+                };
+                initAuth();
+                return FSDK.onAuthStateChanged(auth, setUser);
+            }, [auth, FSDK]);
+
+            useEffect(() => {
                 if (!user) return;
-                const path = `artifacts/${appId}/users/${user.uid}`;
-                
-                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => {
-                    setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error(err));
-                
-                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
-                    const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
-                    setDailyRecords(recs);
-                }, err => console.error(err));
-                
-                const unsubAccounts = db.collection(`${path}/accounts`).onSnapshot(snap => {
-                    const accList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setAccounts(accList);
-                    if (accList.length > 0 && !account) setAccount(accList[0].name);
-                }, err => console.error(err));
-                
-                const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
-                    const sorted = snap.docs
-                        .map(d => ({ id: d.id, ...d.data() }))
-                        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-                    setCategories(sorted);
-                }, err => console.error(err));
-                
-                const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => {
-                    setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => console.error(err));
-
-                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); };
-            }, [user]);
-
-            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
-            const uniqueDescriptions = useMemo(() => {
-                const seen = new Set();
-                return transactions
-                    .map(t => t.description)
-                    .filter(d => {
-                        if (!d || seen.has(d.trim().toLowerCase())) return false;
-                        seen.add(d.trim().toLowerCase());
-                        return true;
-                    })
-                    .sort();
-            }, [transactions]);
-
-            const filteredDashboardTxs = useMemo(() => {
-                return transactions.filter(t => {
-                    const accInfo = accounts.find(a => a.name === t.account);
-                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
-                    const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
-                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao') && isAccountMatch && isCategoryMatch;
-                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, accounts, filterMonth, dashboardFilterAccount, dashboardFilterCategory]);
-
-            const accountBalances = useMemo(() => {
-                const balances = {}; 
-                accounts.forEach(acc => balances[acc.name] = 0);
-                const p = (v) => parseFloat(v) || 0;
-                transactions.forEach(t => {
-                    if (t.status === 'pago') {
-                        const amt = p(t.amount);
-                        if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
-                        else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
-                        else if (t.type === 'transferencia') { 
-                            balances[t.account] -= amt; balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
-                        }
-                    }
+                const unsubGoal = FSDK.onSnapshot(FSDK.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'goal'), (d) => {
+                    if (d.exists()) { setTotalGoal(d.data().value); setTempGoal(d.data().value.toString()); }
                 });
-                return balances;
-            }, [transactions, accounts]);
+                const unsubAssets = FSDK.onSnapshot(FSDK.collection(db, 'artifacts', appId, 'users', user.uid, 'assets'), (s) => {
+                    setAssets(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                }, (err) => setSyncError("Erro de ligação ao Firebase. Verifique a consola."));
+                return () => { unsubGoal(); unsubAssets(); };
+            }, [user, db, FSDK]);
 
-            const totalGeneralBalance = useMemo(() => {
-                return accounts
-                    .filter(acc => acc.type === 'corrente')
-                    .reduce((total, acc) => total + (accountBalances[acc.name] || 0), 0);
-            }, [accounts, accountBalances]);
-
-            const groups = useMemo(() => {
-                const items = accounts.filter(acc => acc.type === 'corrente');
-                return {
-                    operacional: items.filter(acc => acc.group === 'operacional' || !acc.group),
-                    reservas: items.filter(acc => acc.group === 'reserva'),
-                    outras: items.filter(acc => acc.group === 'outros')
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (suggestionRef.current && !suggestionRef.current.contains(event.target)) {
+                        setShowSuggestions(false);
+                    }
                 };
-            }, [accounts]);
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
 
-            const stats = useMemo(() => {
-                const p = (v) => parseFloat(v) || 0;
-                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
-                Object.keys(dailyRecords).forEach(day => {
-                    if (day.startsWith(filterMonth)) {
-                        const r = dailyRecords[day];
-                        rb += p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
-                        custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
-                    }
-                });
-                transactions.forEach(t => {
-                    if ((t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && t.status === 'pago') {
-                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
-                    }
-                });
-                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
-                return { rb, custosVariaveis, totalOperating, lucro: rb - (custosVariaveis + totalOperating), costsByCategory };
-            }, [transactions, dailyRecords, filterMonth]);
-
-            const pendingPaymentsConsolidated = useMemo(() => {
-                const p = (v) => parseFloat(v) || 0;
-                const normalPendings = transactions.filter(t => {
-                    const accInfo = accounts.find(a => a.name === t.account);
-                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
-                });
-                const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
-                    const total = cardTxs.reduce((acc, t) => {
-                        if (t.type === 'saida') return acc + p(t.amount);
-                        if (t.type === 'entrada' || t.category === 'Pagamento de Fatura') return acc - p(t.amount);
-                        return acc;
-                    }, 0);
-                    if (total <= 0.01) return null;
-                    return {
-                        id: `invoice-${card.name}-${filterMonth}`,
-                        description: `Fatura: ${card.name}`,
-                        amount: total,
-                        type: 'saida',
-                        status: 'pendente',
-                        clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`,
-                        account: card.name,
-                        category: 'Cartão de Crédito',
-                        isInvoice: true
-                    };
-                }).filter(Boolean);
-                return [...normalPendings, ...cardInvoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
-            }, [transactions, filterMonth, accounts]);
-
-            const futureIncomes = useMemo(() => {
-                return transactions.filter(t => t.type === 'entrada' && t.status === 'pendente' && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)))
-                                  .sort((a,b) => a.date.localeCompare(b.date));
-            }, [transactions, filterMonth]);
-
-            const handleAuth = async (e) => {
-                e.preventDefault();
+            // --- SINCRONIZAÇÃO ROBUSTA COM DADOS DE MERCADO ---
+            const syncPrices = useCallback(async (forcedTab = null) => {
+                const tabToSync = forcedTab || activeTab;
+                if (!user || isSyncing || tabToSync === 'home' || tabToSync === 'caixa') return;
+                
+                const tabAssets = assets.filter(a => a.category === tabToSync);
+                if (tabAssets.length === 0) return;
+                
+                setIsSyncing(true);
+                setSyncError(null);
+                
                 try {
-                    if (isRegistering) await auth.createUserWithEmailAndPassword(email, password);
-                    else await auth.signInWithEmailAndPassword(email, password);
-                } catch (err) { alert(err.message); }
-            };
-
-            const resetForm = () => { 
-                setEditingId(null); setDesc(''); setVal(''); setType('saida'); 
-                setAccount(accounts[0]?.name || ''); setDestAccount(''); setCat(''); 
-                setSupplier(''); setStatus('pago'); setInstallments(1);
-                setDate(new Date().toLocaleDateString('en-CA')); setClearance(new Date().toLocaleDateString('en-CA'));
-            };
-
-            const startEdit = (t) => {
-                setEditingId(t.id); setDesc(t.description || ''); setVal(t.amount.toString().replace('.', ','));
-                setType(t.type || 'saida'); setAccount(t.account || ''); setDestAccount(t.destinationAccount || '');
-                setCat(t.category || ''); setSupplier(t.supplier || ''); setStatus(t.status || 'pago');
-                setInstallments(1); 
-                setDate(t.date || ''); setClearance(t.clearanceDate || ''); window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
-            const saveTx = async (e) => {
-                e.preventDefault();
-                if (!user || !val) return;
-                
-                const totalAmount = parseFloat(val.replace(',', '.'));
-                const cardInfo = accounts.find(acc => acc.name === account && acc.type === 'cartao');
-                const batch = db.batch();
-                const path = `artifacts/${appId}/users/${user.uid}/transactions`;
-                const numInstallments = cardInfo ? installments : 1;
-
-                for (let i = 0; i < numInstallments; i++) {
-                    const dObj = new Date(date + 'T00:00:00');
-                    dObj.setMonth(dObj.getMonth() + i);
-                    let finalDate = dObj.toISOString().split('T')[0];
-                    let finalClearance = clearance;
-                    let billingMonth = finalDate.slice(0, 7); 
-                    let finalDesc = desc;
-
-                    if (numInstallments > 1) finalDesc = `${desc} (${i + 1}/${numInstallments})`;
-
-                    if (cardInfo) {
-                        const closingDay = parseInt(cardInfo.closingDay) || 25;
-                        const dueDay = parseInt(cardInfo.dueDay) || 10;
-                        const purchaseDay = dObj.getDate();
-                        let billingDate = new Date(dObj);
-                        if (purchaseDay > closingDay) billingDate.setMonth(billingDate.getMonth() + 1);
-                        billingMonth = billingDate.toISOString().slice(0, 7);
-                        let dueDate = new Date(billingDate);
-                        dueDate.setMonth(dueDate.getMonth() + 1);
-                        dueDate.setDate(dueDay);
-                        finalClearance = dueDate.toISOString().split('T')[0];
-                    } else {
-                        const cObj = new Date(clearance + 'T00:00:00');
-                        cObj.setMonth(cObj.getMonth() + i);
-                        finalClearance = cObj.toISOString().split('T')[0];
-                    }
-
-                    const payload = { 
-                        description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : finalDesc,
-                        amount: totalAmount / numInstallments, 
-                        type, status: cardInfo ? 'pendente' : status, 
-                        date: finalDate, clearanceDate: finalClearance, billingMonth: billingMonth, 
-                        account, destinationAccount: destAccount,
-                        category: type === 'transferencia' ? 'Transferência Interna' : (cat || 'Geral'), 
-                        supplier, timestamp: new Date().toISOString()
+                    const headers = { 
+                        "Authorization": `Bearer ${DM_TOKEN}`,
+                        "Accept": "application/json"
                     };
+                    
+                    const updatePromises = tabAssets.map(async (asset) => {
+                        try {
+                            const ticker = asset.name.trim().toUpperCase();
+                            // Corrigindo URL: Conforme Curl exemplo, o endpoint de cotações é /tickers/{ticker}/quotes
+                            const res = await fetch(`${DM_API_BASE}/tickers/${ticker}/quotes`, { headers });
+                            
+                            if (res.status === 401) throw new Error("Token Inválido ou Expirado.");
+                            
+                            if (res.ok) {
+                                const quotes = await res.json();
+                                if (quotes && quotes.length > 0) {
+                                    const latest = quotes[quotes.length - 1];
+                                    await FSDK.updateDoc(FSDK.doc(db, 'artifacts', appId, 'users', user.uid, 'assets', asset.id), { 
+                                        currentPrice: latest.close, 
+                                        updatedAt: Date.now() 
+                                    });
+                                }
+                            }
+                        } catch (e) { 
+                            console.error(`Erro no ticker ${asset.name}:`, e); 
+                            if (e.message.includes("Token")) throw e;
+                        }
+                    });
 
-                    if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
-                    else batch.set(db.collection(path).doc(), payload);
+                    await Promise.all(updatePromises);
+                } catch (e) { 
+                    setSyncError(e.message || "Falha na sincronização com a Bolsa.");
+                } finally { 
+                    setIsSyncing(false); 
                 }
-                await batch.commit();
-                resetForm();
+            }, [user, activeTab, assets, db, FSDK, isSyncing]);
+
+            useEffect(() => {
+                if (activeTab !== 'home' && user && assets.length > 0) {
+                    const timer = setTimeout(() => syncPrices(activeTab), 1000);
+                    return () => clearTimeout(timer);
+                }
+            }, [activeTab, user]);
+
+            const saveGoal = async () => {
+                if (!user) return;
+                await FSDK.setDoc(FSDK.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'goal'), { value: parseFloat(tempGoal) || 0 });
+                setIsEditGoal(false);
             };
 
-            const markAsPaid = async (tId) => {
-                if (tId.startsWith('invoice-')) { setActiveTab('cartoes'); return; }
-                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
+            const addAsset = async (e) => {
+                if (e) e.preventDefault();
+                if (!user || !newAsset.name || !newAsset.qty) return;
+                const id = Date.now().toString();
+                await FSDK.setDoc(FSDK.doc(db, 'artifacts', appId, 'users', user.uid, 'assets', id), {
+                    ...newAsset,
+                    name: newAsset.name.toUpperCase().trim(),
+                    category: activeTab,
+                    qty: parseFloat(newAsset.qty),
+                    avgPrice: parseFloat(newAsset.avgPrice || 0),
+                    currentPrice: parseFloat(newAsset.currentPrice || 0),
+                    updatedAt: Date.now()
+                });
+                setNewAsset({ name: '', qty: '', avgPrice: '', currentPrice: '' });
+                setShowSuggestions(false);
             };
 
-            const deleteTx = async (id) => { if (confirm('Eliminar lançamento?')) await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${id}`).delete(); };
-
-            const saveAccount = async () => {
-                if (!accName) return;
-                const payload = { 
-                    name: accName, type: accType, 
-                    group: accType === 'corrente' ? accGroup : 'cartao',
-                    closingDay: accClosing, dueDay: accDue 
-                };
-                const path = `artifacts/${appId}/users/${user.uid}/accounts`;
-                if (editingAccId) await db.doc(`${path}/${editingAccId}`).update(payload);
-                else await db.collection(path).add(payload);
-                resetAccForm();
+            const removeAsset = async (id) => {
+                if (user) await FSDK.deleteDoc(FSDK.doc(db, 'artifacts', appId, 'users', user.uid, 'assets', id));
             };
 
-            const resetAccForm = () => { setEditingAccId(null); setAccName(''); setAccType('corrente'); setAccGroup('operacional'); setAccClosing('25'); setAccDue('10'); };
-            const startEditAccount = (a) => {
-                setEditingAccId(a.id); setAccName(a.name); setAccType(a.type || 'corrente'); setAccGroup(a.group || 'operacional');
-                setAccClosing(a.closingDay || '25'); setAccDue(a.dueDay || '10'); window.scrollTo({ top: 0, behavior: 'smooth' });
+            const handleTickerChange = (val) => {
+                const term = val.toUpperCase();
+                setNewAsset({...newAsset, name: term});
+                
+                if (term.length > 0) {
+                    const filtered = apiTickers
+                        .filter(item => 
+                            item.ticker.includes(term) || 
+                            item.name.toUpperCase().includes(term)
+                        )
+                        .sort((a, b) => {
+                            if (a.ticker.startsWith(term) && !b.ticker.startsWith(term)) return -1;
+                            if (!a.ticker.startsWith(term) && b.ticker.startsWith(term)) return 1;
+                            return a.ticker.localeCompare(b.ticker);
+                        })
+                        .slice(0, 15);
+                    
+                    setSuggestions(filtered);
+                    setShowSuggestions(filtered.length > 0);
+                } else {
+                    setShowSuggestions(false);
+                }
             };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={48} /></div>;
+            const selectSuggestion = (ticker) => {
+                setNewAsset({...newAsset, name: ticker});
+                setShowSuggestions(false);
+            };
 
-            if (!user) return (
-                <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
-                    <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
-                        <div className="text-center mb-10"><img src="logo.png" className="w-24 mx-auto mb-4" /><h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter text-center">Tribo Finanças</h2></div>
-                        <form onSubmit={handleAuth} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border-2 rounded-2xl font-semibold outline-none focus:border-orange-500" value={email} onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border-2 rounded-2xl font-semibold outline-none focus:border-orange-500" value={password} onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-all">Entrar</button>
-                        </form>
-                        <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isRegistering ? "Já tenho conta" : "Criar nova conta"}</button>
-                    </div>
-                </div>
-            );
+            const processedAssets = useMemo(() => assets.map(a => {
+                const qty = parseFloat(a.qty) || 0;
+                const avgPrice = parseFloat(a.avgPrice) || 0;
+                const currentPrice = parseFloat(a.currentPrice) || 0;
+                const totalInvested = qty * avgPrice;
+                const priceForCurrent = (currentPrice > 0) ? currentPrice : avgPrice;
+                const totalCurrent = qty * priceForCurrent;
+                const profitVal = (currentPrice > 0) ? (totalCurrent - totalInvested) : 0;
+                const profitPerc = (totalInvested > 0 && currentPrice > 0) ? (profitVal / totalInvested) * 100 : 0;
+                return { ...a, qty, avgPrice, currentPrice, totalInvested, totalCurrent, profitVal, profitPerc };
+            }), [assets]);
+
+            const totals = useMemo(() => {
+                const res = { acoes: { invested: 0, current: 0 }, realestate: { invested: 0, current: 0 }, caixa: { invested: 0, current: 0 }, internacional: { invested: 0, current: 0 } };
+                processedAssets.forEach(a => { if(res[a.category]) { res[a.category].invested += a.totalInvested; res[a.category].current += a.totalCurrent; } });
+                return res;
+            }, [processedAssets]);
+
+            const grandTotalCurrent = useMemo(() => Object.values(totals).reduce((a, b) => a + b.current, 0), [totals]);
+            const grandTotalInvested = useMemo(() => Object.values(totals).reduce((a, b) => a + b.invested, 0), [totals]);
+            
+            const shareGoal = totalGoal / 4;
+            const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+            if (!user) return <div className="h-screen bg-black flex flex-col items-center justify-center gap-4 text-white"><Icons.Loader2 size={40} className="text-cyan-500" /><p className="text-[10px] font-black tracking-widest uppercase">A ligar ao sistema Tribo...</p></div>;
 
             return (
-                <div className="min-h-screen flex flex-col fade-in relative pb-20">
-                    <img src="logo.png" className="bg-watermark w-96" alt="watermark" />
-                    <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
-                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="min-h-screen bg-[#050505] text-zinc-100 pb-32 selection:bg-cyan-500/20">
+                    <header className="p-6 sticky top-0 bg-[#050505]/95 backdrop-blur-xl border-b border-zinc-900 z-50">
+                        <div className="flex justify-between items-center max-w-4xl mx-auto">
                             <div className="flex items-center gap-3">
-                                <img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="logo" />
-                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter leading-none">Tribo Management</h1><button onClick={() => auth.signOut()} className="text-[8px] text-red-400 font-bold uppercase mt-1">Sair</button></div>
+                                <div className="w-9 h-9 bg-cyan-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(0,212,197,0.3)]"><Icons.TrendingUp size={20} color="#000" /></div>
+                                <h1 className="font-black tracking-tighter text-xl uppercase text-white">R.I <span className="text-cyan-500 text-white">SISTEMA</span></h1>
                             </div>
-                            <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
-                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
-                                        {tab === 'planilha' ? 'Vendas' : tab === 'dashboard' ? 'Lançamentos' : tab.replace('_', ' ')}
-                                    </button>
-                                ))}
-                            </nav>
+                            <div className="flex items-center gap-3">
+                                {isSyncing && <div className="text-[10px] font-bold text-cyan-400 animate-pulse-cyan uppercase tracking-widest">Sincronização B3 ativa...</div>}
+                                <Icons.Cloud size={20} className={isSyncing ? "text-cyan-500 animate-pulse" : "text-emerald-500/50"} />
+                            </div>
                         </div>
                     </header>
 
-                    <main className="p-6 max-w-6xl mx-auto w-full flex-1 space-y-6">
-                        <div className="flex justify-center"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border-2 border-slate-100 shadow-sm"><span className="text-[9px] font-black uppercase text-slate-400">Período:</span><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
+                    <main className="max-w-4xl mx-auto px-6 pt-10">
+                        {syncError && (
+                            <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl mb-8 flex items-center gap-3 text-rose-400">
+                                <Icons.AlertCircle size={20} />
+                                <span className="text-xs font-bold uppercase tracking-tight">{syncError}</span>
+                            </div>
+                        )}
 
-                        {activeTab === 'dashboard' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <form onSubmit={saveTx} className={`lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 h-fit transition-all ${editingId ? 'border-blue-500 bg-blue-50/10' : 'border-[#1A202C]'}`}>
-                                    <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
-                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t.slice(0, 5)}</button>))}</div>
-                                    {type !== 'transferencia' && (
-                                        <div className="relative">
-                                            <input list="desc-sug" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
-                                            <datalist id="desc-sug">{uniqueDescriptions.map(d => <option key={d} value={d}/>)}</datalist>
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" placeholder="Valor Total" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
-                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                        {activeTab === 'home' ? (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <div className="relative flex items-center justify-center w-72 h-72 mx-auto my-12 text-white">
+                                    <svg viewBox="0 0 200 200" className="transform -rotate-90 w-full h-full drop-shadow-[0_0_25px_rgba(0,0,0,0.8)]">
+                                        {STRATEGY.map((cat, i, arr) => {
+                                            const r = 82; const circ = 2 * Math.PI * r;
+                                            const off = arr.slice(0, i).reduce((acc, c) => acc + (grandTotalCurrent > 0 ? (totals[c.id].current/grandTotalCurrent)*circ : 0.25*circ), 0);
+                                            const stroke = grandTotalCurrent > 0 ? (totals[cat.id].current/grandTotalCurrent)*circ : 0.25*circ;
+                                            return <circle key={cat.id} cx="100" cy="100" r={r} fill="none" stroke={cat.color} strokeWidth="26" strokeDasharray={`${stroke} ${circ}`} strokeDashoffset={-off} className="donut-animation" />;
+                                        })}
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                                        <span className="text-[9px] font-black tracking-[0.4em] text-zinc-600 uppercase">DIVERSIFICAÇÃO</span>
+                                        <span className="text-3xl font-black tracking-tighter text-white">R.I <span className="font-light opacity-30">INVEST</span></span>
                                     </div>
-                                    {accounts.find(a => a.name === account)?.type === 'cartao' && (
-                                        <div className="space-y-1 fade-in">
-                                            <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Parcelas</label>
-                                            <input type="number" min="1" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={installments} onChange={e => setInstallments(parseInt(e.target.value) || 1)} />
+                                </div>
+
+                                <div className="bg-zinc-900/30 border border-zinc-900 p-8 rounded-[2.5rem] mb-10 grid grid-cols-1 md:grid-cols-2 gap-6 premium-shadow">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] font-black text-zinc-500 tracking-[0.2em] mb-2 uppercase text-white">Património Atualizado</p>
+                                            <h3 className="text-4xl font-black tracking-tighter text-white">{formatBRL(grandTotalCurrent)}</h3>
                                         </div>
-                                    )}
-                                    {type === 'saida' && (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
-                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={supplier} onChange={e => setSupplier(e.target.value)}><option value="">Fornecedor...</option>{suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
-                                        </div>
-                                    )}
-                                    {type !== 'transferencia' && (
-                                        <div className="flex gap-2">
-                                            <button type="button" onClick={() => setStatus('pago')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase transition-all border ${status === 'pago' ? 'bg-green-500 text-white border-green-600' : 'bg-white text-slate-400'}`}>PAGO</button>
-                                            <button type="button" onClick={() => setStatus('pendente')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase transition-all border ${status === 'pendente' ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-slate-400'}`}>PENDENTE</button>
-                                        </div>
-                                    )}
-                                    {type === 'transferencia' && (<select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}><option value="">Para...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>)}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-2 text-slate-400">Registo</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /></div>
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-2 text-slate-400">Venc./Comp.</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
+                                        <button onClick={() => setIsEditGoal(!isEditGoal)} className="p-4 bg-white/5 rounded-2xl text-cyan-400 hover:scale-105 active:scale-95 transition-all text-white"><Icons.Edit3 size={20} /></button>
                                     </div>
-                                    <div className="flex gap-2"><button className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">{editingId ? 'Guardar' : 'Gravar'}</button>{editingId && <button type="button" onClick={resetForm} className="bg-slate-200 p-4 rounded-2xl font-black uppercase text-[10px]">X</button>}</div>
-                                </form>
-                                <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[600px] flex flex-col border overflow-hidden">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex flex-col md:flex-row justify-between items-center gap-3">
-                                        <span>Histórico Mensal</span>
-                                        <div className="flex gap-2">
-                                            <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterAccount} onChange={e=>setDashboardFilterAccount(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
-                                            <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterCategory} onChange={e=>setDashboardFilterCategory(e.target.value)}><option value="">Categorias...</option>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                                    <div className="border-l border-zinc-800 md:pl-6 flex flex-col justify-end">
+                                        <p className="text-[10px] font-black text-zinc-500 tracking-[0.2em] mb-1 uppercase text-white">Total Investido (Aplicações)</p>
+                                        <p className="text-xl font-bold text-zinc-400">{formatBRL(grandTotalInvested)}</p>
+                                    </div>
+                                </div>
+
+                                {isEditGoal && (
+                                    <div className="bg-zinc-900 p-8 rounded-[2.5rem] border border-cyan-500/30 mb-10 animate-in zoom-in-95">
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase block mb-4 text-white">Meta Total de Alocação (ARCA)</label>
+                                        <div className="flex gap-4">
+                                            <input type="number" value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="flex-1 bg-black border border-zinc-800 rounded-2xl px-6 py-4 text-xl font-bold focus:border-cyan-500 outline-none text-white" />
+                                            <button onClick={saveGoal} className="bg-cyan-500 text-black px-8 rounded-2xl font-black flex items-center justify-center hover:bg-cyan-400 active:scale-95 transition-all text-white"><Icons.Check size={20} strokeWidth={3} /></button>
                                         </div>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {filteredDashboardTxs.map(t => (
-                                            <div key={t.id} className={`p-4 flex justify-between items-center group hover:bg-slate-50 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
-                                                <div className="flex items-center gap-4">
-                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status}</span></div>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
+                                )}
+
+                                <div className="space-y-4">
+                                    {STRATEGY.map(cat => {
+                                        const total = totals[cat.id].current; const diff = shareGoal - total;
+                                        return (
+                                            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className="w-full bg-zinc-900/20 border border-zinc-900 p-6 rounded-[2rem] flex items-center justify-between group hover:bg-zinc-900/40 transition-all border-l-4" style={{ borderLeftColor: cat.color }}>
+                                                <div className="flex items-center gap-5">
+                                                    <div className="p-3.5 rounded-xl bg-white/5 text-white/90 group-hover:scale-110 transition-transform"><cat.icon size={18} /></div>
+                                                    <div className="text-left"><h4 className="text-[10px] font-black text-zinc-600 mb-1 uppercase text-white">{cat.label}</h4><p className="text-xl font-black text-white">{formatBRL(total)}</p></div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[10px] font-black text-zinc-500 mb-1.5 text-white">{grandTotalCurrent > 0 ? ((total/grandTotalCurrent)*100).toFixed(1) : 0}%</div>
+                                                    <div className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${diff > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                                                        {diff > 0 ? `INVESTIR ${formatBRL(diff)}` : `EXCEDENTE ${formatBRL(Math.abs(diff))}`}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4"><p className="font-black text-sm">{formatMoney(t.amount)}</p><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">{t.status === 'pendente' && <button onClick={() => markAsPaid(t.id)} className="text-green-500"><Icon name="check-circle" size={14}/></button>}<button onClick={() => startEdit(t)} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => deleteTx(t.id)} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        )}
-
-                        {activeTab === 'saldos' && (
-                            <div className="space-y-12 animate-in fade-in">
-                                {/* NOVO BANNER: SOMA TOTAL DE TODAS AS CONTAS */}
-                                <div className="stat-banner !border-[#1A202C] !bg-[#D97757] !text-white !p-12">
-                                    <div className="flex items-center justify-center gap-3 mb-2">
-                                        <Icon name="landmark" size={24} className="text-white opacity-80" />
-                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-white/90">Património Líquido Total</p>
+                        ) : (
+                            <div className="animate-in slide-in-from-right-4 duration-500">
+                                <div className="flex justify-between items-end mb-10 pb-8 border-b border-zinc-900 text-white">
+                                    <div><h2 className="text-3xl font-black uppercase text-white tracking-tighter" style={{ color: STRATEGY.find(t => t.id === activeTab).color }}>{STRATEGY.find(t => t.id === activeTab).label}</h2></div>
+                                    <div className="flex items-center gap-4 text-right">
+                                        <button onClick={() => syncPrices()} disabled={isSyncing} className="p-3.5 bg-zinc-900 border border-zinc-800 rounded-xl text-cyan-400 hover:bg-zinc-800 active:scale-90 transition-all text-white">
+                                            {isSyncing ? <Icons.Loader2 size={20} /> : <Icons.RefreshCw size={20} />}
+                                        </button>
+                                        <div className="text-white"><p className="text-[9px] font-black text-zinc-700 uppercase text-white">Investido nesta Classe</p><p className="text-2xl font-black text-white tracking-tighter">{formatBRL(totals[activeTab].invested)}</p></div>
                                     </div>
-                                    <h3 className="text-5xl font-black drop-shadow-lg">{formatMoney(totalGeneralBalance)}</h3>
-                                    <p className="text-[9px] font-bold uppercase mt-4 opacity-70 tracking-widest">Soma de todas as contas correntes e aplicações</p>
                                 </div>
 
-                                {[
-                                    {title: 'Destaque Operacional', list: groups.operacional}, 
-                                    {title: 'Reservas & Aplicações', list: groups.reservas}, 
-                                    {title: 'Outras Contas', list: groups.outras}
-                                ].map(g => (
-                                    <div key={g.title} className="space-y-4">
-                                        <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.4em] px-2 border-l-4 border-slate-400 ml-2">{g.title}</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-2">
-                                            {g.list.map(acc => (
-                                                <div key={acc.id} className={`bg-white p-8 rounded-[3.5rem] shadow-xl border-t-8 ${acc.name.toLowerCase().includes('mercado') ? 'card-bank-mercado' : acc.name.toLowerCase().includes('ifood') ? 'card-bank-ifood' : acc.name.toLowerCase().includes('c6') ? 'card-bank-c6' : acc.group === 'reserva' ? 'card-bank-fundo' : 'border-[#1A202C]'} flex flex-col items-center transition-transform hover:scale-105`}>
-                                                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
-                                                    <h3 className={`text-3xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
-                                                </div>
-                                            ))}
+                                <form onSubmit={addAsset} className="bg-zinc-900/20 border border-zinc-900 p-8 rounded-[2.5rem] mb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end premium-shadow relative">
+                                    <div className="space-y-2 relative" ref={suggestionRef}>
+                                        <label className="text-[9px] font-black text-zinc-600 uppercase ml-3 tracking-widest text-white">Ticker ou Empresa</label>
+                                        <div className="relative">
+                                            <input required type="text" placeholder="EX: PETR4 ou PETROBRAS" autoComplete="off" value={newAsset.name} onChange={e => handleTickerChange(e.target.value)} onFocus={() => handleTickerChange(newAsset.name)} className="w-full bg-black border border-zinc-800 rounded-2xl p-4 pl-12 text-sm font-bold focus:border-cyan-500 outline-none text-white uppercase transition-all text-white" />
+                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600"><Icons.Search size={18} /></div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {activeTab === 'planilha' && <PlanilhaTab dailyRecords={dailyRecords} user={user} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} appId={appId} db={db} />}
-                        {activeTab === 'a_pagar' && <APagarTab pendingPaymentsConsolidated={pendingPaymentsConsolidated} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} markAsPaid={markAsPaid} />}
-                        {activeTab === 'a_receber' && <AReceberTab futureIncomes={futureIncomes} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} markAsPaid={markAsPaid} />}
-                        {activeTab === 'cartoes' && <CartoesTab accounts={accounts} transactions={transactions} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} deleteTx={deleteTx} db={db} appId={appId} user={user} localPayments={localPayments} setLocalPayments={setLocalPayments} />}
-                        {activeTab === 'resultados' && <ResultadosTab stats={stats} filterMonth={filterMonth} formatMoney={formatMoney} />}
-                        {activeTab === 'dre' && <DRETab stats={stats} filterMonth={filterMonth} formatMoney={formatMoney} />}
-                        {activeTab === 'fornecedores' && <FornecedoresTab suppliers={suppliers} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} />}
-                        {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
-                    </main>
-
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.8</footer>
-                </div>
-            );
-        }
-
-        const PlanilhaTab = ({ dailyRecords, user, filterMonth, formatMoney, Icon, appId, db }) => {
-            const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
-            const p = (v) => parseFloat(v) || 0;
-            
-            return (
-                <div className="space-y-6 animate-in fade-in">
-                    <div className="stat-banner"><p className="text-[9px] font-black uppercase text-[#F8CC82] mb-2">Vendas Totais {filterMonth}</p><h3 className="text-4xl font-black">{formatMoney(Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).reduce((acc, d) => acc + ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((t,f)=>t+(p(dailyRecords[d][f])), 0), 0))}</h3></div>
-                    <div className="flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm"><div className="flex items-center gap-2 font-black uppercase text-[10px] text-[#1A202C]"><Icon name="table" /><span>Planilha Diária</span></div><div className="flex gap-2"><input type="date" className="p-2 border rounded-xl text-xs font-bold outline-none" value={newDay} onChange={e => setNewDay(e.target.value)} /><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Novo Dia</button></div></div>
-                    <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                        <table className="w-full text-center text-[11px] min-w-[1500px]">
-                            <thead>
-                                <tr className="header-black text-white">
-                                    <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
-                                    <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                    {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
-                                    <th className="p-4 text-orange-400">Taxa Entrega</th>
-                                    <th className="p-4 text-red-400">Motoboy</th>
-                                    <th className="p-4 bg-slate-800">Total Logística</th>
-                                    <th className="p-4">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y font-bold">
-                                {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { 
-                                    const totalVendas = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(p(dailyRecords[d][f])), 0);
-                                    const totalLogistica = p(dailyRecords[d].motoboy) + p(dailyRecords[d].taxaEntrega);
-                                    
-                                    return (
-                                        <tr key={d} className="hover:bg-slate-50 h-12">
-                                            <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
-                                            <td className="p-4 bg-yellow-50 font-black">{formatMoney(totalVendas)}</td>
-                                            {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                <td key={f} className="p-0 border-r">
-                                                    <input className="table-input" value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                                </td>
-                                            ))}
-                                            <td className="p-0 border-r">
-                                                <input className="table-input !text-orange-600" value={dailyRecords[d].taxaEntrega || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ taxaEntrega: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                            </td>
-                                            <td className="p-0 border-r">
-                                                <input className="table-input !text-red-600" value={dailyRecords[d].motoboy || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ motoboy: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                            </td>
-                                            <td className="p-4 bg-slate-50 font-black text-slate-800">
-                                                {formatMoney(totalLogistica)}
-                                            </td>
-                                            <td className="p-4"><button onClick={() => { if(confirm('Eliminar dia?')) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()}} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            );
-        };
-
-        const APagarTab = ({ pendingPaymentsConsolidated, filterMonth, formatMoney, Icon, markAsPaid }) => {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const urgentPayments = pendingPaymentsConsolidated.filter(t => {
-                const dueDate = new Date(t.clearanceDate + 'T00:00:00');
-                const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                return diffDays <= 2;
-            });
-            return (
-                <div className="space-y-6 animate-in fade-in">
-                    <div className="stat-banner !border-red-500">
-                        <p className="text-[9px] font-black uppercase text-red-400 mb-2">Vencimentos Pendentes {filterMonth}</p>
-                        <h3 className="text-4xl font-black">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3>
-                    </div>
-                    {urgentPayments.length > 0 && (
-                        <div className="bg-red-50 border-2 border-red-200 p-4 rounded-3xl flex items-center gap-4 animate-pulse">
-                            <div className="bg-red-500 text-white p-2 rounded-xl"><Icon name="alert-triangle" size={18} /></div>
-                            <div>
-                                <h4 className="text-[10px] font-black uppercase text-red-700">Atenção: Pagamentos Urgentes</h4>
-                                <p className="text-[9px] font-bold text-red-500 uppercase tracking-tight">Tens {urgentPayments.length} contas que vencem nos próximos 2 dias.</p>
-                            </div>
-                        </div>
-                    )}
-                    <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
-                        {pendingPaymentsConsolidated.map(t => {
-                            const dueDate = new Date(t.clearanceDate + 'T00:00:00');
-                            const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                            const isUrgent = diffDays <= 2;
-                            const isOverdue = diffDays < 0;
-                            return (
-                                <div key={t.id} className={`p-6 flex justify-between items-center hover:bg-slate-50 transition-all ${isUrgent ? 'bg-red-50/30' : ''}`}>
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isUrgent ? 'bg-red-500 text-white shadow-lg' : t.isInvoice ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
-                                            <Icon name={isUrgent ? 'clock' : (t.isInvoice ? 'credit-card' : 'calendar')} size={24} />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-black text-base uppercase leading-tight">
-                                                    <span className={isUrgent ? 'text-red-600' : 'text-slate-900'}>[{t.clearanceDate.split('-').reverse().join('/')}]</span>
-                                                    <span className="ml-2">{t.description}</span>
-                                                </p>
-                                                {isOverdue && <span className="bg-red-600 text-white px-2 py-0.5 rounded-lg text-[7px] font-black uppercase">VENCIDO</span>}
-                                                {diffDays >= 0 && diffDays <= 2 && <span className="bg-orange-500 text-white px-2 py-0.5 rounded-lg text-[7px] font-black uppercase">VENCE EM BREVE</span>}
+                                        {showSuggestions && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#0A0A0A] border border-zinc-800 rounded-2xl overflow-hidden z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                                                <ul className="suggestion-list">
+                                                    {suggestions.map((item, idx) => (
+                                                        <li key={idx} onClick={() => selectSuggestion(item.ticker)} className="px-6 py-4 hover:bg-cyan-500/10 cursor-pointer border-b border-zinc-900 last:border-none flex flex-col transition-colors group">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="font-black text-sm text-cyan-400 group-hover:text-white transition-colors">{item.ticker}</span>
+                                                                <span className="text-[8px] text-zinc-700 uppercase tracking-widest bg-zinc-900/50 px-2 py-0.5 rounded text-white">B3 OFICIAL</span>
+                                                            </div>
+                                                            <span className="text-[10px] text-zinc-500 group-hover:text-zinc-300 transition-colors truncate text-white">{item.name}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
-                                        </div>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-6">
-                                        <p className={`font-black text-lg ${isUrgent ? 'text-red-700' : ''}`}>{formatMoney(t.amount)}</p>
-                                        <button onClick={() => markAsPaid(t.id)} className={`w-10 h-10 ${isUrgent ? 'bg-red-600' : 'bg-green-500'} text-white rounded-xl flex items-center justify-center shadow-lg transition-transform active:scale-90`}><Icon name="check" size={18} /></button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        };
+                                    <div className="space-y-2"><label className="text-[9px] font-black text-zinc-600 uppercase ml-3 tracking-widest text-white">Quantidade</label><input required type="number" step="any" value={newAsset.qty} onChange={e => setNewAsset({...newAsset, qty: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-sm font-bold outline-none text-white" /></div>
+                                    <div className="space-y-2"><label className="text-[9px] font-black text-zinc-600 uppercase ml-3 tracking-widest text-white">Preço Médio</label><input required type="number" step="0.01" value={newAsset.avgPrice} onChange={e => setNewAsset({...newAsset, avgPrice: e.target.value})} className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-sm font-bold outline-none text-white" /></div>
+                                    <button type="submit" className="bg-white text-black font-black text-[10px] h-[58px] rounded-2xl tracking-[0.2em] uppercase hover:bg-cyan-500 transition-all active:scale-95 shadow-lg text-white">ADICIONAR</button>
+                                </form>
 
-        const AReceberTab = ({ futureIncomes, filterMonth, formatMoney, Icon, markAsPaid }) => (
-            <div className="space-y-6 animate-in fade-in">
-                <div className="stat-banner !border-green-500"><p className="text-[9px] font-black uppercase tracking-[0.4em] text-green-400 mb-2">Entradas Previstas ({filterMonth})</p><h3 className="text-4xl font-black text-white">{formatMoney(futureIncomes.reduce((acc, t) => acc + t.amount, 0))}</h3></div>
-                <div className="glass-card rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[400px] divide-y border">{futureIncomes.map(t => (<div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={24} /></div><div><p className="font-black text-base uppercase leading-tight"><span className="text-green-500 mr-2">[{t.date?.split('-').reverse().join('/')}]</span>{t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p></div></div><div className="flex items-center gap-6"><p className="font-black text-lg text-[#1A202C]">{formatMoney(t.amount)}</p><button onClick={() => markAsPaid(t.id)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg"><Icon name="check" size={18} /></button></div></div>))}</div>
-            </div>
-        );
-
-        const CartoesTab = ({ accounts, transactions, filterMonth, formatMoney, Icon, deleteTx, db, appId, user, localPayments, setLocalPayments }) => (
-            <div className="space-y-12 animate-in zoom-in duration-300">
-                {accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth))))
-                                       .sort((a,b) => a.date.localeCompare(b.date));
-                    const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + t.amount : acc - t.amount, 0);
-                    const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotal), sourceAccount: accounts.filter(acc => acc.type !== 'cartao')[0]?.name || '' };
-                    return (
-                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] space-y-8">
-                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
-                                <div><h3 className="text-2xl font-black uppercase text-[#1A202C]">{card.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p></div>
-                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
-                                    <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotal)}</h3>
-                                </div>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2 px-2"><Icon name="list" size={14} className="text-slate-400" /><h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Itens da Fatura de {filterMonth} ({cardTxs.length})</h4></div>
-                                <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
-                                    {cardTxs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-400 font-black uppercase">Sem lançamentos para este mês</p> : cardTxs.map(t => (
-                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} />
+                                <div className="space-y-6">
+                                    {processedAssets.filter(a => a.category === activeTab).map(asset => (
+                                        <div key={asset.id} className="bg-zinc-900/15 border border-zinc-900 p-6 rounded-[2rem] flex flex-col gap-6 hover:bg-zinc-900/25 transition-all group border-l-4" style={{ borderLeftColor: STRATEGY.find(t => t.id === activeTab).color }}>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center font-black text-[11px] text-zinc-400 uppercase tracking-tighter border border-white/5">{asset.name.substring(0, 4)}</div>
+                                                    <div><h4 className="font-black text-lg text-white uppercase tracking-tight flex items-center gap-2 text-white">{asset.name}<span className="text-[9px] bg-white/10 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-widest text-white">Ativo</span></h4><p className="text-[10px] font-bold text-zinc-600 uppercase mt-0.5 tracking-widest text-white">Posição Detalhada</p></div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-black text-xs uppercase leading-none">{t.description}</p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Compra: {t.date?.split('-').reverse().join('/')} • Vencimento: {t.clearanceDate?.split('-').reverse().join('/')}</p>
-                                                </div>
+                                                <button onClick={() => removeAsset(asset.id)} className="p-3 text-zinc-800 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all text-white"><Icons.Trash2 size={18} /></button>
                                             </div>
-                                            <div className="flex items-center gap-4">
-                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                <button onClick={() => deleteTx(t.id)} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14} /></button>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-zinc-900/50">
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Quantidade</span><span className="text-sm font-bold text-white">{asset.qty} UN</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Preço Médio</span><span className="text-sm font-bold text-zinc-300">{formatBRL(asset.avgPrice)}</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Cotação Atual</span><span className="text-sm font-bold text-cyan-400">{(asset.currentPrice > 0) ? formatBRL(asset.currentPrice) : 'Aguardando Sinc...'}</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Total Investido</span><span className="text-sm font-bold text-zinc-400">{formatBRL(asset.totalInvested)}</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Total Atual</span><span className="text-sm font-bold text-white">{formatBRL(asset.totalCurrent)}</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Lucro R$</span><span className={`text-sm font-black flex items-center gap-1 ${asset.profitVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{asset.profitVal >= 0 ? <Icons.ArrowUpRight size={14} /> : <Icons.ArrowDownRight size={14} />}{formatBRL(asset.profitVal)}</span></div>
+                                                <div className="flex flex-col"><span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1 text-white">Lucro %</span><span className={`text-sm font-black ${asset.profitPerc >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{asset.profitPerc >= 0 ? '+' : ''}{asset.profitPerc.toFixed(2)}%</span></div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
-                            <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                                <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-2">Pagar de:</label><select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs" value={payInfo.sourceAccount} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, sourceAccount: e.target.value }})}>{accounts.filter(acc => acc.type !== 'cartao').map(acc => <option key={acc.id} value={acc.name}>{acc.name}</option>)}</select></div>
-                                <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-2">Valor:</label><input type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-sm" value={payInfo.amountToPay} onChange={e => setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: e.target.value }})}/></div>
-                                <button onClick={async() => {
-                                    const payAmt = parseFloat(payInfo.amountToPay); if (!payInfo.sourceAccount || payAmt <= 0) return;
-                                    const batch = db.batch(); const path = `artifacts/${appId}/users/${user.uid}/transactions`;
-                                    batch.set(db.doc(`${path}/PAY-OUT-${Date.now()}`), { description: `PAGAMENTO FATURA: ${card.name}`, amount: payAmt, type: 'saida', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: new Date().toISOString().split('T')[0], account: payInfo.sourceAccount, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
-                                    batch.set(db.doc(`${path}/PAY-IN-${Date.now()}`), { description: `BAIXA FATURA`, amount: payAmt, type: 'entrada', status: 'pago', date: new Date().toISOString().split('T')[0], clearanceDate: filterMonth + "-01", billingMonth: filterMonth, account: card.name, category: 'Pagamento de Fatura', timestamp: new Date().toISOString() });
-                                    await batch.commit(); setLocalPayments({...localPayments, [card.name]: { ...payInfo, amountToPay: 0 }});
-                                }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg bg-[#1A202C] text-[#F8CC82]">Confirmar Pagamento</button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        );
+                        )}
+                    </main>
 
-        const ResultadosTab = ({ stats, filterMonth, formatMoney }) => (
-            <div className="space-y-8 animate-in fade-in">
-                <h2 className="text-xl font-black uppercase text-center">Desempenho Operacional: {filterMonth}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Receita de Vendas</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Custos + Despesas</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
-                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'} text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Operacional</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">CMV Est.</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.costsByCategory['CMV (Insumos)'] || 0)}</h3></div>
-                </div>
-            </div>
-        );
-
-        const DRETab = ({ stats, filterMonth, formatMoney }) => (
-            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
-                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional (Vendas) - {filterMonth}</h2>
-                <div className="space-y-4">
-                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Operacional (Vendas Planilha)</span><span>{formatMoney(stats.rb)}</span></div>
-                    <div className="py-4 border-b">
-                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas Operacionais</h3>
-                        {Object.entries(stats.costsByCategory).sort(([a], [b]) => a.localeCompare(b)).map(([cat, amt]) => (
-                            <div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-b border-slate-50 last:border-0"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(amt)}</span></div>
+                    <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[#0A0A0A]/90 backdrop-blur-md border border-zinc-800/50 p-2.5 rounded-[2.5rem] flex items-center gap-2 z-50 shadow-[0_30px_60px_rgba(0,0,0,0.7)] text-white">
+                        <button onClick={() => setActiveTab('home')} className={`p-4 rounded-[1.8rem] transition-all flex items-center gap-3 ${activeTab === 'home' ? 'bg-cyan-500 text-black shadow-[0_0_25px_rgba(0,212,197,0.4)]' : 'text-zinc-600 hover:bg-zinc-900'}`}><Icons.LayoutGrid size={20} strokeWidth={2.5} /><span className={activeTab === 'home' ? 'text-[10px] font-black tracking-widest uppercase pr-2' : 'hidden'}>Dashboard</span></button>
+                        <div className="w-px h-6 bg-zinc-800/50 mx-1.5"></div>
+                        {STRATEGY.map(tab => (
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`p-4 rounded-[1.8rem] transition-all flex items-center gap-3 ${activeTab === tab.id ? 'bg-white text-black shadow-lg' : 'text-zinc-600 hover:bg-zinc-900'}`}><tab.icon size={20} strokeWidth={2.5} /><span className={activeTab === tab.id ? 'text-[10px] font-black tracking-widest uppercase pr-2' : 'hidden'}>{tab.id.substring(0, 3)}</span></button>
                         ))}
-                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) Custos Variáveis (Logística/Taxas)</span><span className="text-red-400 font-black">{formatMoney(stats.custosVariaveis)}</span></div>
-                    </div>
-                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase">Resultado Líquido</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
-                </div>
-                <p className="mt-6 text-[8px] text-center text-slate-400 uppercase font-bold tracking-widest">* Entradas manuais de capital não operacional são ignoradas neste demonstrativo.</p>
-            </div>
-        );
+                    </nav>
 
-        const FornecedoresTab = ({ suppliers, user, appId, db, Icon, accName, setAccName }) => (
-            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
-                <div className="glass-card p-8 rounded-[3rem] shadow-md h-fit">
-                    <h2 className="text-sm font-black uppercase mb-6">Novo Fornecedor</h2>
-                    <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold mb-4" placeholder="Nome" value={accName} onChange={e => setAccName(e.target.value)} />
-                    <button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: accName }); setAccName(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Cadastrar</button>
+                    <div className="fixed bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500/30 via-blue-600/30 to-rose-600/30 opacity-20 blur-[1px]"></div>
                 </div>
-                <div className="glass-card p-8 rounded-[3rem] shadow-lg max-h-[500px] overflow-y-auto no-scrollbar">
-                    <h2 className="text-sm font-black uppercase mb-6">Lista</h2>
-                    <div className="space-y-2">{suppliers.map(s => <div key={s.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group"><span className="text-xs font-black uppercase">{s.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button></div>)}</div>
-                </div>
-            </div>
-        );
+            );
+        }
 
-        const AjustesTab = ({ accounts, categories, user, appId, db, Icon, accName, setAccName, accType, setAccType, accGroup, setAccGroup, accClosing, setAccClosing, accDue, setAccDue, editingAccId, setEditingAccId, resetAccForm, saveAccount, startEditAccount }) => (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
-                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500 h-fit space-y-4 shadow-xl">
-                    <h2 className="text-sm font-black uppercase">{editingAccId ? 'Editar Conta' : 'Nova Conta'}</h2>
-                    <div className="p-6 bg-slate-50 rounded-3xl border border-dashed space-y-4">
-                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
-                        <div className="flex gap-2"><button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button><button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button></div>
-                        {accType === 'corrente' ? (<select className="w-full p-4 bg-white border rounded-2xl text-[10px] font-black" value={accGroup} onChange={e => setAccGroup(e.target.value)}><option value="operacional">Destaque Operacional</option><option value="reserva">Reservas / Fundos</option><option value="outros">Outras</option></select>) : (<div className="grid grid-cols-2 gap-3"><div className="space-y-1"><label className="text-[8px] font-black ml-2 uppercase">Fecho</label><input type="number" className="w-full p-3 border rounded-xl" value={accClosing} onChange={e => setAccClosing(e.target.value)}/></div><div className="space-y-1"><label className="text-[8px] font-black ml-2 uppercase">Vence</label><input type="number" className="w-full p-3 border rounded-xl" value={accDue} onChange={e => setAccDue(e.target.value)}/></div></div>)}
-                        <div className="flex gap-2 pt-2"><button onClick={saveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">{editingAccId ? 'Guardar' : 'Criar'}</button>{editingAccId && <button onClick={resetAccForm} className="bg-slate-200 p-4 rounded-2xl font-black uppercase text-[10px]">X</button>}</div>
-                    </div>
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar">{accounts.map(a => <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white hover:bg-slate-50 group"><div className="flex flex-col"><div className="flex items-center gap-2 font-black text-[10px] uppercase">{a.name} {a.type === 'corrente' && <span className={`group-badge bg-${a.group}`}>{a.group}</span>}</div><span className="text-[8px] text-slate-400 font-bold uppercase">{a.type}</span></div><div className="flex gap-2 opacity-0 group-hover:opacity-100"><button onClick={() => startEditAccount(a)} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>)}</div>
-                </div>
-                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-[#1A202C] h-fit space-y-6">
-                    <h2 className="text-sm font-black uppercase">Categorias</h2>
-                    <div className="flex gap-2"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs" value={accName} onChange={e => setAccName(e.target.value)} /><button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: accName }); setAccName(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={14}/></button></div>
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar">{categories.map(c => <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center"><span className="text-[9px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={12}/></button></div>)}</div>
-                </div>
-            </div>
-        );
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
