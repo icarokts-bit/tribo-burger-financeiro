@@ -111,6 +111,7 @@
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
             const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
+            const [dashboardFilterType, setDashboardFilterType] = useState(''); // Novo estado para filtro de tipo
             const [localPayments, setLocalPayments] = useState({});
 
             const [desc, setDesc] = useState('');
@@ -193,9 +194,10 @@
                     const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
                     const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
                     const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
-                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao') && isAccountMatch && isCategoryMatch;
+                    const isTypeMatch = dashboardFilterType === '' || t.type === dashboardFilterType; // Aplicação do novo filtro
+                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao') && isAccountMatch && isCategoryMatch && isTypeMatch;
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, accounts, filterMonth, dashboardFilterAccount, dashboardFilterCategory]);
+            }, [transactions, accounts, filterMonth, dashboardFilterAccount, dashboardFilterCategory, dashboardFilterType]);
 
             const accountBalances = useMemo(() => {
                 const balances = {}; 
@@ -467,6 +469,13 @@
                                     <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex flex-col md:flex-row justify-between items-center gap-3">
                                         <span>Histórico Mensal</span>
                                         <div className="flex gap-2">
+                                            {/* NOVO FILTRO DE TIPO */}
+                                            <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterType} onChange={e=>setDashboardFilterType(e.target.value)}>
+                                                <option value="">Todos Tipos</option>
+                                                <option value="entrada">Apenas Entradas</option>
+                                                <option value="saida">Apenas Saídas</option>
+                                                <option value="transferencia">Transferências</option>
+                                            </select>
                                             <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterAccount} onChange={e=>setDashboardFilterAccount(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                             <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterCategory} onChange={e=>setDashboardFilterCategory(e.target.value)}><option value="">Categorias...</option>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                         </div>
@@ -532,7 +541,7 @@
                         {activeTab === 'ajustes' && <AjustesTab accounts={accounts} categories={categories} user={user} appId={appId} db={db} Icon={Icon} accName={accName} setAccName={setAccName} accType={accType} setAccType={setAccType} accGroup={accGroup} setAccGroup={setAccGroup} accClosing={accClosing} setAccClosing={setAccClosing} accDue={accDue} setAccDue={setAccDue} editingAccId={editingAccId} setEditingAccId={setEditingAccId} resetAccForm={resetAccForm} saveAccount={saveAccount} startEditAccount={startEditAccount} />}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.0.9</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.1.0</footer>
                 </div>
             );
         }
