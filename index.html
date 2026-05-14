@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Baseline v15.3.0</title>
+    <title>Tribo Burger | Baseline v15.4.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -191,24 +191,41 @@
             }, [dailyRecords, filterMonth]);
 
             const pendingPaymentsConsolidated = useMemo(() => {
+                // 1. Pagamentos normais do mês selecionado
                 const normalPendings = transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
                 
+                // 2. Faturas de Cartão (Consolidadas pelo vencimento real)
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (t.type === 'entrada' && t.clearanceDate?.startsWith(filterMonth))));
+                    // Calculamos qual billingMonth vence no filterMonth atual
+                    // Se o vencimento é em Junho (filterMonth), a fatura de referência é a de Maio
+                    const dateObj = new Date(filterMonth + '-01T12:00:00');
+                    dateObj.setMonth(dateObj.getMonth() - 1);
+                    const billingRef = dateObj.toISOString().slice(0, 7);
+
+                    const cardTxs = transactions.filter(t => 
+                        t.account === card.name && 
+                        (t.billingMonth === billingRef || (t.type === 'entrada' && t.clearanceDate?.startsWith(filterMonth)))
+                    );
+                    
                     const total = cardTxs.reduce((acc, t) => {
                         const val = p(t.amount);
                         if (t.type === 'saida') return acc + val;
                         if (t.type === 'entrada' || t.category === 'Pagamento de Fatura') return acc - val;
                         return acc;
                     }, 0);
+
                     if (total <= 0.01) return null;
+
                     return { 
-                        id: `inv-${card.name}`, description: `Fatura: ${card.name}`, amount: total, 
+                        id: `inv-${card.name}-${filterMonth}`, 
+                        description: `Fatura: ${card.name}`, 
+                        amount: total, 
                         clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, 
-                        account: card.name, isInvoice: true 
+                        account: card.name, 
+                        isInvoice: true 
                     };
                 }).filter(Boolean);
                 
@@ -241,10 +258,18 @@
                     if(cardInfo) {
                         const closingDay = parseInt(cardInfo.closingDay) || 25;
                         const dueDay = parseInt(cardInfo.dueDay) || 10;
-                        if (dObj.getDate() > closingDay) { dObj.setMonth(dObj.getMonth() + 1); }
+                        
+                        // Se o dia da compra for após o fechamento, joga a fatura pro mês seguinte
+                        if (dObj.getDate() > closingDay) { 
+                            dObj.setMonth(dObj.getMonth() + 1); 
+                        }
                         billingMonth = dObj.toISOString().slice(0, 7);
-                        dObj.setDate(dueDay);
-                        finalClearance = dObj.toISOString().split('T')[0];
+                        
+                        // O vencimento real é no mês seguinte ao fechamento da fatura
+                        const dueObj = new Date(dObj);
+                        dueObj.setMonth(dueObj.getMonth() + 1);
+                        dueObj.setDate(dueDay);
+                        finalClearance = dueObj.toISOString().split('T')[0];
                     }
 
                     const payload = {
@@ -270,7 +295,7 @@
                 setEditingAccId(null); setAccName('');
             };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">TRIBO V15.3 LOADING...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">TRIBO V15.4 LOADING...</div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C]">
@@ -466,6 +491,7 @@
                         {activeTab === 'cartoes' && (
                             <div className="space-y-8">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    // Na aba cartões, o usuário vê o que ele comprou no mês de referência
                                     const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (t.type === 'entrada' && t.clearanceDate?.startsWith(filterMonth))))
                                                    .sort((a,b) => a.date.localeCompare(b.date));
                                     
@@ -479,7 +505,7 @@
                                             <div className="flex flex-col md:flex-row justify-between items-center border-b pb-6 mb-6">
                                                 <div><h2 className="text-xl font-black uppercase">{card.name}</h2><p className="text-[10px] text-slate-400 font-bold uppercase">Fecho dia {card.closingDay} • Vence dia {card.dueDay}</p></div>
                                                 <div className="text-right">
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase">{cardTotal < 0 ? "Crédito a favor" : "Valor na Fatura"}</p>
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase">{cardTotal < 0 ? "Crédito a favor" : "Total Fatura (Vence no mês seguinte)"}</p>
                                                     <h3 className={`text-3xl font-black ${cardTotal < 0 ? 'text-green-500' : 'text-orange-500'}`}>{formatMoney(Math.abs(cardTotal))}</h3>
                                                 </div>
                                             </div>
@@ -490,7 +516,7 @@
                                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                                 <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} />
                                                             </div>
-                                                            <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[8px] font-bold text-slate-300 mt-1 uppercase">{t.date?.split('-').reverse().join('/')}</p></div>
+                                                            <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[8px] font-bold text-slate-300 mt-1 uppercase">Compra: {t.date?.split('-').reverse().join('/')} | Vencimento Real: {t.clearanceDate?.split('-').reverse().join('/')}</p></div>
                                                         </div>
                                                         <div className="flex items-center gap-4">
                                                             <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
@@ -514,6 +540,10 @@
                                         <div className="grid grid-cols-2 gap-2">
                                             <select className="p-3 border rounded-xl text-[9px] font-black uppercase" value={accType} onChange={e=>setAccType(e.target.value)}><option value="corrente">Corrente</option><option value="cartao">Cartão</option></select>
                                             <select className="p-3 border rounded-xl text-[9px] font-black uppercase" value={accGroup} onChange={e=>setAccGroup(e.target.value)}><option value="operacional">Operacional</option><option value="reserva">Reserva</option></select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-2">Dia Fecho</label><input type="number" className="w-full p-2 border rounded-xl" value={accClosing} onChange={e=>setAccClosing(e.target.value)}/></div>
+                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase ml-2">Dia Vence</label><input type="number" className="w-full p-2 border rounded-xl" value={accDue} onChange={e=>setAccDue(e.target.value)}/></div>
                                         </div>
                                         <div className="flex items-center gap-2 px-2"><input type="checkbox" checked={accHighlight} onChange={e=>setAccHighlight(e.target.checked)}/><label className="text-[9px] font-black uppercase text-slate-400">Destaque no Saldo</label></div>
                                         <button onClick={saveAccount} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Guardar Conta</button>
@@ -543,7 +573,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.3.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.4.0</footer>
                 </div>
             );
         }
