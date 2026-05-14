@@ -295,7 +295,7 @@
                                 <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v15</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'resultados', 'ajustes'].map(tab => (
+                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'resultados', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
                                         {tab.replace('_', ' ')}
                                     </button>
@@ -419,39 +419,18 @@
                             </div>
                         )}
 
-                        {activeTab === 'planilha' && (
+                        {activeTab === 'vendas' && (
                             <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                                {}
+                                {/* ... existing code ... */}
                                 <table className="w-full text-center text-[11px] min-w-[1400px]">
                                     <thead>
                                         <tr className="bg-black text-white uppercase font-black">
                                             <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
                                             <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                            {['Pix','Dinheiro','Ifood','Débito','Crédito','Outros'].map(h => <th key={h} className="p-4">{h}</th>)}
-                                            <th className="p-4 text-orange-400">Logística</th>
-                                            <th className="p-4">Ações</th>
+                                            {/* ... existing code ... */}
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y font-bold">
-                                        {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { 
-                                            const total = ['pix','dinheiro','ifood','debito','credito','outros'].reduce((acc,f)=>acc+p(dailyRecords[d][f]), 0);
-                                            return (
-                                                <tr key={d} className="hover:bg-slate-50 h-12">
-                                                    <td className="p-0 sticky left-0 bg-white border-r font-black min-w-[100px]">{d.split('-').reverse().join('/')}</td>
-                                                    <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                    {['pix','dinheiro','ifood','debito','credito','outros'].map(f => (
-                                                        <td key={f} className="p-0 border-r">
-                                                            <input className="table-input" value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                                        </td>
-                                                    ))}
-                                                    <td className="p-0 border-r">
-                                                        <input className="table-input !text-orange-600" value={dailyRecords[d].motoboy || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ motoboy: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                                    </td>
-                                                    <td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
+                                    {/* ... existing code ... */}
                                 </table>
                             </div>
                         )}
