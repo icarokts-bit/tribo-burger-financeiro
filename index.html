@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v16.7.1</title>
+    <title>Tribo Burger | Gestão Financeira v16.8.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -69,7 +69,7 @@
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            /* Estados de Login (Correção do ReferenceError) */
+            /* Estados de Login */
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
 
@@ -162,7 +162,7 @@
             }, [accounts, accountBalances]);
 
             const stats = useMemo(() => {
-                let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0;
+                let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0; let totalPedidos = 0;
                 Object.keys(dailyRecords).forEach(d => {
                     if (d.startsWith(filterMonth)) {
                         const r = dailyRecords[d];
@@ -170,6 +170,7 @@
                         if (totalDia > 0) diasAtivos++;
                         rb += totalDia;
                         custos += p(r.motoboy) + p(r.taxaEntrega);
+                        totalPedidos += p(r.qtdPedidos);
                     }
                 });
                 transactions.forEach(t => {
@@ -178,7 +179,16 @@
                     }
                 });
                 const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
-                return { rb, totalCosts: operCosts + custos, lucro: rb - (operCosts + custos), catCosts, diasAtivos, ticket: diasAtivos > 0 ? rb / diasAtivos : 0 };
+                return { 
+                    rb, 
+                    totalCosts: operCosts + custos, 
+                    lucro: rb - (operCosts + custos), 
+                    catCosts, 
+                    diasAtivos, 
+                    totalPedidos,
+                    ticketDiario: diasAtivos > 0 ? rb / diasAtivos : 0,
+                    ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0
+                };
             }, [dailyRecords, transactions, filterMonth]);
 
             const consolidatedAPagar = useMemo(() => {
@@ -262,7 +272,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.7.1</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.8.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -412,7 +422,7 @@
 
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center space-y-4">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta de Vendas</p>
                                         <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
@@ -424,8 +434,13 @@
                                         <h3 className="text-5xl font-black">{stats.diasAtivos} <span className="text-sm text-slate-300">DIAS</span></h3>
                                     </div>
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Ticket)</p>
-                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticket)}</h3>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Dia Ativo)</p>
+                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticketDiario)}</h3>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-purple-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ticket Médio (Pedidos)</p>
+                                        <h3 className="text-3xl font-black text-purple-600">{formatMoney(stats.ticketPedido)}</h3>
+                                        <p className="text-[8px] font-black text-slate-300 mt-2 uppercase">{stats.totalPedidos} PEDIDOS TOTAIS</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -616,7 +631,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.7.1 Baseline</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.8.0 Baseline</footer>
                 </div>
             );
         }
