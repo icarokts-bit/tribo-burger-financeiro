@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v15.8.0</title>
+    <title>Tribo Burger | Gestão Financeira v15.9.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -22,6 +22,9 @@
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
+        .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
+        .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -66,25 +69,41 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             
             const [transactions, setTransactions] = useState([]);
+            const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
             const [categories, setCategories] = useState([]);
+            const [suppliers, setSuppliers] = useState([]);
+            const [appSettings, setAppSettings] = useState({});
             
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
             const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
             const [typeFilter, setTypeFilter] = useState('todos');
             const [searchTerm, setSearchTerm] = useState('');
+            const [localPayments, setLocalPayments] = useState({});
 
-            /* Estados do Formulário */
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
             const [destAccount, setDestAccount] = useState(''); 
             const [cat, setCat] = useState('');
+            const [supplier, setSupplier] = useState(''); 
             const [status, setStatus] = useState('pago'); 
             const [installments, setInstallments] = useState(1);
             const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
+            const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
+            const [paymentDate, setPaymentDate] = useState(new Date().toLocaleDateString('en-CA'));
+            const [editingId, setEditingId] = useState(null);
+
+            const [accName, setAccName] = useState('');
+            const [accType, setAccType] = useState('corrente');
+            const [accGroup, setAccGroup] = useState('operacional'); 
+            const [accClosing, setAccClosing] = useState('25');
+            const [accDue, setAccDue] = useState('10');
+            const [accPosition, setAccPosition] = useState('1');
+            const [accHighlight, setAccHighlight] = useState(false);
+            const [editingAccId, setEditingAccId] = useState(null);
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged((u) => {
@@ -101,29 +120,45 @@
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => {
                     setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
+                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
+                    const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
+                    setDailyRecords(recs);
+                });
                 const unsubAccounts = db.collection(`${path}/accounts`).onSnapshot(snap => {
                     setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
                 const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
                     setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
+                const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => {
+                    setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+                const unsubSettings = db.doc(`${path}/settings/config`).onSnapshot(doc => {
+                    if (doc.exists) setAppSettings(doc.data());
+                });
 
-                return () => { unsubTx(); unsubAccounts(); unsubCategories(); };
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); unsubSettings(); };
             }, [user]);
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
             const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
 
-            const filteredHistory = useMemo(() => {
+            const uniqueDescriptions = useMemo(() => {
+                const seen = new Set();
+                return transactions.map(t => t.description).filter(d => {
+                    if (!d || seen.has(d.trim().toLowerCase())) return false;
+                    seen.add(d.trim().toLowerCase());
+                    return true;
+                }).sort();
+            }, [transactions]);
+
+            const filteredDashboardTxs = useMemo(() => {
                 return transactions.filter(t => {
-                    // Usar a data de pagamento real se estiver pago, senão a data de registro
-                    const activeDate = (t.status === 'pago' && t.paymentDate) ? t.paymentDate : t.date;
+                    const activeDate = (t.status === 'pago' && t.paymentDate) ? t.paymentDate : (t.clearanceDate || t.date);
                     const isDateMatch = activeDate?.startsWith(filterMonth);
                     const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
                     const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
                     const isTypeMatch = typeFilter === 'todos' || t.type === typeFilter;
-                    
-                    // Lógica de pesquisa por nome
                     const matchesSearch = searchTerm === '' || 
                         t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         t.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -131,12 +166,77 @@
 
                     return isDateMatch && isAccountMatch && isCategoryMatch && isTypeMatch && matchesSearch;
                 }).sort((a,b) => {
-                    // Ordenar pelo pagamento mais recente (ou data prevista)
                     const dateA = (a.status === 'pago' && a.paymentDate) ? a.paymentDate : (a.date || '0000-00-00');
                     const dateB = (b.status === 'pago' && b.paymentDate) ? b.paymentDate : (b.date || '0000-00-00');
                     return dateB.localeCompare(dateA);
                 });
             }, [transactions, filterMonth, dashboardFilterAccount, dashboardFilterCategory, typeFilter, searchTerm]);
+
+            const accountBalances = useMemo(() => {
+                const balances = {}; 
+                accounts.forEach(acc => balances[acc.name] = 0);
+                transactions.forEach(t => {
+                    if (t.status === 'pago') {
+                        const amt = p(t.amount);
+                        if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
+                        else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
+                        else if (t.type === 'transferencia') { 
+                            balances[t.account] -= amt; balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
+                        }
+                    }
+                });
+                return balances;
+            }, [transactions, accounts]);
+
+            const totalBalance = useMemo(() => {
+                return accounts.filter(a => a.type === 'corrente').reduce((acc, a) => acc + (accountBalances[a.name] || 0), 0);
+            }, [accounts, accountBalances]);
+
+            const stats = useMemo(() => {
+                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
+                let activeDaysCount = 0;
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(filterMonth)) {
+                        const r = dailyRecords[day];
+                        const totalDay = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc, f) => acc + p(r[f]), 0);
+                        if (totalDay > 0) activeDaysCount++;
+                        rb += totalDay;
+                        custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
+                    }
+                });
+                transactions.forEach(t => {
+                    const activeDate = (t.status === 'pago' && t.paymentDate) ? t.paymentDate : (t.clearanceDate || t.date);
+                    if (activeDate?.startsWith(filterMonth) && t.status === 'pago') {
+                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
+                    }
+                });
+                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
+                return { rb, custosVariaveis, totalOperating, activeDaysCount, lucro: rb - (custosVariaveis + totalOperating), costsByCategory };
+            }, [transactions, dailyRecords, filterMonth]);
+
+            const pendingPaymentsConsolidated = useMemo(() => {
+                const normalPendings = transactions.filter(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
+                });
+                const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
+                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
+                    const total = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    if (total <= 0.01) return null;
+                    return {
+                        id: `invoice-${card.name}-${filterMonth}`,
+                        description: `Fatura: ${card.name}`,
+                        amount: total,
+                        type: 'saida',
+                        status: 'pendente',
+                        clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`,
+                        account: card.name,
+                        category: 'Cartão de Crédito',
+                        isInvoice: true
+                    };
+                }).filter(Boolean);
+                return [...normalPendings, ...cardInvoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+            }, [transactions, filterMonth, accounts]);
 
             const saveTransaction = async (e) => {
                 e.preventDefault();
@@ -152,31 +252,64 @@
                     const d = new Date(date + 'T00:00:00');
                     d.setMonth(d.getMonth() + i);
                     const finalDate = d.toISOString().split('T')[0];
+                    let finalClearance = clearance;
                     
+                    if (isCard) {
+                        const closingDay = parseInt(selectedAcc.closingDay) || 25;
+                        const dueDay = parseInt(selectedAcc.dueDay) || 10;
+                        let billingDate = new Date(d);
+                        if (d.getDate() > closingDay) billingDate.setMonth(billingDate.getMonth() + 1);
+                        let dueDate = new Date(billingDate);
+                        dueDate.setMonth(dueDate.getMonth() + 1);
+                        dueDate.setDate(dueDay);
+                        finalClearance = dueDate.toISOString().split('T')[0];
+                    }
+
                     const payload = {
-                        description: count > 1 ? `${desc} (${i+1}/${count})` : desc,
+                        description: count > 1 ? `${desc} (${i+1}/${count})` : (type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : desc),
                         amount: totalAmount / count,
                         type,
                         status: isCard ? 'pendente' : status,
                         date: finalDate,
+                        clearanceDate: finalClearance,
                         paymentDate: (!isCard && status === 'pago') ? finalDate : null,
                         account,
                         destinationAccount: type === 'transferencia' ? destAccount : null,
                         category: type === 'transferencia' ? 'Transferência' : (cat || 'Geral'),
+                        supplier,
                         timestamp: new Date().toISOString()
                     };
-                    batch.set(db.collection(path).doc(), payload);
+                    
+                    if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
+                    else batch.set(db.collection(path).doc(), payload);
                 }
-                
                 await batch.commit();
-                setDesc(''); setVal(''); setInstallments(1);
+                resetForm();
             };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">Tribo v15.8.0 Loading...</div>;
+            const markAsPaid = async (t) => {
+                if (t.id.startsWith('invoice-')) { setActiveTab('cartoes'); return; }
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({ 
+                    status: 'pago', 
+                    paymentDate: paymentDate 
+                });
+            };
+
+            const saveAccount = async () => {
+                const path = `artifacts/${appId}/users/${user.uid}/accounts`;
+                const payload = { name: accName, type: accType, group: accType === 'corrente' ? accGroup : 'cartao', closingDay: accClosing, dueDay: accDue, position: parseInt(accPosition), highlight: accHighlight };
+                if (editingAccId) await db.doc(`${path}/${editingAccId}`).update(payload);
+                else await db.collection(path).add(payload);
+                resetAccForm();
+            };
+
+            const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setInstallments(1); setDate(new Date().toLocaleDateString('en-CA')); setClearance(new Date().toLocaleDateString('en-CA')); };
+            const resetAccForm = () => { setEditingAccId(null); setAccName(''); setAccType('corrente'); setAccHighlight(false); setAccPosition('1'); };
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">Tribo v15.9.0 Carregando...</div>;
 
             return (
                 <div className="min-h-screen flex flex-col fade-in pb-20">
-                    {}
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
@@ -184,7 +317,7 @@
                                 <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Business</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'cartoes', 'resultados', 'ajustes'].map(tab => (
+                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
                                         {tab.replace('_', ' ')}
                                     </button>
@@ -196,25 +329,27 @@
 
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1 space-y-6">
                         <div className="flex justify-center">
-                            <div className="glass-card px-6 py-2 rounded-full border shadow-sm">
+                            <div className="glass-card px-6 py-2 rounded-full border shadow-sm flex items-center gap-2">
+                                <Icon name="calendar" size={14} className="text-[#D97757]" />
                                 <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent font-black text-[#D97757] text-sm outline-none cursor-pointer" />
                             </div>
                         </div>
 
+                        {/* ABA DASHBOARD */}
                         {activeTab === 'dashboard' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                {/* Formulário de Lançamento */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in">
                                 <div className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm border-t-4 border-black h-fit">
                                     <h2 className="text-xs font-black uppercase border-b pb-3 mb-4">Novo Registro</h2>
                                     <form onSubmit={saveTransaction} className="space-y-4">
                                         <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
-                                            {['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>))}
+                                            {['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>))}
                                         </div>
-                                        
                                         {type !== 'transferencia' && (
-                                            <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-semibold" value={desc} onChange={e => setDesc(e.target.value)} />
+                                            <div className="relative">
+                                                <input list="descs" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-semibold" value={desc} onChange={e => setDesc(e.target.value)} />
+                                                <datalist id="descs">{uniqueDescriptions.map(d => <option key={d} value={d} />)}</datalist>
+                                            </div>
                                         )}
-
                                         <div className="grid grid-cols-2 gap-2">
                                             <input type="text" placeholder="Valor" required className="p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
                                             <select className="p-4 bg-white border rounded-2xl text-[10px] font-black uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>
@@ -222,121 +357,66 @@
                                                 {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
                                         </div>
-
                                         {type === 'transferencia' && (
                                             <select className="w-full p-4 bg-white border rounded-2xl text-[10px] font-black uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}>
                                                 <option value="">Para Conta...</option>
                                                 {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
                                         )}
-
                                         {type !== 'transferencia' && (
-                                            <select className="w-full p-4 bg-white border rounded-2xl text-[10px] font-black uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}>
-                                                <option value="">Categoria...</option>
-                                                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                            </select>
-                                        )}
-
-                                        {accounts.find(a => a.name === account)?.type === 'cartao' && (
-                                            <div className="flex flex-col gap-1 p-2 bg-orange-50 rounded-2xl border border-orange-100">
-                                                <label className="text-[9px] font-black text-orange-400 uppercase ml-2">Parcelas</label>
-                                                <input type="number" min="1" className="p-2 bg-transparent font-black text-sm outline-none" value={installments} onChange={e => setInstallments(parseInt(e.target.value) || 1)} />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <select className="p-4 bg-white border rounded-2xl text-[10px] font-black uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}>
+                                                    <option value="">Categoria...</option>
+                                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                                </select>
+                                                <select className="p-4 bg-white border rounded-2xl text-[10px] font-black uppercase outline-none" value={supplier} onChange={e => setSupplier(e.target.value)}>
+                                                    <option value="">Fornecedor...</option>
+                                                    {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                </select>
                                             </div>
                                         )}
-
-                                        <input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold" value={date} onChange={e => setDate(e.target.value)} />
-                                        
+                                        {accounts.find(a => a.name === account)?.type === 'cartao' && (
+                                            <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100 flex items-center justify-between">
+                                                <label className="text-[9px] font-black text-orange-400 uppercase">Parcelas</label>
+                                                <input type="number" min="1" className="bg-transparent font-black text-sm outline-none w-16 text-center" value={installments} onChange={e => setInstallments(parseInt(e.target.value) || 1)} />
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1"><label className="text-[8px] font-black text-slate-400 uppercase ml-2">Registo</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-2xl text-[10px] font-bold" value={date} onChange={e => setDate(e.target.value)} /></div>
+                                            <div className="space-y-1"><label className="text-[8px] font-black text-slate-400 uppercase ml-2">Compensação</label><input type="date" className="w-full p-3 bg-slate-50 border rounded-2xl text-[10px] font-bold" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
+                                        </div>
                                         <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-transform">Gravar Movimento</button>
                                     </form>
                                 </div>
 
-                                {/* Histórico com Filtros Corrigidos */}
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm flex flex-col border h-[650px] overflow-hidden">
                                     <div className="p-4 bg-slate-50 border-b space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[10px] font-black uppercase text-slate-400">Linha do Tempo</span>
-                                            <span className="bg-black text-[#F8CC82] text-[8px] font-black px-2 py-0.5 rounded-full">{filteredHistory.length} lançamentos</span>
+                                        <div className="relative">
+                                            <input type="text" placeholder="Pesquisar por nome, categoria ou conta..." className="w-full p-3 pl-10 bg-white border rounded-2xl text-[10px] font-bold outline-none focus:border-black" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                            <div className="absolute left-3 top-3.5 text-slate-300"><Icon name="search" size={14} /></div>
                                         </div>
-                                        
-                                        {}
-                                        <div className="space-y-2">
-                                            <div className="relative">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Pesquisar por nome, categoria ou conta..." 
-                                                    className="w-full p-3 pl-10 bg-white border rounded-2xl text-[10px] font-bold outline-none focus:border-black transition-all"
-                                                    value={searchTerm}
-                                                    onChange={e => setSearchTerm(e.target.value)}
-                                                />
-                                                <div className="absolute left-3 top-3 text-slate-300">
-                                                    <Icon name="search" size={14} />
-                                                </div>
-                                                {searchTerm && (
-                                                    <button 
-                                                        onClick={() => setSearchTerm('')}
-                                                        className="absolute right-3 top-3 text-slate-300 hover:text-red-500"
-                                                    >
-                                                        <Icon name="x-circle" size={14} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                                                    <option value="todos">Todos Tipos</option>
-                                                    <option value="entrada">Entradas</option>
-                                                    <option value="saida">Saídas</option>
-                                                    <option value="transferencia">Transf.</option>
-                                                </select>
-                                                <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterAccount} onChange={e => setDashboardFilterAccount(e.target.value)}>
-                                                    <option value="">Todas Contas</option>
-                                                    {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                                                </select>
-                                                <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterCategory} onChange={e => setDashboardFilterCategory(e.target.value)}>
-                                                    <option value="">Categorias</option>
-                                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                                </select>
-                                            </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="todos">Todos Tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="transferencia">Transf.</option></select>
+                                            <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterAccount} onChange={e => setDashboardFilterAccount(e.target.value)}><option value="">Contas...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterCategory} onChange={e => setDashboardFilterCategory(e.target.value)}><option value="">Categorias...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                         </div>
                                     </div>
-
-                                    {}
                                     <div className="flex-1 overflow-y-auto divide-y no-scrollbar">
-                                        {filteredHistory.map(t => (
+                                        {filteredDashboardTxs.map(t => (
                                             <div key={t.id} className="p-4 flex justify-between items-center group hover:bg-slate-50 transition-all">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="flex flex-col items-center min-w-[40px]">
-                                                        <span className="text-[10px] font-black text-slate-400">
-                                                            {(t.status === 'pago' && t.paymentDate) ? t.paymentDate.split('-').reverse().slice(0,2).join('/') : t.date?.split('-').reverse().slice(0,2).join('/')}
-                                                        </span>
-                                                        <span className={`text-[7px] font-bold uppercase mt-1 ${t.status === 'pago' ? 'text-green-500' : 'text-orange-400'}`}>
-                                                            {t.status === 'pago' ? 'Liquidação' : 'Previsto'}
-                                                        </span>
-                                                    </div>
+                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{(t.status === 'pago' && t.paymentDate) ? t.paymentDate.split('-').reverse().slice(0,2).join('/') : t.date?.split('-').reverse().slice(0,2).join('/')}</span>
                                                     <div>
-                                                        <p className="font-black text-sm uppercase tracking-tight text-slate-800">
-                                                            {t.type === 'transferencia' ? (
-                                                                <span className="text-blue-600">Transf: {t.account} → {t.destinationAccount}</span>
-                                                            ) : t.description}
-                                                        </p>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className="text-[8px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-md">{t.account}</span>
-                                                            <span className="text-[8px] font-bold text-slate-300 uppercase italic">/ {t.category}</span>
-                                                        </div>
+                                                        <p className="font-black text-sm uppercase leading-none">{t.description}</p>
+                                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-6">
+                                                <div className="flex items-center gap-4">
                                                     <div className="text-right">
-                                                        <p className={`font-black text-base ${t.type === 'entrada' ? 'text-green-600' : t.type === 'transferencia' ? 'text-blue-500' : 'text-red-600'}`}>
-                                                            {t.type === 'entrada' ? '+' : t.type === 'transferencia' ? '⇄' : '-'} {formatMoney(t.amount)}
-                                                        </p>
-                                                        {t.status === 'pago' && t.paymentDate && (
-                                                            <p className="text-[7px] font-black text-green-500/60 uppercase italic">Pago em {t.paymentDate.split('-').reverse().join('/')}</p>
-                                                        )}
+                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : t.type === 'saida' ? 'text-red-600' : 'text-blue-500'}`}>{formatMoney(t.amount)}</p>
+                                                        <span className={`text-[7px] font-bold uppercase ${t.status === 'pago' ? 'text-green-400' : 'text-orange-400'}`}>{t.status === 'pago' ? 'Liquidação' : 'Previsto'}</span>
                                                     </div>
-                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Icon name="trash-2" size={14}/>
-                                                    </button>
+                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14} /></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -344,12 +424,194 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {activeTab === 'saldos' && <p className="p-20 text-center font-black opacity-20">Aba Saldos Baseline v15 Carregada</p>}
-                        {activeTab === 'vendas' && <p className="p-20 text-center font-black opacity-20">Aba Vendas Baseline v15 Carregada</p>}
+
+                        {}
+                        {activeTab === 'saldos' && (
+                            <div className="space-y-8 fade-in">
+                                <div className="stat-banner !bg-[#D97757] !border-black">
+                                    <p className="text-[11px] font-black uppercase tracking-widest opacity-80 mb-2">Património Líquido Total</p>
+                                    <h3 className="text-5xl font-black text-white drop-shadow-lg">{formatMoney(totalBalance)}</h3>
+                                </div>
+                                <div className="space-y-8">
+                                    {['Destaque', 'Outras'].map(grp => {
+                                        const list = accounts.filter(a => a.type === 'corrente' && (grp === 'Destaque' ? a.highlight : !a.highlight)).sort((a,b) => (a.position || 0) - (b.position || 0));
+                                        if (list.length === 0) return null;
+                                        return (
+                                            <div key={grp} className="space-y-4">
+                                                <h2 className="text-[10px] font-black uppercase text-slate-400 border-l-4 border-slate-300 pl-2 ml-2 tracking-widest">{grp}</h2>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-2">
+                                                    {list.map(acc => (
+                                                        <div key={acc.id} className={`bg-white p-8 rounded-[3.5rem] shadow-xl border-t-8 border-black flex flex-col items-center transition-all hover:scale-105 ${acc.name.toLowerCase().includes('mercado') ? 'card-bank-mercado' : acc.name.toLowerCase().includes('ifood') ? 'card-bank-ifood' : acc.name.toLowerCase().includes('c6') ? 'card-bank-c6' : ''}`}>
+                                                            <p className="text-[11px] font-black text-slate-400 uppercase mb-1">{acc.name}</p>
+                                                            <h3 className={`text-3xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'vendas' && (
+                            <div className="space-y-6 fade-in">
+                                <div className="stat-banner"><p className="text-[9px] font-black uppercase text-[#F8CC82] mb-2">Faturamento {filterMonth}</p><h3 className="text-4xl font-black">{formatMoney(stats.rb)}</h3></div>
+                                <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
+                                    <table className="w-full text-center text-[11px] min-w-[1500px]">
+                                        <thead>
+                                            <tr className="header-black text-white">
+                                                <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
+                                                <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
+                                                {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
+                                                <th className="p-4 text-red-400">Motoboy</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y font-bold">
+                                            {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { 
+                                                const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(dailyRecords[d][f]), 0);
+                                                return (
+                                                    <tr key={d} className="hover:bg-slate-50 h-12">
+                                                        <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
+                                                        <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','motoboy'].map(f => (
+                                                            <td key={f} className="p-0 border-r min-w-[100px]">
+                                                                <input className="table-input" value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'a_pagar' && (
+                            <div className="space-y-6 fade-in">
+                                <div className="stat-banner !border-red-500"><p className="text-[9px] font-black uppercase text-red-400 mb-2">Contas Pendentes {filterMonth}</p><h3 className="text-4xl font-black">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3></div>
+                                <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
+                                    {pendingPaymentsConsolidated.length === 0 ? <p className="p-20 text-center font-black opacity-20 uppercase text-xs">Nenhuma conta pendente</p> : pendingPaymentsConsolidated.map(t => (
+                                        <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center"><Icon name={t.isInvoice ? "credit-card" : "clock"} size={24} /></div>
+                                                <div>
+                                                    <p className="font-black text-base uppercase leading-tight">[{t.clearanceDate.split('-').reverse().join('/')}] {t.description}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <p className="font-black text-lg mr-4">{formatMoney(t.amount)}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                                                    <button onClick={() => markAsPaid(t)} className="bg-green-500 text-white p-3 rounded-xl shadow-lg active:scale-90 transition-transform"><Icon name="check" size={18} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-12 fade-in">
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const cardTxs = transactions.filter(t => t.account === card.name && (t.clearanceDate?.startsWith(filterMonth)))
+                                                       .sort((a,b) => a.date.localeCompare(b.date));
+                                    const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                                    const payInfo = localPayments[card.name] || { amountToPay: Math.max(0, cardTotal), sourceAccount: accounts.filter(acc => acc.type !== 'cartao')[0]?.name || '' };
+                                    return (
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
+                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
+                                                <div><h3 className="text-2xl font-black uppercase">{card.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closingDay} • Vencimento: {card.dueDay}</p></div>
+                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Fatura Atual</p>
+                                                    <h3 className="text-4xl font-black text-orange-500">{formatMoney(cardTotal)}</h3>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
+                                                {cardTxs.map(t => (
+                                                    <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                <Icon name={t.type === 'entrada' ? 'check' : 'shopping-cart'} size={14} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-xs uppercase">{t.description}</p>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase">Compra: {t.date?.split('-').reverse().join('/')}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
+                                                            <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                            <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14} /></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-10 fade-in">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-between">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Meta de Vendas</p>
+                                            <input type="text" className="w-full text-4xl font-black text-center bg-transparent border-0 outline-none text-green-600" value={appSettings.metaVendas || ''} onChange={async(e) => {
+                                                const val = e.target.value.replace(',', '.');
+                                                await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ metaVendas: val }, { merge: true });
+                                            }} placeholder="0,00" />
+                                        </div>
+                                        <div className="mt-8 pt-4 border-t">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Progresso</p>
+                                            <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden border">
+                                                <div className="bg-green-500 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (stats.rb / p(appSettings.metaVendas)) * 100)}%` }}></div>
+                                            </div>
+                                            <p className="text-[9px] font-black mt-2 uppercase">{((stats.rb / p(appSettings.metaVendas)) * 100).toFixed(1)}% Atingido</p>
+                                        </div>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Dias com Venda</p>
+                                        <h3 className="text-6xl font-black text-blue-600">{stats.activeDaysCount}</h3>
+                                        <p className="text-[9px] font-black text-slate-300 mt-4 uppercase">Dias registrados em {filterMonth}</p>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária</p>
+                                        <h3 className="text-4xl font-black text-orange-600">{formatMoney(stats.activeDaysCount > 0 ? stats.rb / stats.activeDaysCount : 0)}</h3>
+                                        <p className="text-[9px] font-black text-slate-300 mt-4 uppercase">Ticket médio por dia útil</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'ajustes' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 fade-in">
+                                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500 h-fit space-y-4 shadow-xl">
+                                    <h2 className="text-sm font-black uppercase">{editingAccId ? 'Editar Conta' : 'Nova Conta'}</h2>
+                                    <div className="p-6 bg-slate-50 rounded-3xl border border-dashed space-y-4">
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
+                                        <div className="flex gap-2"><button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button><button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button></div>
+                                        {accType === 'corrente' ? (<select className="w-full p-4 bg-white border rounded-2xl text-[10px] font-black" value={accGroup} onChange={e => setAccGroup(e.target.value)}><option value="operacional">Destaque Operacional</option><option value="reserva">Reservas / Fundos</option><option value="outros">Outras</option></select>) : (<div className="grid grid-cols-2 gap-3"><div className="space-y-1"><label className="text-[8px] font-black ml-2 uppercase">Fecho</label><input type="number" className="w-full p-3 border rounded-xl" value={accClosing} onChange={e => setAccClosing(e.target.value)}/></div><div className="space-y-1"><label className="text-[8px] font-black ml-2 uppercase">Vence</label><input type="number" className="w-full p-3 border rounded-xl" value={accDue} onChange={e => setAccDue(e.target.value)}/></div></div>)}
+                                        <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border">
+                                            <div className="flex-1"><label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Posição</label><input type="number" className="w-full text-xs font-bold bg-transparent outline-none" value={accPosition} onChange={e => setAccPosition(e.target.value)} /></div>
+                                            <button onClick={() => setAccHighlight(!accHighlight)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accHighlight ? 'bg-yellow-400 text-black' : 'bg-slate-100 text-slate-400'}`}>Destaque</button>
+                                        </div>
+                                        <div className="flex gap-2 pt-2"><button onClick={saveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">{editingAccId ? 'Guardar' : 'Criar'}</button>{editingAccId && <button onClick={resetAccForm} className="bg-slate-200 p-4 rounded-2xl font-black uppercase text-[10px]">X</button>}</div>
+                                    </div>
+                                    <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar">{accounts.map(a => <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white hover:bg-slate-50 group"><div className="flex flex-col"><div className="flex items-center gap-2 font-black text-[10px] uppercase">{a.name} {a.highlight && <Icon name="star" size={10} className="text-yellow-500" />}</div><span className="text-[8px] text-slate-400 font-bold uppercase">{a.type} • Pos {a.position}</span></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditingAccId(a.id); setAccName(a.name); setAccType(a.type); setAccHighlight(a.highlight); setAccPosition(a.position?.toString() || '1'); }} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>)}</div>
+                                </div>
+                            </div>
+                        )}
+                        {}
+                        {activeTab === 'dre' && <div className="max-w-2xl mx-auto glass-card p-10 rounded-[3rem] animate-in fade-in"><h2 className="text-xl font-black text-center uppercase mb-8 border-b pb-4">DRE Financeiro - {filterMonth}</h2><div className="space-y-4"><div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Operacional (Vendas)</span><span>{formatMoney(stats.rb)}</span></div>{Object.entries(stats.costsByCategory).map(([c, v]) => <div key={c} className="flex justify-between px-4 py-2 border-b text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-500 font-black">{formatMoney(v)}</span></div>)}<div className="flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl bg-[#1A202C] text-[#F8CC82]"><h3 className="text-xl font-black uppercase">Resultado</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div></div></div>}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.8.0 Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.9.0 Estável</footer>
                 </div>
             );
         }
