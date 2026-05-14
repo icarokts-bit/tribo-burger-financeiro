@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.1.0 (Restaurada)</title>
+    <title>Tribo Burger | Gestão Total v13.7.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -85,17 +85,15 @@
             
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [isRegistering, setIsRegistering] = useState(false);
-
+            
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
             const [categories, setCategories] = useState([]);
             const [suppliers, setSuppliers] = useState([]);
+            const [salesGoal, setSalesGoal] = useState(0);
             
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
-            const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
-            const [dashboardFilterCategory, setDashboardFilterCategory] = useState('');
             const [typeFilter, setTypeFilter] = useState('todos');
             const [localPayments, setLocalPayments] = useState({});
 
@@ -152,37 +150,52 @@
                     setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
-                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); };
+                const unsubGoal = db.doc(`${path}/settings/config`).onSnapshot(doc => {
+                    if (doc.exists) setSalesGoal(doc.data().salesGoal || 0);
+                });
+
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); unsubGoal(); };
             }, [user]);
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            const uniqueDescriptions = useMemo(() => {
-                const seen = new Set();
-                return transactions
-                    .map(t => t.description)
-                    .filter(d => {
-                        if (!d || seen.has(d.trim().toLowerCase())) return false;
-                        seen.add(d.trim().toLowerCase());
-                        return true;
-                    })
-                    .sort();
-            }, [transactions]);
+            const stats = useMemo(() => {
+                const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
+                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
+                let diasComVenda = 0;
 
-            const filteredDashboardTxs = useMemo(() => {
-                return transactions.filter(t => {
-                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
-                    const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
-                    const isTypeMatch = typeFilter === 'todos' || t.type === typeFilter;
-                    return isDateMatch && isAccountMatch && isCategoryMatch && isTypeMatch;
-                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, filterMonth, dashboardFilterAccount, dashboardFilterCategory, typeFilter]);
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(filterMonth)) {
+                        const r = dailyRecords[day];
+                        const totalDia = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc, f) => acc + p(r[f]), 0);
+                        rb += totalDia;
+                        if (totalDia > 0) diasComVenda++;
+                        custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
+                    }
+                });
 
-            const accountBalances = useMemo(() => {
+                transactions.forEach(t => {
+                    if ((t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && t.status === 'pago') {
+                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
+                    }
+                });
+
+                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
+                return { 
+                    rb, 
+                    custosVariaveis, 
+                    totalOperating, 
+                    lucro: rb - (custosVariaveis + totalOperating), 
+                    costsByCategory,
+                    diasComVenda,
+                    mediaDiaria: diasComVenda > 0 ? rb / diasComVenda : 0
+                };
+            }, [transactions, dailyRecords, filterMonth]);
+
+            const totalPatrimonio = useMemo(() => {
                 const balances = {}; 
-                accounts.forEach(acc => balances[acc.name] = 0);
                 const p = (v) => parseFloat(v) || 0;
+                accounts.forEach(acc => { if(acc.type === 'corrente') balances[acc.name] = 0; });
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
@@ -193,35 +206,16 @@
                         }
                     }
                 });
-                return balances;
+                return Object.values(balances).reduce((a, b) => a + b, 0);
             }, [transactions, accounts]);
 
-            const stats = useMemo(() => {
-                const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
-                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
-                Object.keys(dailyRecords).forEach(day => {
-                    if (day.startsWith(filterMonth)) {
-                        const r = dailyRecords[day];
-                        rb += ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc, f) => acc + p(r[f]), 0);
-                        custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
-                    }
-                });
-                transactions.forEach(t => {
-                    if ((t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && t.status === 'pago') {
-                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
-                    }
-                });
-                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
-                return { rb, custosVariaveis, totalOperating, lucro: rb - (custosVariaveis + totalOperating), costsByCategory };
-            }, [transactions, dailyRecords, filterMonth]);
-
-            const pendingPaymentsConsolidated = useMemo(() => {
-                const p = (v) => parseFloat(v) || 0;
+            const filteredDashboardTxs = useMemo(() => {
                 return transactions.filter(t => {
-                    const accInfo = accounts.find(a => a.name === t.account);
-                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
-                }).sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
-            }, [transactions, filterMonth, accounts]);
+                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
+                    const isTypeMatch = typeFilter === 'todos' || t.type === typeFilter;
+                    return isDateMatch && isTypeMatch;
+                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+            }, [transactions, filterMonth, typeFilter]);
 
             const saveTx = async (e) => {
                 e.preventDefault();
@@ -241,7 +235,7 @@
 
             const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setDate(new Date().toLocaleDateString('en-CA')); setClearance(new Date().toLocaleDateString('en-CA')); };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82]">Carregando Tribo...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82]">Carregando Tribo v13.7...</div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
@@ -275,6 +269,7 @@
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1 space-y-6">
                         <div className="flex justify-center"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white border p-2 rounded-full font-black text-[#D97757] text-sm shadow-sm" /></div>
 
+                        {}
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit">
@@ -326,16 +321,30 @@
                         {activeTab === 'saldos' && (
                             <div className="space-y-6">
                                 <div className="stat-banner !bg-[#D97757] !border-black">
-                                    <p className="text-[11px] font-black uppercase tracking-widest opacity-80 mb-2">Património Total</p>
-                                    <h3 className="text-5xl font-black text-white">{formatMoney(Object.values(accountBalances).reduce((a, b) => a + b, 0))}</h3>
+                                    <p className="text-[11px] font-black uppercase tracking-widest opacity-80 mb-2">Património Total Disponível</p>
+                                    <h3 className="text-5xl font-black text-white">{formatMoney(totalPatrimonio)}</h3>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    {accounts.map(acc => (
-                                        <div key={acc.id} className="glass-card p-8 rounded-[3.5rem] border-t-8 border-black text-center shadow-sm">
-                                            <p className="text-[11px] font-black text-slate-400 uppercase mb-1">{acc.name}</p>
-                                            <h3 className={`text-2xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(accountBalances[acc.name] || 0)}</h3>
-                                        </div>
-                                    ))}
+                                    {accounts.map(acc => {
+                                        const p = (v) => parseFloat(v) || 0;
+                                        let balance = 0;
+                                        transactions.forEach(t => {
+                                            if (t.status === 'pago') {
+                                                const amt = p(t.amount);
+                                                if (t.account === acc.name) {
+                                                    if (t.type === 'entrada') balance += amt;
+                                                    else if (t.type === 'saida' || t.type === 'transferencia') balance -= amt;
+                                                }
+                                                if (t.type === 'transferencia' && t.destinationAccount === acc.name) balance += amt;
+                                            }
+                                        });
+                                        return (
+                                            <div key={acc.id} className={`glass-card p-8 rounded-[3.5rem] border-t-8 text-center shadow-sm ${acc.name.toLowerCase().includes('mercado') ? 'card-bank-mercado' : acc.name.toLowerCase().includes('ifood') ? 'card-bank-ifood' : acc.name.toLowerCase().includes('c6') ? 'card-bank-c6' : 'border-black'}`}>
+                                                <p className="text-[11px] font-black text-slate-400 uppercase mb-1">{acc.name}</p>
+                                                <h3 className={`text-2xl font-black ${balance >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{formatMoney(balance)}</h3>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -347,7 +356,7 @@
                                         <tr className="header-black text-white">
                                             <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
                                             <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                            {['Pix','Dinheiro','Ifood','Débito','Crédito'].map(h => <th key={h} className="p-4">{h}</th>)}
+                                            {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito'].map(h => <th key={h} className="p-4">{h}</th>)}
                                             <th className="p-4 text-orange-400">Taxa Entrega</th>
                                             <th className="p-4 text-red-400">Motoboy</th>
                                         </tr>
@@ -359,10 +368,10 @@
                                             const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
                                             return (
                                                 <tr key={d} className="hover:bg-slate-50 h-12">
-                                                    <td className="p-0 sticky left-0 bg-white border-r font-black">{d.split('-').reverse().join('/')}</td>
+                                                    <td className="p-0 min-w-[120px] sticky left-0 bg-white border-r font-black">{d.split('-').reverse().join('/')}</td>
                                                     <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                    {['pix','dinheiro','ifood','debito','credito','taxaEntrega','motoboy'].map(f => (
-                                                        <td key={f} className="p-0 border-r">
+                                                    {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','taxaEntrega','motoboy'].map(f => (
+                                                        <td key={f} className="p-0 border-r min-w-[100px]">
                                                             <input className="table-input" value={r[f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
                                                         </td>
                                                     ))}
@@ -374,31 +383,145 @@
                             </div>
                         )}
 
-                        {/* As outras abas seguem a lógica restaurada das versões v13.0.x */}
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-8">
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const cardTxs = transactions.filter(t => t.account === card.name && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)));
+                                    const total = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + t.amount : acc - t.amount, 0);
+                                    return (
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black">
+                                            <div className="flex justify-between items-center mb-8 border-b pb-6">
+                                                <div><h3 className="text-xl font-black uppercase">{card.name}</h3><p className="text-[9px] text-slate-400 font-bold uppercase">Fecho dia {card.closingDay} • Vencimento dia {card.dueDay}</p></div>
+                                                <div className="text-center"><p className="text-[9px] font-black text-slate-400 uppercase">Fatura Atual</p><h3 className="text-3xl font-black text-orange-500">{formatMoney(total)}</h3></div>
+                                            </div>
+                                            <div className="divide-y max-h-96 overflow-y-auto no-scrollbar">
+                                                {cardTxs.map(t => (
+                                                    <div key={t.id} className="py-4 flex justify-between items-center group">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} /></div>
+                                                            <div><p className="font-black text-xs uppercase">{t.description}</p><p className="text-[9px] text-slate-400 font-bold uppercase">{t.date.split('-').reverse().join('/')}</p></div>
+                                                        </div>
+                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                    <div className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-[#F8CC82] text-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Meta de Vendas</p>
+                                        <input type="number" className="w-full text-2xl font-black text-center bg-slate-50 p-4 rounded-2xl border mb-4" value={salesGoal} onChange={async(e) => {
+                                            const newGoal = e.target.value;
+                                            setSalesGoal(newGoal);
+                                            await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ salesGoal: parseFloat(newGoal) }, { merge: true });
+                                        }} />
+                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                            <div className="bg-green-500 h-full transition-all" style={{ width: `${Math.min(100, (stats.rb / (salesGoal || 1)) * 100)}%` }}></div>
+                                        </div>
+                                        <p className="text-[9px] font-black uppercase mt-2 text-slate-400">{((stats.rb / (salesGoal || 1)) * 100).toFixed(1)}% Atingido</p>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Faturamento Real</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Dias Ativos</p><h3 className="text-2xl font-black text-blue-600">{stats.diasComVenda} Dias</h3></div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Média Diária</p><h3 className="text-2xl font-black text-orange-600">{formatMoney(stats.mediaDiaria)}</h3></div>
+                                </div>
+                                <div className={`glass-card p-12 rounded-[3.5rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-green-600' : 'border-red-600'} text-center mx-auto max-w-2xl`}>
+                                    <p className="text-[11px] font-black text-slate-400 uppercase mb-4 tracking-[0.3em]">Resultado Final do Mês</p>
+                                    <h3 className={`text-6xl font-black ${stats.lucro >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3>
+                                </div>
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'ajustes' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-black space-y-6">
+                                    <h2 className="text-sm font-black uppercase tracking-widest border-b pb-4">Gestão de Contas</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={()=>setAccType('corrente')} className={`p-3 rounded-xl font-black text-[9px] uppercase border ${accType==='corrente'?'bg-black text-white':'bg-white'}`}>Corrente</button>
+                                            <button onClick={()=>setAccType('cartao')} className={`p-3 rounded-xl font-black text-[9px] uppercase border ${accType==='cartao'?'bg-orange-500 text-white':'bg-white'}`}>Cartão</button>
+                                        </div>
+                                        <button onClick={async()=>{
+                                            if(!accName) return;
+                                            await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ name: accName, type: accType, closingDay: accClosing, dueDay: accDue, group: accGroup });
+                                            setAccName('');
+                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Adicionar Conta</button>
+                                    </div>
+                                    <div className="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
+                                        {accounts.map(acc => (
+                                            <div key={acc.id} className="p-4 border rounded-2xl flex justify-between items-center group">
+                                                <div><p className="font-black text-xs uppercase">{acc.name}</p><p className="text-[8px] text-slate-400 font-bold uppercase">{acc.type}</p></div>
+                                                <button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${acc.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-slate-400 space-y-6">
+                                    <h2 className="text-sm font-black uppercase tracking-widest border-b pb-4">Categorias de Despesa</h2>
+                                    <div className="flex gap-2">
+                                        <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Nova Categoria" value={cat} onChange={e => setCat(e.target.value)} />
+                                        <button onClick={async()=>{
+                                            if(!cat) return;
+                                            await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: cat });
+                                            setCat('');
+                                        }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" /></button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {categories.map(c => (
+                                            <div key={c.id} className="p-3 border rounded-xl flex justify-between items-center text-[9px] font-black uppercase group">
+                                                <span>{c.name}</span>
+                                                <button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="x" size={12}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {}
                         {activeTab === 'a_pagar' && (
-                             <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border">
-                                {pendingPaymentsConsolidated.map(t => (
+                             <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
+                                {pendingPaymentsConsolidated.length === 0 ? <p className="p-10 text-center text-[10px] font-black text-slate-400 uppercase">Sem contas pendentes</p> : pendingPaymentsConsolidated.map(t => (
                                     <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50">
                                         <div className="flex items-center gap-4">
                                             <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center"><Icon name="clock" size={24} /></div>
                                             <div><p className="font-black uppercase">[{t.clearanceDate.split('-').reverse().join('/')}] {t.description}</p><p className="text-[10px] font-bold text-slate-400">{t.account}</p></div>
                                         </div>
-                                        <div className="flex items-center gap-6"><p className="font-black text-lg text-red-700">{formatMoney(t.amount)}</p></div>
+                                        <div className="flex items-center gap-6">
+                                            <p className="font-black text-lg text-red-700">{formatMoney(t.amount)}</p>
+                                            <button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({status:'pago'})} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center"><Icon name="check" /></button>
+                                        </div>
                                     </div>
                                 ))}
                              </div>
                         )}
 
-                        {activeTab === 'resultados' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Receita Vendas</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                                <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Despesas Totais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
-                                <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'} text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                            </div>
+                        {activeTab === 'a_receber' && (
+                             <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
+                                {transactions.filter(t => t.type==='entrada' && t.status==='pendente').sort((a,b)=>a.clearanceDate.localeCompare(b.clearanceDate)).map(t => (
+                                    <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={24} /></div>
+                                            <div><p className="font-black uppercase text-green-600">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{t.account}</p></div>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <p className="font-black text-lg">{formatMoney(t.amount)}</p>
+                                            <button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({status:'pago'})} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center"><Icon name="check" /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.1.0 Restaurada</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.7.0 Estável</footer>
                 </div>
             );
         }
