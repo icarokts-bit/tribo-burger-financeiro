@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v13.2.0</title>
-    
-    <link rel="icon" type="image/png" href="logo.png">
+    <title>Tribo Burger | Gestão Total v13.2.1</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -16,41 +14,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; overflow-x: hidden; }
-        
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
         .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
         .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
-        
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
         .bg-watermark { position: fixed; bottom: -50px; right: -50px; opacity: 0.03; z-index: -1; transform: rotate(-15deg); pointer-events: none; }
-        
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
         .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
-        
-        .card-bank-mercado { border-top: 8px solid #009EE3; }
-        .card-bank-c6 { border-top: 8px solid #000000; }
-        .card-bank-ifood { border-top: 8px solid #EA1D2C; }
-        .card-bank-caixa { border-top: 8px solid #10B981; }
-        .card-bank-fundo { border-top: 8px solid #94A3B8; }
-
-        .group-badge { font-size: 8px; font-weight: 800; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
-        .bg-operacional { background-color: #E0F2FE; color: #0369A1; }
-        .bg-reserva { background-color: #FEF3C7; color: #92400E; }
-        .bg-outros { background-color: #F1F5F9; color: #475569; }
-
-        select.filter-select {
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23D97757' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.75rem center;
-            padding-right: 2rem;
-        }
-
         .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
@@ -100,14 +73,13 @@
             
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [isRegistering, setIsRegistering] = useState(false);
 
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
             const [categories, setCategories] = useState([]);
             const [suppliers, setSuppliers] = useState([]);
-            const [settings, setSettings] = useState({ salesTarget: 0 }); // Novo estado para Meta
+            const [settings, setSettings] = useState({ salesTarget: 0 });
             
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [dashboardFilterAccount, setDashboardFilterAccount] = useState('');
@@ -119,21 +91,10 @@
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
             const [account, setAccount] = useState('');
-            const [destAccount, setDestAccount] = useState(''); 
             const [cat, setCat] = useState('');
-            const [supplier, setSupplier] = useState(''); 
-            const [status, setStatus] = useState('pago'); 
-            const [installments, setInstallments] = useState(1);
-            const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
-            const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
-            const [editingId, setEditingId] = useState(null);
-
-            const [accName, setAccName] = useState('');
-            const [accType, setAccType] = useState('corrente');
-            const [accGroup, setAccGroup] = useState('operacional'); 
-            const [accClosing, setAccClosing] = useState('25');
-            const [accDue, setAccDue] = useState('10');
-            const [editingAccId, setEditingAccId] = useState(null);
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [clearance, setClearance] = useState(new Date().toISOString().split('T')[0]);
+            const [status, setStatus] = useState('pago');
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged((u) => {
@@ -165,23 +126,18 @@
                 const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
                     setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>a.name.localeCompare(b.name)));
                 });
-                
-                const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => {
-                    setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
 
-                // Listener para configurações (Meta)
                 const unsubSettings = db.collection(path).doc('settings').onSnapshot(doc => {
                     if (doc.exists) setSettings(doc.data());
                 });
 
-                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSuppliers(); unsubSettings(); };
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); unsubCategories(); unsubSettings(); };
             }, [user]);
 
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
             const stats = useMemo(() => {
-                const p = (v) => parseFloat(v) || 0;
+                const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
                 let rb = 0; 
                 let custosVariaveis = 0; 
                 let costsByCategory = {}; 
@@ -191,9 +147,7 @@
                     if (day.startsWith(filterMonth)) {
                         const r = dailyRecords[day];
                         const totalDay = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((t,f)=>t+p(r[f]), 0);
-                        
-                        if (totalDay > 0) daysWithSales++; // Contagem de dias com venda real
-                        
+                        if (totalDay > 0) daysWithSales++;
                         rb += totalDay;
                         custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
                     }
@@ -211,46 +165,24 @@
                 return { rb, custosVariaveis, totalOperating, lucro: rb - (custosVariaveis + totalOperating), costsByCategory, daysWithSales, averageDaily };
             }, [transactions, dailyRecords, filterMonth]);
 
-            const accountBalances = useMemo(() => {
-                const balances = {}; 
-                accounts.forEach(acc => balances[acc.name] = 0);
-                const p = (v) => parseFloat(v) || 0;
-                transactions.forEach(t => {
-                    if (t.status === 'pago') {
-                        const amt = p(t.amount);
-                        if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
-                        else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
-                        else if (t.type === 'transferencia') { 
-                            balances[t.account] -= amt; balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
-                        }
-                    }
-                });
-                return balances;
-            }, [transactions, accounts]);
-
-            const totalGeneralBalance = useMemo(() => {
-                return accounts.filter(acc => acc.type === 'corrente').reduce((total, acc) => total + (accountBalances[acc.name] || 0), 0);
-            }, [accounts, accountBalances]);
-
-            const filteredDashboardTxs = useMemo(() => {
-                return transactions.filter(t => {
-                    const accInfo = accounts.find(a => a.name === t.account);
-                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
-                    const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
-                    const isTypeMatch = dashboardFilterType === '' || t.type === dashboardFilterType;
-                    return isDateMatch && (!accInfo || accInfo.type !== 'cartao') && isAccountMatch && isCategoryMatch && isTypeMatch;
-                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, accounts, filterMonth, dashboardFilterAccount, dashboardFilterCategory, dashboardFilterType]);
-
             const saveMeta = async (val) => {
+                if (!user) return;
                 const meta = parseFloat(val) || 0;
                 await db.doc(`artifacts/${appId}/users/${user.uid}/settings`).set({ salesTarget: meta }, { merge: true });
             };
 
-            const markAsPaid = async (tId) => {
-                if (tId.startsWith('invoice-')) { setActiveTab('cartoes'); return; }
-                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
+            const handleSaveTx = async (e) => {
+                e.preventDefault();
+                const valNum = parseFloat(val.replace(',','.'));
+                if(!valNum) return;
+                await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add({ 
+                    description: desc, 
+                    amount: valNum, 
+                    type, status, account, category: cat, 
+                    date, clearanceDate: clearance, 
+                    timestamp: new Date().toISOString() 
+                });
+                setDesc(''); setVal('');
             };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-[#F8CC82]" size={48} /></div>;
@@ -270,15 +202,14 @@
 
             return (
                 <div className="min-h-screen flex flex-col fade-in relative pb-20">
-                    <img src="logo.png" className="bg-watermark w-96" alt="watermark" />
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <img src="logo.png" className="h-10 w-10 bg-white p-1 rounded-full shadow-lg" alt="logo" />
-                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter leading-none">Tribo Management</h1><button onClick={() => auth.signOut()} className="text-[8px] text-red-400 font-bold uppercase mt-1">Sair</button></div>
+                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter leading-none">Tribo Management</h1></div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(tab => (
+                                {['dashboard', 'planilha', 'resultados', 'a_pagar', 'a_receber'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
                                         {tab === 'planilha' ? 'Vendas' : tab === 'dashboard' ? 'Lançamentos' : tab.replace('_', ' ')}
                                     </button>
@@ -292,42 +223,26 @@
 
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <form onSubmit={async(e)=>{e.preventDefault(); const valNum = parseFloat(val.replace(',','.')); if(!valNum) return; await db.collection(`artifacts/${appId}/users/${user.uid}/transactions`).add({ description: desc, amount: valNum, type, status, account, category: cat, date, clearanceDate: clearance, timestamp: new Date().toISOString() }); setDesc(''); setVal(''); }} className="glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-[#1A202C] h-fit">
+                                <form onSubmit={handleSaveTx} className="glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-[#1A202C] h-fit">
                                     <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">Novo Lançamento</h2>
-                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t.slice(0, 5)}</button>))}</div>
+                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada', 'saida'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>))}</div>
                                     <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                     </div>
-                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={() => setStatus('pago')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase transition-all border ${status === 'pago' ? 'bg-green-500 text-white' : 'bg-white text-slate-400'}`}>PAGO</button>
-                                        <button type="button" onClick={() => setStatus('pendente')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase transition-all border ${status === 'pendente' ? 'bg-orange-500 text-white' : 'bg-white text-slate-400'}`}>PENDENTE</button>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Registo</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /></div>
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Vencimento</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
-                                    </div>
                                     <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Gravar</button>
                                 </form>
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[600px] flex flex-col border overflow-hidden">
-                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400 flex flex-col md:flex-row justify-between items-center gap-3">
-                                        <span>Histórico Mensal</span>
-                                        <div className="flex gap-2">
-                                            <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterType} onChange={e=>setDashboardFilterType(e.target.value)}><option value="">Tipos...</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
-                                            <select className="filter-select text-[8px] p-2 border rounded-lg bg-white" value={dashboardFilterAccount} onChange={e=>setDashboardFilterAccount(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
-                                        </div>
-                                    </div>
+                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400">Histórico de Lançamentos</div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {filteredDashboardTxs.map(t => (
-                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                        {transactions.filter(t => t.date?.startsWith(filterMonth)).map(t => (
+                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50">
                                                 <div className="flex items-center gap-4">
-                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} /></div>
-                                                    <div><p className="font-black text-sm uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p></div>
+                                                    <span className="text-[10px] font-black text-slate-400">{t.date?.split('-').reverse().slice(0, 2).join('/')}</span>
+                                                    <div><p className="font-black text-sm uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.category}</p></div>
                                                 </div>
-                                                <div className="flex items-center gap-4"><p className="font-black text-sm">{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14}/></button></div>
+                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -335,98 +250,74 @@
                             </div>
                         )}
 
-                        {activeTab === 'saldos' && (
-                            <div className="space-y-12 fade-in">
-                                <div className="stat-banner !border-[#1A202C] !bg-[#D97757] !p-12"><p className="text-[11px] font-black uppercase text-white/90">Património Líquido Total</p><h3 className="text-5xl font-black">{formatMoney(totalGeneralBalance)}</h3></div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {accounts.filter(a => a.type === 'corrente').map(acc => (
-                                        <div key={acc.id} className="bg-white p-8 rounded-[3.5rem] shadow-xl border-t-8 border-[#1A202C] text-center">
-                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{acc.name}</p>
-                                            <h3 className="text-3xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
                         {activeTab === 'planilha' && <PlanilhaTab dailyRecords={dailyRecords} user={user} filterMonth={filterMonth} formatMoney={formatMoney} Icon={Icon} appId={appId} db={db} />}
-                        
+
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 fade-in">
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     <div className="lg:col-span-2 glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-[#D97757] flex flex-col justify-between">
                                         <div className="flex justify-between items-center mb-4">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase">Definir Meta do Mês</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase">Definir Meta Mensal</p>
                                             <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
                                                 <span className="text-[10px] font-black">R$</span>
-                                                <input type="number" className="bg-transparent border-0 outline-none font-black text-sm w-24" placeholder="0.00" value={settings.salesTarget || ''} onChange={e => saveMeta(e.target.value)} />
+                                                <input type="number" className="bg-transparent border-0 outline-none font-black text-sm w-24" placeholder="0" value={settings.salesTarget || ''} onChange={e => saveMeta(e.target.value)} />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <div className="flex justify-between items-end">
-                                                <h3 className="text-3xl font-black">{formatMoney(stats.rb)}</h3>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase">Faturado de {formatMoney(settings.salesTarget)}</p>
-                                            </div>
+                                            <div className="flex justify-between items-end"><h3 className="text-3xl font-black">{formatMoney(stats.rb)}</h3><p className="text-[10px] font-black text-slate-400 uppercase">Faturado</p></div>
                                             <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden border">
-                                                <div className={`h-full transition-all duration-1000 ${stats.rb >= settings.salesTarget ? 'bg-green-500' : 'bg-[#D97757]'}`} style={{ width: `${Math.min(100, (stats.rb / (settings.salesTarget || 1)) * 100)}%` }}></div>
+                                                <div className="h-full bg-[#D97757] transition-all" style={{ width: `${Math.min(100, (stats.rb / (settings.salesTarget || 1)) * 100)}%` }}></div>
                                             </div>
                                             <p className="text-[9px] font-black uppercase text-center mt-2 tracking-widest">{((stats.rb / (settings.salesTarget || 1)) * 100).toFixed(1)}% da Meta Alcançada</p>
                                         </div>
                                     </div>
-                                    
                                     <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center items-center">
                                         <div className="bg-blue-50 p-3 rounded-full mb-3 text-blue-500"><Icon name="calendar-days" size={24} /></div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Dias Ativos</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase">Dias Ativos</p>
                                         <h3 className="text-3xl font-black text-blue-600">{stats.daysWithSales}</h3>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tight">Com Vendas no Mês</p>
                                     </div>
-
                                     <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center items-center">
                                         <div className="bg-green-50 p-3 rounded-full mb-3 text-green-500"><Icon name="calculator" size={24} /></div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Média Diária</p>
-                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.averageDaily)}</h3>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tight">Faturamento / Dias Ativos</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase">Média Diária</p>
+                                        <h3 className="text-2xl font-black text-green-600">{formatMoney(stats.averageDaily)}</h3>
                                     </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Receita de Vendas</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-red-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Custos + Despesas</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalOperating + stats.custosVariaveis)}</h3></div>
-                                    <div className={`glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 ${stats.lucro >= 0 ? 'border-blue-600' : 'border-red-600'} text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Lucro Operacional</p><h3 className={`text-2xl font-black ${stats.lucro >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-slate-500 text-center"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">CMV Est.</p><h3 className="text-2xl font-black text-slate-800">{formatMoney(stats.costsByCategory['CMV (Insumos)'] || 0)}</h3></div>
                                 </div>
                             </div>
                         )}
-
-                        {activeTab === 'dre' && <DRETab stats={stats} filterMonth={filterMonth} formatMoney={formatMoney} />}
                     </main>
-
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.2.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.2.1</footer>
                 </div>
             );
         }
 
         const PlanilhaTab = ({ dailyRecords, user, filterMonth, formatMoney, Icon, appId, db }) => {
-            const [newDay, setNewDay] = useState(new Date().toLocaleDateString('en-CA'));
+            const [newDay, setNewDay] = useState(new Date().toISOString().split('T')[0]);
             return (
                 <div className="space-y-6 fade-in">
-                    <div className="flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm"><div className="flex items-center gap-2 font-black uppercase text-[10px] text-[#1A202C]"><Icon name="table" /><span>Lançamentos Diários</span></div><div className="flex gap-2"><input type="date" className="p-2 border rounded-xl text-xs font-bold outline-none" value={newDay} onChange={e => setNewDay(e.target.value)} /><button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Novo Dia</button></div></div>
+                    <div className="flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm">
+                        <div className="flex items-center gap-2 font-black uppercase text-[10px]"><Icon name="table" /><span>Vendas Diárias</span></div>
+                        <div className="flex gap-2">
+                            <input type="date" className="p-2 border rounded-xl text-xs" value={newDay} onChange={e => setNewDay(e.target.value)} />
+                            <button onClick={async() => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDay}`).set({ initialized: true }, { merge: true }); }} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Dia</button>
+                        </div>
+                    </div>
                     <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                        <table className="w-full text-center text-[11px] min-w-[1500px]">
-                            <thead><tr className="header-black text-white"><th className="p-4 sticky left-0 z-20 bg-black">Data</th><th className="p-4 bg-yellow-500 text-black">Total Dia</th>{['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4 text-orange-400">Taxa Entrega</th><th className="p-4 text-red-400">Motoboy</th><th className="p-4">Ações</th></tr></thead>
+                        <table className="w-full text-center text-[11px] min-w-[1200px]">
+                            <thead><tr className="header-black text-white"><th className="p-4">Data</th><th className="p-4 bg-yellow-500 text-black">Total Dia</th>{['Pix','Dinheiro','Ifood','Débito','Crédito'].map(h => <th key={h} className="p-4">{h}</th>)}<th className="p-4 text-red-400">Motoboy</th><th className="p-4">Ações</th></tr></thead>
                             <tbody className="divide-y font-bold">
                                 {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { 
-                                    const totalVendas = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(dailyRecords[d][f]) || 0), 0);
+                                    const r = dailyRecords[d];
+                                    const totalDay = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+(parseFloat(r[f]) || 0), 0);
                                     return (
                                         <tr key={d} className="hover:bg-slate-50 h-12">
-                                            <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
-                                            <td className="p-4 bg-yellow-50 font-black">{formatMoney(totalVendas)}</td>
-                                            {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
+                                            <td className="p-4 font-black">{d.split('-').reverse().join('/')}</td>
+                                            <td className="p-4 bg-yellow-50">{formatMoney(totalDay)}</td>
+                                            {['pix','dinheiro','ifood','debito','credito','motoboy'].map(f => (
                                                 <td key={f} className="p-0 border-r">
-                                                    <input className={`table-input ${f === 'motoboy' ? '!text-red-500' : ''}`} value={dailyRecords[d][f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
+                                                    <input className="table-input" value={r[f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
                                                 </td>
                                             ))}
-                                            <td className="p-4"><button onClick={() => { if(confirm('Eliminar dia?')) db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()}} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
+                                            <td className="p-4"><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
                                         </tr>
                                     );
                                 })}
@@ -436,23 +327,6 @@
                 </div>
             );
         };
-
-        const DRETab = ({ stats, filterMonth, formatMoney }) => (
-            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] fade-in">
-                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">Demonstrativo (DRE) - {filterMonth}</h2>
-                <div className="space-y-4">
-                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Operacional Bruta</span><span>{formatMoney(stats.rb)}</span></div>
-                    <div className="py-4 border-b">
-                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Custos e Despesas</h3>
-                        {Object.entries(stats.costsByCategory).map(([cat, amt]) => (
-                            <div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-b border-slate-50 last:border-0"><span>(-) {cat}</span><span className="text-red-400 font-black">{formatMoney(amt)}</span></div>
-                        ))}
-                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) Logística/Variáveis</span><span className="text-red-400 font-black">{formatMoney(stats.custosVariaveis)}</span></div>
-                    </div>
-                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro >= 0 ? 'bg-[#1A202C] text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase">Resultado Líquido</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
-                </div>
-            </div>
-        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
