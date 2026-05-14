@@ -1,36 +1,437 @@
-<!-- ... existing code ... -->
-        const [suppliers, setSuppliers] = useState([]);
-        const [metaVendas, setMetaVendas] = useState(0);
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tribo Burger | Gestão Financeira v16.6.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-        /* Estados para Formulários Independentes */
-        const [supplierInput, setSupplierInput] = useState(''); // Estado exclusivo para fornecedores
-        const [accName, setAccName] = useState(''); // Estado para o nome da conta em Ajustes
-<!-- ... existing code ... -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; overflow-x: hidden; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
+        .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
+        .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
+        .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .card-bank-mercado { border-top: 8px solid #009EE3; }
+        .card-bank-c6 { border-top: 8px solid #000000; }
+        .card-bank-ifood { border-top: 8px solid #EA1D2C; }
+        .card-bank-fundo { border-top: 8px solid #94A3B8; }
+        .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
+            authDomain: "tribo-burger-app.firebaseapp.com",
+            projectId: "tribo-burger-app",
+            storageBucket: "tribo-burger-app.firebasestorage.app",
+            messagingSenderId: "490245681469",
+            appId: "1:490245681469:web:189b1d2e35bd142cc31554"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = 'tribo-burger-financeiro';
+
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide && containerRef.current) {
+                    containerRef.current.innerHTML = `<i data-lucide="${name}"></i>`;
+                    window.lucide.createIcons({
+                        node: containerRef.current,
+                        attrs: { width: size, height: size, class: className }
+                    });
+                }
+            }, [name, size, className]);
+            return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
+        };
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            
+            /* Estados de Dados */
+            const [transactions, setTransactions] = useState([]);
+            const [dailyRecords, setDailyRecords] = useState({});
+            const [accounts, setAccounts] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [suppliers, setSuppliers] = useState([]);
+            const [metaVendas, setMetaVendas] = useState(0);
+
+            /* Filtros Dashboard */
+            const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [searchQuery, setSearchQuery] = useState('');
+            const [typeFilter, setTypeFilter] = useState('todos');
+            const [accFilter, setAccFilter] = useState('');
+            const [catFilter, setCatFilter] = useState('');
+            const [hideCards, setHideCards] = useState(false);
+            const [hideForecasts, setHideForecasts] = useState(false);
+
+            /* Formulários */
+            const [desc, setDesc] = useState('');
+            const [val, setVal] = useState('');
+            const [type, setType] = useState('saida');
+            const [account, setAccount] = useState('');
+            const [destAcc, setDestAcc] = useState('');
+            const [cat, setCat] = useState('');
+            const [sup, setSup] = useState('');
+            const [status, setStatus] = useState('pago');
+            const [inst, setInst] = useState(1);
+            const [date, setDate] = useState(new Date().toLocaleDateString('en-CA'));
+            const [clearance, setClearance] = useState(new Date().toLocaleDateString('en-CA'));
+            const [editingId, setEditingId] = useState(null);
+
+            /* Ajustes e Fornecedores */
+            const [accForm, setAccForm] = useState({ id: null, name: '', type: 'corrente', group: 'operacional', closing: '25', due: '10', pos: '1', highlight: false });
+            const [supplierInput, setSupplierInput] = useState('');
+            const [payDates, setPayDates] = useState({}); // Controle local para datas de pagamento na aba A Pagar
+
+            useEffect(() => {
+                const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+                return () => unsub();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const path = `artifacts/${appId}/users/${user.uid}`;
+                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); });
+                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); });
+
+                return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
+            }, [user]);
+
+            const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
+            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            const filteredDashboard = useMemo(() => {
+                return transactions.filter(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    const isMonth = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth) || t.billingMonth === filterMonth);
+                    const matchSearch = t.description?.toLowerCase().includes(searchQuery.toLowerCase()) || t.category?.toLowerCase().includes(searchQuery.toLowerCase());
+                    const matchType = typeFilter === 'todos' || t.type === typeFilter;
+                    const matchAcc = accFilter === '' || t.account === accFilter;
+                    const matchCat = catFilter === '' || t.category === catFilter;
+                    const filterCard = hideCards ? accInfo?.type !== 'cartao' : true;
+                    const filterForecast = hideForecasts ? t.status === 'pago' : true;
+                    return isMonth && matchSearch && matchType && matchAcc && matchCat && filterCard && filterForecast;
+                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+            }, [transactions, filterMonth, searchQuery, typeFilter, accFilter, catFilter, hideCards, hideForecasts, accounts]);
+
+            const accountBalances = useMemo(() => {
+                const bal = {}; accounts.forEach(a => bal[a.name] = 0);
+                transactions.forEach(t => {
+                    if (t.status === 'pago') {
+                        const amt = p(t.amount);
+                        if (t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
+                        else if (t.type === 'saida') bal[t.account] = (bal[t.account] || 0) - amt;
+                        else if (t.type === 'transferencia') { bal[t.account] -= amt; bal[t.destinationAccount] = (bal[t.destinationAccount] || 0) + amt; }
+                    }
+                });
+                return bal;
+            }, [transactions, accounts]);
+
+            const totalPatrimony = useMemo(() => {
+                return accounts.filter(a => a.type === 'corrente').reduce((acc, a) => acc + (accountBalances[a.name] || 0), 0);
+            }, [accounts, accountBalances]);
+
+            const stats = useMemo(() => {
+                let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0;
+                Object.keys(dailyRecords).forEach(d => {
+                    if (d.startsWith(filterMonth)) {
+                        const r = dailyRecords[d];
+                        const totalDia = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((s,f)=>s+p(r[f]), 0);
+                        if (totalDia > 0) diasAtivos++;
+                        rb += totalDia;
+                        custos += p(r.motoboy) + p(r.taxaEntrega);
+                    }
+                });
+                transactions.forEach(t => {
+                    if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth))) {
+                        if (t.type === 'saida') catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                    }
+                });
+                const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
+                return { rb, totalCosts: operCosts + custos, lucro: rb - (operCosts + custos), catCosts, diasAtivos, ticket: diasAtivos > 0 ? rb / diasAtivos : 0 };
+            }, [dailyRecords, transactions, filterMonth]);
+
+            const consolidatedAPagar = useMemo(() => {
+                const pendings = transactions.filter(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
+                });
+                const invoices = accounts.filter(a => a.type === 'cartao').map(card => {
+                    const txs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
+                    const sum = txs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    if (sum <= 0.01) return null;
+                    return { id: `card-${card.name}`, description: `Fatura ${card.name}`, amount: sum, account: card.name, clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, isInvoice: true };
+                }).filter(Boolean);
+                return [...pendings, ...invoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+            }, [transactions, accounts, filterMonth]);
+
+            const handleSaveTx = async (e) => {
+                e.preventDefault();
+                if (!user || !val) return;
+                const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
+                const batch = db.batch();
+                const numInst = cardInfo ? inst : 1;
+
+                for (let i = 0; i < numInst; i++) {
+                    const d = new Date(date + 'T00:00:00'); d.setMonth(d.getMonth() + i);
+                    let finalClearance = clearance;
+                    let billingM = d.toISOString().slice(0, 7);
+                    
+                    if (cardInfo) {
+                        const closing = parseInt(cardInfo.closingDay);
+                        const due = parseInt(cardInfo.dueDay);
+                        let billingDate = new Date(d);
+                        if (d.getDate() > closing) billingDate.setMonth(billingDate.getMonth() + 1);
+                        billingM = billingDate.toISOString().slice(0, 7);
+                        let dueDate = new Date(billingDate); dueDate.setMonth(dueDate.getMonth() + 1); dueDate.setDate(due);
+                        finalClearance = dueDate.toISOString().split('T')[0];
+                    }
+
+                    const payload = {
+                        description: numInst > 1 ? `${desc} (${i+1}/${numInst})` : desc,
+                        amount: p(val) / numInst, type, status: cardInfo ? 'pendente' : status,
+                        date: d.toISOString().split('T')[0], clearanceDate: finalClearance, billingMonth: billingM,
+                        account, destinationAccount: destAcc, category: cat || 'Geral', supplier: sup, timestamp: new Date().toISOString()
+                    };
+
+                    if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
+                    else batch.set(db.collection(path).doc(), payload);
+                }
+                await batch.commit(); setEditingId(null); setDesc(''); setVal('');
+            };
+
+            const markPaid = async (t, payDate) => {
+                if (t.isInvoice) { setActiveTab('cartoes'); return; }
+                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({ status: 'pago', clearanceDate: payDate });
+            };
+
+            const saveMeta = async (v) => {
+                const path = `artifacts/${appId}/users/${user.uid}/settings/config`;
+                await db.doc(path).set({ meta: p(v) }, { merge: true });
+            };
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase">Tribo a Carregar...</div>;
+
+            if (!user) return (
+                <div className="min-h-screen flex items-center justify-center bg-[#1A202C] p-4">
+                    <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
+                        <h2 className="text-3xl font-black text-[#1A202C] uppercase text-center mb-10">Tribo Burger</h2>
+                        <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(a => alert(a.message)); }} className="space-y-4">
+                            <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={email} onChange={e=>setEmail(e.target.value)} />
+                            <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={password} onChange={e=>setPassword(e.target.value)} />
+                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-all">Entrar no Sistema</button>
+                        </form>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col fade-in">
+                    <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
+                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.6</h1>
+                            </div>
+                            <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
+                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
+                                    <button key={t} onClick={()=>setActiveTab(t)} className={`px-4 py-2 text-[10px] font-black uppercase whitespace-nowrap transition-all ${activeTab === t ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
+                                        {t.replace('_', ' ')}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+                    </header>
+
+                    <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
+                        <div className="flex justify-center"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm"><span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
+
+                        {}
+                        {activeTab === 'dashboard' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit">
+                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada','saida','transferencia'].map(t=>(<button key={t} type="button" onClick={()=>setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type===t?'bg-white shadow-sm text-black':'text-slate-400'}`}>{t}</button>))}</div>
+                                    <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={desc} onChange={e=>setDesc(e.target.value)} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e=>setVal(e.target.value)} />
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={account} onChange={e=>setAccount(e.target.value)}><option value="">Conta...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                    </div>
+                                    {accounts.find(a=>a.name===account)?.type === 'cartao' && <input type="number" placeholder="Parcelas" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={inst} onChange={e=>setInst(parseInt(e.target.value)||1)} />}
+                                    {type === 'transferencia' && <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={destAcc} onChange={e=>setDestAcc(e.target.value)}><option value="">Para...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={cat} onChange={e=>setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={sup} onChange={e=>setSup(e.target.value)}><option value="">Fornecedor...</option>{suppliers.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Lanç.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={date} onChange={e=>setDate(e.target.value)} /></div>
+                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Venc./Comp.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={clearance} onChange={e=>setClearance(e.target.value)} /></div>
+                                    </div>
+                                    <div className="flex gap-2"><button type="button" onClick={()=>setStatus('pago')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pago'?'bg-green-500 text-white':'bg-white text-slate-400'}`}>PAGO</button><button type="button" onClick={()=>setStatus('pendente')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pendente'?'bg-orange-500 text-white':'bg-white text-slate-400'}`}>PENDENTE</button></div>
+                                    <button className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">Gravar Movimento</button>
+                                </form>
+
+                                <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
+                                    <div className="p-4 bg-slate-50 border-b space-y-4">
+                                        <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar por nome, categoria ou conta..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="todos">Todos Tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="transferencia">Transf.</option></select>
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            <div className="flex gap-2 ml-auto">
+                                                <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão Oculto':'Mostrar Cartão'}</button>
+                                                <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts?'Apenas Pagos':'Mostrar Tudo'}</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                        {filteredDashboard.map(t => (
+                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>{t.type==='entrada'?'IN':'OUT'}</div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago'?`Liquidação ${t.clearanceDate?.split('-').reverse().slice(0,2).join('/')}`:'Previsto'}</span></div>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                    <button onClick={async()=>{if(confirm('Eliminar?')) await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete();}} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all p-2"><Icon name="trash-2" size={14}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'saldos' && (
+                            <div className="space-y-12 animate-in fade-in">
+                                <div className="stat-banner !border-black !bg-[#D97757]">
+                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Património Líquido Disponível</p>
+                                    <h3 className="text-5xl font-black drop-shadow-xl">{formatMoney(totalPatrimony)}</h3>
+                                </div>
+                                {['operacional','reserva','outros'].map(grp => {
+                                    const grpAccs = accounts.filter(a => a.type === 'corrente' && (a.group === grp || (!a.group && grp === 'operacional'))).sort((a,b)=>parseInt(a.pos||0)-parseInt(b.pos||0));
+                                    if (grpAccs.length === 0) return null;
+                                    return (
+                                        <div key={grp} className="space-y-4">
+                                            <h2 className="text-[10px] font-black uppercase text-slate-400 border-l-4 border-slate-400 pl-3 ml-2">{grp}</h2>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                                {grpAccs.map(acc => (
+                                                    <div key={acc.id} className={`glass-card p-8 rounded-[3.5rem] shadow-xl border-t-8 ${acc.highlight ? 'border-orange-500 scale-105 z-10' : 'border-[#1A202C]'} text-center transition-all`}>
+                                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{acc.name}</p>
+                                                        <h3 className={`text-3xl font-black ${accountBalances[acc.name]>=0?'text-slate-900':'text-red-500'}`}>{formatMoney(accountBalances[acc.name]||0)}</h3>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'vendas' && (
+                            <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
+                                <table className="w-full text-center text-[11px] min-w-[1500px]">
+                                    <thead>
+                                        <tr className="header-black text-white">
+                                            <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
+                                            <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
+                                            {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h=><th key={h} className="p-4">{h}</th>)}
+                                            <th className="p-4 text-orange-400">Taxa Entrega</th>
+                                            <th className="p-4 text-red-400">Motoboy</th>
+                                            <th className="p-4">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y font-bold">
+                                        {Object.keys(dailyRecords).filter(d=>d.startsWith(filterMonth)).sort((a,b)=>new Date(b)-new Date(a)).map(d => {
+                                            const r = dailyRecords[d] || {};
+                                            const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
+                                            return (
+                                                <tr key={d} className="hover:bg-slate-50 h-12">
+                                                    <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
+                                                    <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
+                                                    {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
+                                                        <td key={f} className="p-0 border-r">
+                                                            <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
+                                                        </td>
+                                                    ))}
+                                                    <td className="p-4"><button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {}
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-8 animate-in fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center space-y-4">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta de Vendas</p>
+                                        <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
+                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all" style={{width:`${Math.min(100, (stats.rb/metaVendas)*100)}%`}}></div></div>
+                                        <p className="text-[10px] font-black text-green-600">{((stats.rb/metaVendas)*100).toFixed(1)}% Atingido</p>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Dias com Venda</p>
+                                        <h3 className="text-5xl font-black">{stats.diasAtivos} <span className="text-sm text-slate-300">DIAS</span></h3>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Ticket)</p>
+                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticket)}</h3>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Receita Bruta</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Custos Totais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalCosts)}</h3></div>
+                                     <div className={`glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 ${stats.lucro>=0?'border-blue-600':'border-red-600'}`}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro>=0?'text-blue-600':'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {}
                         {activeTab === 'fornecedores' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] h-fit space-y-6 shadow-sm border-t-4 border-black">
                                     <h2 className="text-sm font-black uppercase border-b pb-4">Novo Fornecedor</h2>
                                     <div className="space-y-4">
-                                        <input 
-                                            type="text" 
-                                            className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50 outline-none focus:border-[#D97757]" 
-                                            placeholder="Nome do Parceiro/Fornecedor" 
-                                            value={supplierInput} 
-                                            onChange={e => setSupplierInput(e.target.value)} 
-                                        />
-                                        <button 
-                                            onClick={async() => { 
-                                                if(!supplierInput) return; 
-                                                await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ 
-                                                    name: supplierInput,
-                                                    timestamp: new Date().toISOString()
-                                                }); 
-                                                setSupplierInput(''); 
-                                            }} 
-                                            className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all"
-                                        >
-                                            Cadastrar Fornecedor
-                                        </button>
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50 outline-none focus:border-[#D97757]" placeholder="Nome do Parceiro/Fornecedor" value={supplierInput} onChange={e => setSupplierInput(e.target.value)} />
+                                        <button onClick={async() => { if(!supplierInput) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: supplierInput, timestamp: new Date().toISOString() }); setSupplierInput(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Cadastrar Fornecedor</button>
                                     </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-sm max-h-[550px] flex flex-col border border-t-4 border-slate-400">
@@ -50,14 +451,7 @@
                                                         </div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button 
-                                                        onClick={async () => {
-                                                            if(confirm(`Remover fornecedor ${s.name}?`)) {
-                                                                await db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete();
-                                                            }
-                                                        }} 
-                                                        className="text-red-200 hover:text-red-500 transition-colors p-2"
-                                                    >
+                                                    <button onClick={async () => { if(confirm(`Remover fornecedor ${s.name}?`)) await db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete(); }} className="text-red-200 hover:text-red-500 transition-colors p-2">
                                                         <Icon name="trash-2" size={16}/>
                                                     </button>
                                                 </div>
@@ -67,16 +461,162 @@
                                 </div>
                             </div>
                         )}
-<!-- ... existing code ... -->
-```
 
-eof
+                        {}
+                        {activeTab === 'a_pagar' && (
+                            <div className="space-y-6 animate-in fade-in">
+                                <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
+                                <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
+                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Nada a pagar este mês</p> : consolidatedAPagar.map(t => (
+                                        <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
+                                            <div className="flex items-center gap-5">
+                                                <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}/></div>
+                                                <div>
+                                                    <div className="flex items-center gap-2"><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p></div>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-6">
+                                                <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
+                                                {!t.isInvoice && (
+                                                    <div className="flex gap-2 items-center">
+                                                        <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toLocaleDateString('en-CA')} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
+                                                        <button onClick={()=>markPaid(t, payDates[t.id] || new Date().toLocaleDateString('en-CA'))} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                                    </div>
+                                                )}
+                                                {t.isInvoice && <button onClick={()=>setActiveTab('cartoes')} className="bg-orange-500 text-white px-4 py-2 rounded-2xl text-[9px] font-black uppercase">Ver Fatura</button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
-A versão **v16.5.0** corrigiu especificamente a aba **Fornecedores**, que estava em branco devido a um conflito de nomes de variáveis no formulário.
+                        {}
+                        {activeTab === 'a_receber' && (
+                             <div className="space-y-6 animate-in fade-in">
+                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
+                                <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
+                                    {transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).sort((a,b)=>a.clearanceDate.localeCompare(b.clearanceDate)).map(t => (
+                                        <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
+                                                <div><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
+                                            </div>
+                                            <div className="flex items-center gap-6">
+                                                <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
+                                                <button onClick={()=>markPaid(t, new Date().toLocaleDateString('en-CA'))} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                             </div>
+                        )}
 
-**Melhorias na Aba Fornecedores:**
-1.  **Estado Independente**: Agora o input de fornecedores não interfere com o input de ajustes de contas.
-2.  **Lista Dinâmica**: Adicionei um contador de parceiros e a ordenação alfabética automática.
-3.  **Visual Premium**: Melhorei o acabamento dos cards de fornecedores com ícones circulares iniciais.
+                        {}
+                        {activeTab === 'ajustes' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-orange-500 space-y-6 shadow-xl">
+                                    <h2 className="text-sm font-black uppercase">{accForm.id ? 'Editar Conta' : 'Nova Conta'}</h2>
+                                    <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed">
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs" placeholder="Nome" value={accForm.name} onChange={e=>setAccForm({...accForm, name:e.target.value})} />
+                                        <div className="flex gap-2"><button onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button><button onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button></div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {accForm.type === 'corrente' ? (
+                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={accForm.group} onChange={e=>setAccForm({...accForm, group:e.target.value})}><option value="operacional">Operacional</option><option value="reserva">Reserva</option><option value="outros">Outros</option></select>
+                                            ) : (
+                                                <><input type="number" placeholder="Fecho" className="w-full p-4 border rounded-2xl font-black text-xs" value={accForm.closing} onChange={e=>setAccForm({...accForm, closing:e.target.value})} /><input type="number" placeholder="Venc." className="w-full p-4 border rounded-2xl font-black text-xs" value={accForm.due} onChange={e=>setAccForm({...accForm, due:e.target.value})} /></>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between p-2">
+                                            <div className="flex items-center gap-2"><span className="text-[9px] font-black uppercase text-slate-400">Posição</span><input type="number" className="w-16 p-2 border rounded-xl text-center font-black" value={accForm.pos} onChange={e=>setAccForm({...accForm, pos:e.target.value})} /></div>
+                                            <button onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>{accForm.highlight?'Em Destaque':'Destaque Off'}</button>
+                                        </div>
+                                        <button onClick={async()=>{ if(!accForm.name) return; const pth = `artifacts/${appId}/users/${user.uid}/accounts`; if(accForm.id) await db.doc(`${pth}/${accForm.id}`).update(accForm); else await db.collection(pth).add(accForm); setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false}); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">{accForm.id?'Gravar Alterações':'Criar Conta'}</button>
+                                    </div>
+                                    <div className="space-y-2 overflow-y-auto max-h-80 divide-y">
+                                        {accounts.map(a => (
+                                            <div key={a.id} className="p-4 flex justify-between items-center group">
+                                                <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} • Posição {a.pos}</p></div>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>setAccForm(a)} className="text-blue-500 p-2"><Icon name="edit-2" size={14}/></button><button onClick={async()=>await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200 p-2"><Icon name="trash-2" size={14}/></button></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] space-y-6">
+                                     <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
+                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs" id="new-cat" placeholder="Nova Categoria..." /><button onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({name:v}); document.getElementById('new-cat').value='';}} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
+                                     <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
+                                        {categories.sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
+                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black"><span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span><button onClick={async()=>await db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-100 group-hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>
+                                        ))}
+                                     </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {}
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
+                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Operacional (Bruta)</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="py-4 border-b">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas por Categoria</h3>
+                                        {Object.entries(stats.catCosts).sort(([a],[b])=>a.localeCompare(b)).map(([c, v]) => (
+                                            <div key={c} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-400 font-black">{formatMoney(v)}</span></div>
+                                        ))}
+                                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-t mt-2 pt-2"><span>(-) Custos de Entrega (Vendas)</span><span className="text-red-400 font-black">{formatMoney(dailyRecords?.[filterMonth]?.motoboy ? p(dailyRecords[filterMonth].motoboy) + p(dailyRecords[filterMonth].taxaEntrega) : 0)}</span></div>
+                                    </div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase">Resultado Líquido</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {}
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-12 animate-in zoom-in duration-300">
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const txs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth)))).sort((a,b)=>a.date.localeCompare(b.date));
+                                    const total = txs.reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    return (
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
+                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
+                                                <div><h3 className="text-2xl font-black uppercase">{card.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closingDay} • Vencimento: {card.dueDay}</p></div>
+                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
+                                                    <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <h4 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Lançamentos da Fatura</h4>
+                                                <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
+                                                    {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem dados</p> : txs.map(t => (
+                                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
+                                                                <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
+                                                            </div>
+                                                            <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p><button onClick={async()=>await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-100 group-hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14}/></button></div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
 
-As outras abas (Dashboard com os novos filtros, Saldos, Vendas, Resultados, etc.) permanecem totalmente funcionais. Pode testar o cadastro de fornecedores agora mesmo!
+                    </main>
+
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.6.0 Baseline</footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
