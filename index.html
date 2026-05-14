@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v16.3.0</title>
+    <title>Tribo Burger | Gestão Financeira v16.4.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -27,7 +27,6 @@
         .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
         
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
-        .bg-watermark { position: fixed; bottom: -50px; right: -50px; opacity: 0.03; z-index: -1; transform: rotate(-15deg); pointer-events: none; }
         
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -39,12 +38,9 @@
         .card-bank-ifood { border-top: 8px solid #EA1D2C; }
         .card-bank-fundo { border-top: 8px solid #94A3B8; }
 
-        .group-badge { font-size: 8px; font-weight: 800; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
         .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
         
-        select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23D97757' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; }
-
-        /* Estilo para o Toggle de Esconder Cartões */
+        /* Estilo para os Toggles */
         .toggle-checkbox:checked { right: 0; border-color: #1A202C; background-color: #1A202C; }
         .toggle-checkbox:checked + .toggle-label { background-color: #F8CC82; }
     </style>
@@ -89,47 +85,39 @@
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-
+            /* Estados de Dados */
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
             const [categories, setCategories] = useState([]);
             const [suppliers, setSuppliers] = useState([]);
             const [metaVendas, setMetaVendas] = useState(0);
-            
+
+            /* Estados de Filtro */
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
             const [searchTerm, setSearchTerm] = useState('');
             const [typeFilter, setTypeFilter] = useState('todos');
             const [accountFilter, setAccountFilter] = useState('');
             const [categoryFilter, setCategoryFilter] = useState('');
-            const [hideCardTxs, setHideCardTxs] = useState(false); // NOVO: Estado para ocultar cartões
-            
-            const [payDateForConfirmation, setPayDateForConfirmation] = useState(new Date().toISOString().split('T')[0]);
-            const [receiveDateForConfirmation, setReceiveDateForConfirmation] = useState(new Date().toISOString().split('T')[0]);
-            const [localPayments, setLocalPayments] = useState({});
+            const [hideCardTxs, setHideCardTxs] = useState(false);
+            const [hidePending, setHidePending] = useState(false); // NOVO: Estado para ocultar previsões
 
+            /* Estados de Formulário */
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
-            const [type, setType] = useState('saida'); 
+            const [type, setType] = useState('saida');
             const [account, setAccount] = useState('');
-            const [destAccount, setDestAccount] = useState(''); 
+            const [destAccount, setDestAccount] = useState('');
             const [cat, setCat] = useState('');
-            const [supplier, setSupplier] = useState(''); 
-            const [status, setStatus] = useState('pago'); 
+            const [status, setStatus] = useState('pago');
             const [installments, setInstallments] = useState(1);
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const [clearance, setClearance] = useState(new Date().toISOString().split('T')[0]);
             const [editingId, setEditingId] = useState(null);
 
-            const [accName, setAccName] = useState('');
-            const [accType, setAccType] = useState('corrente');
-            const [accPos, setAccPos] = useState('1');
-            const [isHighlight, setIsHighlight] = useState(false);
-            const [accClosing, setAccClosing] = useState('25');
-            const [accDue, setAccDue] = useState('10');
-            const [editingAccId, setEditingAccId] = useState(null);
+            /* Estados para Datas de Liquidação nas Abas A Pagar/Receber */
+            const [paymentDateConfirm, setPaymentDateConfirm] = useState(new Date().toISOString().split('T')[0]);
+            const [localPayments, setLocalPayments] = useState({});
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged((u) => {
@@ -146,24 +134,19 @@
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(snap => {
                     setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
-                
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(snap => {
                     const recs = {}; snap.docs.forEach(d => recs[d.id] = d.data());
                     setDailyRecords(recs);
                 });
-                
                 const unsubAccounts = db.collection(`${path}/accounts`).onSnapshot(snap => {
                     setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => parseInt(a.position || 0) - parseInt(b.position || 0)));
                 });
-                
                 const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
                     setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
-
                 const unsubSuppliers = db.collection(`${path}/suppliers`).onSnapshot(snap => {
                     setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
-
                 const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(doc => {
                     if (doc.exists) setMetaVendas(doc.data().meta || 0);
                 });
@@ -174,10 +157,22 @@
             const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            const uniqueDescriptions = useMemo(() => {
-                const seen = new Set();
-                return transactions.map(t => t.description).filter(d => d && !seen.has(d.trim().toLowerCase()) && seen.add(d.trim().toLowerCase())).sort();
-            }, [transactions]);
+            const filteredHistory = useMemo(() => {
+                return transactions.filter(t => {
+                    const searchLower = searchTerm.toLowerCase();
+                    const matchesSearch = !searchTerm || t.description?.toLowerCase().includes(searchLower) || t.category?.toLowerCase().includes(searchLower) || t.account?.toLowerCase().includes(searchLower);
+                    const matchesType = typeFilter === 'todos' || t.type === typeFilter;
+                    const matchesAcc = !accountFilter || t.account === accountFilter;
+                    const matchesCat = !categoryFilter || t.category === categoryFilter;
+                    
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    const matchesCard = !hideCardTxs || accInfo?.type !== 'cartao';
+                    const matchesPending = !hidePending || t.status === 'pago'; // Lógica para ocultar previsões
+
+                    const isMonth = t.clearanceDate?.startsWith(filterMonth) || t.date?.startsWith(filterMonth);
+                    return matchesSearch && matchesType && matchesAcc && matchesCat && isMonth && matchesCard && matchesPending;
+                }).sort((a, b) => (b.clearanceDate || b.timestamp || "").localeCompare(a.clearanceDate || a.timestamp || ""));
+            }, [transactions, filterMonth, searchTerm, typeFilter, accountFilter, categoryFilter, hideCardTxs, hidePending, accounts]);
 
             const accountBalances = useMemo(() => {
                 const bal = {}; accounts.forEach(a => bal[a.name] = 0);
@@ -236,24 +231,6 @@
                                   .sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
             }, [transactions, filterMonth]);
 
-            const filteredHistory = useMemo(() => {
-                return transactions.filter(t => {
-                    const searchLower = searchTerm.toLowerCase();
-                    const matchesSearch = !searchTerm || t.description?.toLowerCase().includes(searchLower) || t.category?.toLowerCase().includes(searchLower) || t.account?.toLowerCase().includes(searchLower);
-                    const matchesType = typeFilter === 'todos' || t.type === typeFilter;
-                    const matchesAcc = !accountFilter || t.account === accountFilter;
-                    const matchesCat = !categoryFilter || t.category === categoryFilter;
-                    
-                    // Lógica para ocultar cartões
-                    const accInfo = accounts.find(a => a.name === t.account);
-                    const isCard = accInfo?.type === 'cartao';
-                    const hideCondition = !hideCardTxs || !isCard;
-
-                    const isMonth = t.clearanceDate?.startsWith(filterMonth) || t.date?.startsWith(filterMonth);
-                    return matchesSearch && matchesType && matchesAcc && matchesCat && isMonth && hideCondition;
-                }).sort((a, b) => (b.clearanceDate || b.timestamp || "").localeCompare(a.clearanceDate || a.timestamp || ""));
-            }, [transactions, filterMonth, searchTerm, typeFilter, accountFilter, categoryFilter, hideCardTxs, accounts]);
-
             const saveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
@@ -282,7 +259,7 @@
                     }
                     const payload = {
                         description: type === 'transferencia' ? `Transf: ${account} → ${destAccount}` : (nIns > 1 ? `${desc} (${i+1}/${nIns})` : desc),
-                        amount: totalAmt / nIns, type, status: isCard ? 'pendente' : status, date: finalDate, clearanceDate: finalClearance, billingMonth,
+                        amount: totalAmt / nIns, type, status, date: finalDate, clearanceDate: finalClearance, billingMonth,
                         account, destinationAccount: destAccount, category: type === 'transferencia' ? 'Transferência' : (cat || 'Geral'), timestamp: new Date().toISOString()
                     };
                     if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
@@ -298,15 +275,15 @@
                 await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago', clearanceDate: finalDate });
             };
 
-            const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setInstallments(1); setDate(new Date().toISOString().split('T')[0]); setClearance(new Date().toISOString().split('T')[0]); };
+            const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setAccount(''); setDestAccount(''); setCat(''); setStatus('pago'); setInstallments(1); setDate(new Date().toISOString().split('T')[0]); setClearance(new Date().toISOString().split('T')[0]); };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase">Sincronizando Tribo...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase">Carregando v16.4.0...</div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] p-4">
                     <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
                         <h2 className="text-3xl font-black text-center mb-8 uppercase tracking-tighter">Tribo Finanças</h2>
-                        <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro ao entrar: " + err.message)); }} className="space-y-4">
+                        <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert("Erro: " + err.message)); }} className="space-y-4">
                             <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none" value={password} onChange={e => setPassword(e.target.value)} />
                             <button className="w-full bg-black text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs">Entrar no Sistema</button>
@@ -321,7 +298,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="h-10 w-10 bg-white rounded-full p-1 shadow-lg flex items-center justify-center"><Icon name="utensils" size={20} className="text-[#1A202C]" /></div>
-                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase leading-none">Tribo Management</h1><p className="text-[8px] font-bold text-slate-400 uppercase mt-1">v16.3.0 Inteligente</p></div>
+                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase leading-none">Tribo Management</h1><p className="text-[8px] font-bold text-slate-400 uppercase mt-1">v16.4.0 Estável</p></div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -333,13 +310,12 @@
                     </header>
 
                     <main className="p-6 max-w-7xl mx-auto w-full flex-1 space-y-6">
-                        {}
                         <div className="flex justify-center"><input type="month" className="bg-white border-2 border-slate-100 p-2 rounded-full font-black text-[#D97757] shadow-sm" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} /></div>
 
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit">
-                                    <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+                                    <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">{editingId ? 'Editar' : 'Novo Lançamento'}</h2>
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                         {['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>))}
                                     </div>
@@ -348,53 +324,62 @@
                                         <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={account} onChange={e => setAccount(e.target.value)}><option value="">Conta...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                     </div>
-                                    {accounts.find(a => a.name === account)?.type === 'cartao' && <div className="space-y-1 fade-in"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas</label><input type="number" min="1" className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={installments} onChange={e => setInstallments(parseInt(e.target.value) || 1)} /></div>}
-                                    {type === 'transferencia' ? <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}><option value="">Para Conta...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select> : <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>}
+                                    {accounts.find(a => a.name === account)?.type === 'cartao' && <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas</label><input type="number" min="1" className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={installments} onChange={e => setInstallments(parseInt(e.target.value) || 1)} /></div>}
+                                    {type === 'transferencia' ? <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={destAccount} onChange={e => setDestAccount(e.target.value)}><option value="">Para...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select> : <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] uppercase outline-none" value={cat} onChange={e => setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>}
                                     <div className="flex gap-2">
                                         <button type="button" onClick={() => setStatus('pago')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase border transition-all ${status === 'pago' ? 'bg-green-500 text-white' : 'bg-white text-slate-400'}`}>Pago</button>
                                         <button type="button" onClick={() => setStatus('pendente')} className={`flex-1 p-3 rounded-xl font-black text-[9px] uppercase border transition-all ${status === 'pendente' ? 'bg-orange-500 text-white' : 'bg-white text-slate-400'}`}>Pendente</button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Registo</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={date} onChange={e => setDate(e.target.value)} /></div>
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
+                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Vencimento</label><input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={clearance} onChange={e => setClearance(e.target.value)} /></div>
                                     </div>
-                                    <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Gravar Movimentação</button>
+                                    <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Gravar</button>
                                 </form>
 
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[650px] flex flex-col border overflow-hidden">
                                     <div className="p-4 bg-slate-50 border-b space-y-4">
-                                        <div className="flex gap-4">
-                                            <div className="relative flex-1">
+                                        <div className="flex flex-wrap gap-4 items-center">
+                                            <div className="relative flex-1 min-w-[200px]">
                                                 <Icon name="search" size={14} className="absolute left-4 top-4 text-slate-400" />
-                                                <input type="text" placeholder="Pesquisar por nome, categoria ou conta..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                                <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                                             </div>
-                                            {}
-                                            <div className="flex items-center gap-2 px-4 bg-white border rounded-2xl">
-                                                <label className="text-[9px] font-black uppercase text-slate-400 cursor-pointer select-none" onClick={() => setHideCardTxs(!hideCardTxs)}>Ocultar Cartões</label>
-                                                <div className="relative inline-block w-8 align-middle select-none">
-                                                    <input type="checkbox" checked={hideCardTxs} onChange={() => setHideCardTxs(!hideCardTxs)} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out" />
-                                                    <label className="toggle-label block overflow-hidden h-4 rounded-full bg-gray-300 cursor-pointer"></label>
+                                            <div className="flex items-center gap-3">
+                                                {/* Botão de Ocultar Cartões */}
+                                                <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-xl">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 cursor-pointer select-none" onClick={() => setHideCardTxs(!hideCardTxs)}>Ocultar Cartões</label>
+                                                    <div className="relative inline-block w-6 align-middle select-none">
+                                                        <input type="checkbox" checked={hideCardTxs} onChange={() => setHideCardTxs(!hideCardTxs)} className="toggle-checkbox absolute block w-3 h-3 rounded-full bg-white border-2 appearance-none cursor-pointer transition-all duration-300" />
+                                                        <label className="toggle-label block overflow-hidden h-3 rounded-full bg-gray-300 cursor-pointer"></label>
+                                                    </div>
+                                                </div>
+                                                {/* Botão de Ocultar Previsões (Novo) */}
+                                                <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-xl">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 cursor-pointer select-none" onClick={() => setHidePending(!hidePending)}>Ocultar Previsões</label>
+                                                    <div className="relative inline-block w-6 align-middle select-none">
+                                                        <input type="checkbox" checked={hidePending} onChange={() => setHidePending(!hidePending)} className="toggle-checkbox absolute block w-3 h-3 rounded-full bg-white border-2 appearance-none cursor-pointer transition-all duration-300" />
+                                                        <label className="toggle-label block overflow-hidden h-3 rounded-full bg-gray-300 cursor-pointer"></label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="todos">Todos Tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="transferencia">Transf.</option></select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase outline-none" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="">Contas...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase outline-none" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Categorias...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                                            <select className="p-2 border rounded-xl text-[8px] font-black uppercase outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="todos">Todos Tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="transferencia">Transf.</option></select>
+                                            <select className="p-2 border rounded-xl text-[8px] font-black uppercase outline-none" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="">Contas...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            <select className="p-2 border rounded-xl text-[8px] font-black uppercase outline-none" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Categorias...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredHistory.map(t => (
                                             <div key={t.id} className="p-4 flex justify-between items-center group hover:bg-slate-50 transition-colors">
                                                 <div className="flex items-center gap-4">
-                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : t.type === 'saida' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : t.type === 'saida' ? 'trending-down' : 'refresh-cw'} size={14} /></div>
                                                     <div>
                                                         <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status === 'pago' ? `Liquidação (${t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')})` : 'Previsto'}</span></div>
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : t.type === 'saida' ? 'text-slate-800' : 'text-blue-600'}`}>{formatMoney(t.amount)}</p><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { setEditingId(t.id); setDesc(t.description); setVal(t.amount.toString()); setType(t.type); setAccount(t.account); setCat(t.category); setStatus(t.status); setDate(t.date); setClearance(t.clearanceDate); }} className="text-blue-500 hover:scale-110"><Icon name="edit-2" size={14}/></button><button onClick={() => { if(confirm('Apagar permanentemente?')) db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete(); }} className="text-red-300 hover:text-red-600 hover:scale-110"><Icon name="trash-2" size={14}/></button></div></div>
+                                                <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : t.type === 'saida' ? 'text-slate-800' : 'text-blue-600'}`}>{formatMoney(t.amount)}</p><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { setEditingId(t.id); setDesc(t.description); setVal(t.amount.toString()); setType(t.type); setAccount(t.account); setCat(t.category); setStatus(t.status); setDate(t.date); setClearance(t.clearanceDate); }} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => { if(confirm('Apagar?')) db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete(); }} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>
                                             </div>
                                         ))}
                                     </div>
@@ -460,11 +445,10 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'a_pagar' && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Vencimentos Pendentes ({filterMonth})</p><h3 className="text-4xl font-black">{formatMoney(pendingPaymentsConsolidated.reduce((acc, t) => acc + t.amount, 0))}</h3></div>
-                                <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border shadow-sm">
+                                <div className="glass-card rounded-[2.5rem] divide-y border shadow-sm overflow-hidden">
                                     {pendingPaymentsConsolidated.map(t => (
                                         <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-4">
@@ -474,8 +458,8 @@
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-lg text-slate-900">{formatMoney(t.amount)}</p>
                                                 <div className="flex gap-2 items-center">
-                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={payDateForConfirmation} onChange={e => setPayDateForConfirmation(e.target.value)} />
-                                                    <button onClick={() => markAsPaid(t.id, payDateForConfirmation)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all"><Icon name="check" size={18} /></button>
+                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={paymentDateConfirm} onChange={e => setPaymentDateConfirm(e.target.value)} />
+                                                    <button onClick={() => markAsPaid(t.id, paymentDateConfirm)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all"><Icon name="check" size={18} /></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -492,13 +476,13 @@
                                         <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={24} /></div>
-                                                <div><p className="font-black text-base uppercase">[{t.clearanceDate.split('-').reverse().join('/')}] {t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
+                                                <div><p className="font-black text-base uppercase leading-none">[{t.clearanceDate.split('-').reverse().join('/')}] {t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-lg text-green-600">{formatMoney(t.amount)}</p>
                                                 <div className="flex gap-2 items-center">
-                                                    <div className="flex flex-col"><label className="text-[7px] font-black text-slate-400 uppercase ml-1">Data Recebido</label><input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={receiveDateForConfirmation} onChange={e => setReceiveDateForConfirmation(e.target.value)} /></div>
-                                                    <button onClick={() => markAsPaid(t.id, receiveDateForConfirmation)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all mt-3"><Icon name="check" size={18} /></button>
+                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={paymentDateConfirm} onChange={e => setPaymentDateConfirm(e.target.value)} />
+                                                    <button onClick={() => markAsPaid(t.id, paymentDateConfirm)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all"><Icon name="check" size={18} /></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -555,20 +539,19 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-yellow-500 transition-transform hover:scale-105">
+                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-yellow-500">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Meta Mensal de Vendas</p>
                                         <div className="flex items-center justify-center gap-3 mb-4">
                                             <input type="number" className="w-32 p-3 bg-slate-50 border-2 rounded-2xl text-xl font-black text-center outline-none focus:border-yellow-500" value={metaVendas} onChange={e => { const m = p(e.target.value); setMetaVendas(m); db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ meta: m }, { merge: true }); }} />
                                         </div>
-                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2 shadow-inner"><div className="bg-green-500 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (stats.rb / (metaVendas || 1)) * 100)}%` }}></div></div>
+                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2"><div className="bg-green-500 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (stats.rb / (metaVendas || 1)) * 100)}%` }}></div></div>
                                         <p className="text-[9px] font-black uppercase text-slate-400">{((stats.rb / (metaVendas || 1)) * 100).toFixed(1)}% Atingido</p>
                                     </div>
-                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-green-500 transition-transform hover:scale-105"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Dias Operados no Mês</p><h3 className="text-4xl font-black text-green-600">{stats.daysActive}</h3><p className="text-[9px] font-black uppercase text-slate-400 mt-2">Registos na Planilha</p></div>
-                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-blue-500 transition-transform hover:scale-105"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Média Diária (Ticket)</p><h3 className="text-4xl font-black text-blue-600">{formatMoney(stats.avg)}</h3><p className="text-[9px] font-black uppercase text-slate-400 mt-2">Faturação / Dias</p></div>
+                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-green-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Dias Operados</p><h3 className="text-4xl font-black text-green-600">{stats.daysActive}</h3><p className="text-[9px] font-black uppercase text-slate-400 mt-2">Registos no Mês</p></div>
+                                    <div className="glass-card p-10 rounded-[3rem] text-center border-t-8 border-blue-500"><p className="text-[10px] font-black text-slate-400 uppercase mb-4">Média Diária (Ticket)</p><h3 className="text-4xl font-black text-blue-600">{formatMoney(stats.avg)}</h3><p className="text-[9px] font-black uppercase text-slate-400 mt-2">Faturação / Dias</p></div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="glass-card p-8 rounded-[2.5rem] bg-green-50/30 text-center"><p className="text-[9px] font-black uppercase text-slate-400 mb-1">Receita Bruta</p><h4 className="text-xl font-black text-green-600">{formatMoney(stats.rb)}</h4></div>
@@ -580,37 +563,36 @@
 
                         {activeTab === 'dre' && (
                             <div className="max-w-3xl mx-auto glass-card p-12 rounded-[3.5rem] shadow-2xl animate-in fade-in border-t-8 border-orange-600">
-                                <h2 className="text-xl font-black uppercase border-b pb-6 text-center mb-8">Demonstrativo de Resultados - {filterMonth}</h2>
+                                <h2 className="text-xl font-black uppercase border-b pb-6 text-center mb-8">DRE - {filterMonth}</h2>
                                 <div className="space-y-4">
-                                    <div className="flex justify-between font-black text-sm p-4 bg-green-50 rounded-2xl uppercase"><span>(+) Receita Operacional Bruta</span><span>{formatMoney(stats.rb)}</span></div>
-                                    <div className="flex justify-between font-bold text-xs px-4 py-2 text-red-600 border-b"><span>(-) Custos Variáveis (Logística)</span><span>{formatMoney(stats.custosVar)}</span></div>
-                                    <div className="py-2"><h3 className="text-[10px] font-black uppercase text-slate-400 px-4 mb-2">Despesas Operacionais por Categoria</h3>{Object.entries(stats.cCat).map(([cat, val]) => (<div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 border-b border-dashed"><span>(-) {cat}</span><span>{formatMoney(val)}</span></div>))}</div>
+                                    <div className="flex justify-between font-black text-sm p-4 bg-green-50 rounded-2xl uppercase"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="flex justify-between font-bold text-xs px-4 py-2 text-red-600 border-b"><span>(-) Logística (Motoboy/Taxas)</span><span>{formatMoney(stats.custosVar)}</span></div>
+                                    <div className="py-2"><h3 className="text-[10px] font-black uppercase text-slate-400 px-4 mb-2">Despesas Operacionais</h3>{Object.entries(stats.cCat).map(([cat, val]) => (<div key={cat} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 border-b border-dashed uppercase"><span>(-) {cat}</span><span>{formatMoney(val)}</span></div>))}</div>
                                     <div className={`flex justify-between p-10 rounded-[2.5rem] mt-10 shadow-xl ${stats.lucro >= 0 ? 'bg-black text-[#F8CC82]' : 'bg-red-600 text-white'}`}><h3 className="text-xl font-black uppercase">Resultado Líquido</h3><span className="text-4xl font-black">{formatMoney(stats.lucro)}</span></div>
                                 </div>
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'fornecedores' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] h-fit space-y-6 shadow-sm">
-                                    <h2 className="text-sm font-black uppercase tracking-widest border-b pb-4">Novo Fornecedor</h2>
-                                    <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none bg-slate-50 focus:bg-white" placeholder="Nome do Fornecedor" value={accName} onChange={e => setAccName(e.target.value)} />
-                                    <button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: accName, timestamp: new Date().toISOString() }); setAccName(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Cadastrar Fornecedor</button>
+                                    <h2 className="text-sm font-black uppercase border-b pb-4">Novo Fornecedor</h2>
+                                    <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50" placeholder="Nome" value={accName} onChange={e => setAccName(e.target.value)} />
+                                    <button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: accName }); setAccName(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Cadastrar</button>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-sm max-h-[500px] overflow-y-auto no-scrollbar">
-                                    <h2 className="text-sm font-black uppercase tracking-widest border-b pb-4 mb-4">Lista de Parceiros</h2>
-                                    <div className="space-y-2">{suppliers.map(s => <div key={s.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group"><span className="text-xs font-black uppercase">{s.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14}/></button></div>)}</div>
+                                    <h2 className="text-sm font-black uppercase border-b pb-4 mb-4">Parceiros</h2>
+                                    <div className="space-y-2">{suppliers.map(s => <div key={s.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group"><span className="text-xs font-black uppercase">{s.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button></div>)}</div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'ajustes' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
-                                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500 h-fit space-y-4 shadow-xl">
+                                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-orange-500 h-fit space-y-4">
                                     <h2 className="text-sm font-black uppercase">{editingAccId ? 'Editar Conta' : 'Nova Conta'}</h2>
                                     <div className="p-6 bg-slate-50 rounded-3xl border border-dashed space-y-4">
-                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs" placeholder="Nome" value={accName} onChange={e => setAccName(e.target.value)} />
                                         <div className="grid grid-cols-2 gap-2">
                                             <button type="button" onClick={() => setAccType('corrente')} className={`p-3 rounded-xl text-[9px] font-black transition-all ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>Corrente</button>
                                             <button type="button" onClick={() => setAccType('cartao')} className={`p-3 rounded-xl text-[9px] font-black transition-all ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>Cartão</button>
@@ -625,20 +607,20 @@
                                             if (editingAccId) await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${editingAccId}`).update(payload);
                                             else await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add(payload);
                                             setEditingAccId(null); setAccName('');
-                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar Configurações</button>
+                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Salvar</button>
                                     </div>
-                                    <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar">{accounts.map(a => <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white group"><div className="flex flex-col"><div className="flex items-center gap-2 font-black text-[10px] uppercase">{a.name} {a.isHighlight && <span className="group-badge bg-yellow-100 text-yellow-700">Destaque</span>}</div><span className="text-[8px] text-slate-400 font-bold uppercase">Posição: {a.position}</span></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { setEditingAccId(a.id); setAccName(a.name); setAccType(a.type); setAccPos(a.position); setIsHighlight(a.isHighlight); setAccClosing(a.closingDay || '25'); setAccDue(a.dueDay || '10'); }} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>)}</div>
+                                    <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar">{accounts.map(a => <div key={a.id} className="flex justify-between items-center p-4 border rounded-2xl bg-white group"><div className="flex flex-col"><div className="flex items-center gap-2 font-black text-[10px] uppercase">{a.name}</div><span className="text-[8px] text-slate-400 font-bold uppercase">Pos: {a.position}</span></div><div className="flex gap-2 opacity-0 group-hover:opacity-100"><button onClick={() => { setEditingAccId(a.id); setAccName(a.name); setAccType(a.type); setAccPos(a.position); setIsHighlight(a.isHighlight); setAccClosing(a.closingDay || '25'); setAccDue(a.dueDay || '10'); }} className="text-blue-500"><Icon name="edit-2" size={14}/></button><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></div></div>)}</div>
                                 </div>
-                                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-[#1A202C] h-fit space-y-6 shadow-xl">
-                                    <h2 className="text-sm font-black uppercase tracking-widest">Categorias</h2>
-                                    <div className="flex gap-2"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" value={accName} onChange={e => setAccName(e.target.value)} placeholder="Nova Categoria..." /><button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: accName }); setAccName(''); }} className="bg-black text-white p-3 rounded-xl hover:scale-105 active:scale-95 transition-all"><Icon name="plus" size={16}/></button></div>
-                                    <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar">{categories.map(c => <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group"><span className="text-[9px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={12}/></button></div>)}</div>
+                                <div className="glass-card p-8 rounded-[3rem] border-t-4 border-[#1A202C] h-fit space-y-6">
+                                    <h2 className="text-sm font-black uppercase">Categorias</h2>
+                                    <div className="flex gap-2"><input type="text" className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs" value={accName} onChange={e => setAccName(e.target.value)} placeholder="Nova..." /><button onClick={async() => { if(!accName) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({ name: accName }); setAccName(''); }} className="bg-black text-white p-3 rounded-xl"><Icon name="plus" size={16}/></button></div>
+                                    <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar">{categories.map(c => <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group"><span className="text-[9px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={12}/></button></div>)}</div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger • Business Intelligence v16.3.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger • v16.4.0</footer>
                 </div>
             );
         }
