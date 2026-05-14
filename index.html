@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v15.7.0</title>
+    <title>Tribo Burger | Gestão Financeira v15.8.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -75,6 +75,7 @@
             const [typeFilter, setTypeFilter] = useState('todos');
             const [searchTerm, setSearchTerm] = useState('');
 
+            /* Estados do Formulário */
             const [desc, setDesc] = useState('');
             const [val, setVal] = useState('');
             const [type, setType] = useState('saida'); 
@@ -115,12 +116,14 @@
 
             const filteredHistory = useMemo(() => {
                 return transactions.filter(t => {
+                    // Usar a data de pagamento real se estiver pago, senão a data de registro
                     const activeDate = (t.status === 'pago' && t.paymentDate) ? t.paymentDate : t.date;
                     const isDateMatch = activeDate?.startsWith(filterMonth);
                     const isAccountMatch = dashboardFilterAccount === '' || t.account === dashboardFilterAccount;
                     const isCategoryMatch = dashboardFilterCategory === '' || t.category === dashboardFilterCategory;
                     const isTypeMatch = typeFilter === 'todos' || t.type === typeFilter;
                     
+                    // Lógica de pesquisa por nome
                     const matchesSearch = searchTerm === '' || 
                         t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         t.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -128,11 +131,12 @@
 
                     return isDateMatch && isAccountMatch && isCategoryMatch && isTypeMatch && matchesSearch;
                 }).sort((a,b) => {
+                    // Ordenar pelo pagamento mais recente (ou data prevista)
                     const dateA = (a.status === 'pago' && a.paymentDate) ? a.paymentDate : (a.date || '0000-00-00');
                     const dateB = (b.status === 'pago' && b.paymentDate) ? b.paymentDate : (b.date || '0000-00-00');
                     return dateB.localeCompare(dateA);
                 });
-            }, [transactions, filterMonth, dashboardFilterAccount, dashboardFilterCategory, typeFilter]);
+            }, [transactions, filterMonth, dashboardFilterAccount, dashboardFilterCategory, typeFilter, searchTerm]);
 
             const saveTransaction = async (e) => {
                 e.preventDefault();
@@ -168,7 +172,7 @@
                 setDesc(''); setVal(''); setInstallments(1);
             };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">Tribo v15.7.0 Loading...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black">Tribo v15.8.0 Loading...</div>;
 
             return (
                 <div className="min-h-screen flex flex-col fade-in pb-20">
@@ -199,7 +203,7 @@
 
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                {}
+                                {/* Formulário de Lançamento */}
                                 <div className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm border-t-4 border-black h-fit">
                                     <h2 className="text-xs font-black uppercase border-b pb-3 mb-4">Novo Registro</h2>
                                     <form onSubmit={saveTransaction} className="space-y-4">
@@ -246,7 +250,7 @@
                                     </form>
                                 </div>
 
-                                {}
+                                {/* Histórico com Filtros Corrigidos */}
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm flex flex-col border h-[650px] overflow-hidden">
                                     <div className="p-4 bg-slate-50 border-b space-y-3">
                                         <div className="flex justify-between items-center">
@@ -279,6 +283,32 @@
                                             
                                             <div className="grid grid-cols-3 gap-2">
                                                 <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                                                    <option value="todos">Todos Tipos</option>
+                                                    <option value="entrada">Entradas</option>
+                                                    <option value="saida">Saídas</option>
+                                                    <option value="transferencia">Transf.</option>
+                                                </select>
+                                                <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterAccount} onChange={e => setDashboardFilterAccount(e.target.value)}>
+                                                    <option value="">Todas Contas</option>
+                                                    {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                                                </select>
+                                                <select className="text-[9px] font-bold p-2 border rounded-xl bg-white outline-none" value={dashboardFilterCategory} onChange={e => setDashboardFilterCategory(e.target.value)}>
+                                                    <option value="">Categorias</option>
+                                                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {}
+                                    <div className="flex-1 overflow-y-auto divide-y no-scrollbar">
+                                        {filteredHistory.map(t => (
+                                            <div key={t.id} className="p-4 flex justify-between items-center group hover:bg-slate-50 transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex flex-col items-center min-w-[40px]">
+                                                        <span className="text-[10px] font-black text-slate-400">
+                                                            {(t.status === 'pago' && t.paymentDate) ? t.paymentDate.split('-').reverse().slice(0,2).join('/') : t.date?.split('-').reverse().slice(0,2).join('/')}
+                                                        </span>
                                                         <span className={`text-[7px] font-bold uppercase mt-1 ${t.status === 'pago' ? 'text-green-500' : 'text-orange-400'}`}>
                                                             {t.status === 'pago' ? 'Liquidação' : 'Previsto'}
                                                         </span>
@@ -315,12 +345,11 @@
                             </div>
                         )}
                         
-                        {}
                         {activeTab === 'saldos' && <p className="p-20 text-center font-black opacity-20">Aba Saldos Baseline v15 Carregada</p>}
                         {activeTab === 'vendas' && <p className="p-20 text-center font-black opacity-20">Aba Vendas Baseline v15 Carregada</p>}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.7.0 Estável</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.8.0 Estável</footer>
                 </div>
             );
         }
