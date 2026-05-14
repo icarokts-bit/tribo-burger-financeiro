@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Total v14.6.0</title>
+    <title>Tribo Burger | Gestão Total v14.7.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18,30 +18,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #FDFCF9; color: #1A202C; overflow-x: hidden; }
-        
         .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.6); }
         .tab-active { background-color: #1A202C; color: #F8CC82; border-radius: 14px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; padding: 4px; }
-        .table-input:focus { background-color: rgba(211, 226, 152, 0.2); }
-        
         .header-black { background-color: #000; color: #FFF; font-weight: 800; text-transform: uppercase; font-size: 10px; border: 1px solid #333; }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2.5rem; border-radius: 3rem; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
-        .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; }
-
-        select.filter-select {
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23D97757' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.5rem center;
-            padding-right: 1.5rem;
-        }
-
-        .section-label { font-[900] text-[10px] uppercase tracking-[0.3em] text-slate-400 mb-6 flex items-center gap-3; }
+        .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .card-bank-mercado { border-top: 8px solid #009EE3; }
+        .card-bank-c6 { border-top: 8px solid #000000; }
+        .card-bank-ifood { border-top: 8px solid #EA1D2C; }
+        .card-bank-fundo { border-top: 8px solid #94A3B8; }
+        .section-label { font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: #94A3B8; margin-bottom: 1.5rem; display: flex; items-center gap: 1rem; }
         .section-label::after { content: ''; flex: 1; height: 1px; background: #E2E8F0; }
     </style>
 </head>
@@ -158,7 +144,6 @@
                 const balances = {}; 
                 const p = (v) => parseFloat(v) || 0;
                 accounts.forEach(acc => balances[acc.name] = 0);
-                
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
@@ -180,70 +165,60 @@
             }, [accounts, accountBalances]);
 
             const groupedAccounts = useMemo(() => {
-                const currentAccs = accounts
-                    .filter(acc => acc.type === 'corrente')
-                    .sort((a,b) => (parseInt(a.position) || 0) - (parseInt(b.position) || 0));
-                
+                const currentAccs = accounts.filter(acc => acc.type === 'corrente');
                 return {
-                    highlighted: currentAccs.filter(acc => acc.highlight),
-                    others: currentAccs.filter(acc => !acc.highlight)
+                    highlighted: currentAccs.filter(acc => acc.highlight).sort((a,b) => (parseInt(a.position) || 0) - (parseInt(b.position) || 0)),
+                    others: currentAccs.filter(acc => !acc.highlight).sort((a,b) => (parseInt(a.position) || 0) - (parseInt(b.position) || 0))
                 };
             }, [accounts]);
 
+            const pendingPaymentsConsolidated = useMemo(() => {
+                const p = (v) => parseFloat(v) || 0;
+                const consolidated = [];
+                const cardsProcessed = new Set();
+
+                // 1. Processar contas correntes (Saídas pendentes normais)
+                transactions.forEach(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    if (t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao') {
+                        consolidated.push({ ...t, isCard: false });
+                    }
+                });
+
+                // 2. Processar cartões de crédito (Agrupar em uma fatura única por vencimento real)
+                accounts.filter(a => a.type === 'cartao').forEach(card => {
+                    const cardTxs = transactions.filter(t => t.account === card.name && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth));
+                    if (cardTxs.length > 0) {
+                        const totalCard = cardTxs.reduce((sum, tx) => sum + p(tx.amount), 0);
+                        consolidated.push({
+                            id: `fatura-${card.name}-${filterMonth}`,
+                            description: `Fatura ${card.name}`,
+                            amount: totalCard,
+                            clearanceDate: `${filterMonth}-${String(card.dueDay || 1).padStart(2, '0')}`,
+                            account: card.name,
+                            category: 'Cartão de Crédito',
+                            isCard: true,
+                            txIds: cardTxs.map(t => t.id) // Para poder marcar como pago em massa depois
+                        });
+                    }
+                });
+
+                return consolidated.sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+            }, [transactions, accounts, filterMonth]);
+
             const stats = useMemo(() => {
                 const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
-                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; 
-                let diasComVenda = 0;
-
+                let rb = 0; let custosVariaveis = 0; let costsByCategory = {}; let diasComVenda = 0;
                 Object.keys(dailyRecords).forEach(day => {
                     if (day.startsWith(filterMonth)) {
                         const r = dailyRecords[day];
                         const totalDia = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc, f) => acc + p(r[f]), 0);
-                        if (totalDia > 0) {
-                            rb += totalDia;
-                            diasComVenda++;
-                        }
+                        if (totalDia > 0) { rb += totalDia; diasComVenda++; }
                         custosVariaveis += p(r.motoboy) + p(r.taxaEntrega);
                     }
                 });
-
-                transactions.forEach(t => {
-                    if ((t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)) && t.status === 'pago') {
-                        if (t.type === 'saida') costsByCategory[t.category] = (costsByCategory[t.category] || 0) + p(t.amount);
-                    }
-                });
-
-                const totalOperating = Object.values(costsByCategory).reduce((a, b) => a + b, 0);
-                return { 
-                    rb, lucro: rb - (custosVariaveis + totalOperating), 
-                    diasComVenda, mediaDiaria: diasComVenda > 0 ? rb / diasComVenda : 0
-                };
-            }, [transactions, dailyRecords, filterMonth]);
-
-            const filteredTxs = useMemo(() => {
-                return transactions.filter(t => {
-                    const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
-                    const isTypeMatch = typeFilter === 'todos' || t.type === typeFilter;
-                    const isAccMatch = accFilter === '' || t.account === accFilter || t.destinationAccount === accFilter;
-                    const isCatMatch = catFilter === '' || t.category === catFilter;
-                    return isDateMatch && isTypeMatch && isAccMatch && isCatMatch;
-                }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
-            }, [transactions, filterMonth, typeFilter, accFilter, catFilter]);
-
-            const saveAccount = async (e) => {
-                e.preventDefault();
-                if (!accName) return;
-                const path = `artifacts/${appId}/users/${user.uid}/accounts`;
-                const payload = { 
-                    name: accName, 
-                    type: accType, 
-                    highlight: accHighlight, 
-                    position: parseInt(accPosition) || 0 
-                };
-                if (editingAccId) await db.doc(`${path}/${editingAccId}`).update(payload);
-                else await db.collection(path).add(payload);
-                setAccName(''); setAccHighlight(false); setAccPosition(1); setEditingAccId(null);
-            };
+                return { rb, diasComVenda, mediaDiaria: diasComVenda > 0 ? rb / diasComVenda : 0 };
+            }, [dailyRecords, filterMonth]);
 
             const saveTx = async (e) => {
                 e.preventDefault();
@@ -268,7 +243,7 @@
                         let billingDate = new Date(dObj);
                         if (purchaseDay > closingDay) billingDate.setMonth(billingDate.getMonth() + 1);
                         let dueDate = new Date(billingDate);
-                        dueDate.setMonth(dueDate.getMonth() + 1);
+                        dueDate.setMonth(dueDate.getMonth() + 1); // Vence no mês seguinte ao faturamento
                         dueDate.setDate(dueDay);
                         finalClearance = dueDate.toISOString().split('T')[0];
                     }
@@ -288,24 +263,18 @@
                 setDesc(''); setVal(''); setInstallments(1); setCat('');
             };
 
-            const markAsPaid = async (tId) => {
-                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${tId}`).update({ status: 'pago' });
+            const markAsPaid = async (item) => {
+                const batch = db.batch();
+                const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                if (item.isCard) {
+                    item.txIds.forEach(id => batch.update(db.doc(`${path}/${id}`), { status: 'pago' }));
+                } else {
+                    batch.update(db.doc(`${path}/${item.id}`), { status: 'pago' });
+                }
+                await batch.commit();
             };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82]"><Icon name="loader" className="animate-spin" size={48} /></div>;
-
-            if (!user) return (
-                <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
-                    <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
-                        <h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter text-center mb-10">Tribo Burger</h2>
-                        <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert(err.message)); }} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={email} onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={password} onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs">Entrar</button>
-                        </form>
-                    </div>
-                </div>
-            );
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C]"><Icon name="loader" className="animate-spin text-orange-500" size={48} /></div>;
 
             return (
                 <div className="min-h-screen flex flex-col fade-in relative pb-20">
@@ -316,9 +285,9 @@
                                 <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Business</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'ajustes'].map(tab => (
+                                {['dashboard', 'saldos', 'planilha', 'a_pagar', 'resultados', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
-                                        {tab === 'planilha' ? 'Vendas' : tab.replace('_', ' ')}
+                                        {tab.replace('_', ' ')}
                                     </button>
                                 ))}
                                 <button onClick={() => auth.signOut()} className="px-4 py-2 text-[10px] font-black text-red-400 uppercase ml-4">Sair</button>
@@ -327,74 +296,43 @@
                     </header>
 
                     <main className="p-6 max-w-6xl mx-auto w-full flex-1 space-y-6">
-                        <div className="flex justify-center"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white border p-2 rounded-full font-black text-[#D97757] text-sm shadow-sm" /></div>
+                        <div className="flex justify-center"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-white border-2 border-slate-100 p-3 rounded-full font-black text-[#D97757] text-sm shadow-sm outline-none" /></div>
 
-                        {/* DASHBOARD */}
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <form onSubmit={saveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit">
-                                    <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">Novo Lançamento</h2>
+                                    <h2 className="text-xs font-black uppercase tracking-widest border-b pb-3">Lançamento Rápido</h2>
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                         {['entrada', 'saida', 'transferencia'].map(t => (
                                             <button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>
                                         ))}
                                     </div>
-                                    <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+                                    <input type="text" placeholder="O que foi?" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
+                                        <input type="text" placeholder="Quanto?" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none" value={val} onChange={e => setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={account} onChange={e => setAccount(e.target.value)}>
                                             {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                         </select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Categoria</label>
-                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>
-                                            <option value="">Geral</option>
-                                            {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                        </select>
-                                    </div>
-                                    {type === 'transferencia' && (
-                                        <select className="w-full p-4 bg-blue-50 border rounded-2xl font-black text-[10px] outline-none uppercase" value={destAccount} onChange={e => setDestAccount(e.target.value)}>
-                                            <option value="">Destino...</option>
-                                            {accounts.filter(a => a.name !== account).map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                                        </select>
-                                    )}
+                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none uppercase" value={cat} onChange={e => setCat(e.target.value)}>
+                                        <option value="">Categoria...</option>
+                                        {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                    </select>
                                     <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Gravar</button>
                                 </form>
-
-                                <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[600px] flex flex-col border overflow-hidden">
-                                    <div className="p-4 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-3">
-                                        <div className="font-black text-[10px] uppercase text-slate-400">Histórico de Movimentações</div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <select className="filter-select text-[8px] font-black uppercase p-2 border rounded-xl bg-white outline-none" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                                                <option value="todos">Todos Tipos</option>
-                                                <option value="entrada">Entradas</option>
-                                                <option value="saida">Saídas</option>
-                                                <option value="transferencia">Transf.</option>
-                                            </select>
-                                            <select className="filter-select text-[8px] font-black uppercase p-2 border rounded-xl bg-white outline-none" value={accFilter} onChange={e => setAccFilter(e.target.value)}>
-                                                <option value="">Todos Bancos</option>
-                                                {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-
+                                <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[500px] flex flex-col border overflow-hidden">
+                                    <div className="p-4 bg-slate-50 border-b font-black text-[10px] uppercase text-slate-400">Últimas Movimentações</div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {filteredTxs.map(t => (
+                                        {transactions.filter(t => t.date?.startsWith(filterMonth)).sort((a,b) => b.timestamp.localeCompare(a.timestamp)).map(t => (
                                             <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50">
                                                 <div className="flex items-center gap-4">
-                                                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.date?.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : t.type === 'saida' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                        <Icon name={t.type === 'entrada' ? 'trending-up' : t.type === 'saida' ? 'trending-down' : 'repeat'} size={14} />
-                                                    </div>
+                                                    <span className="text-[10px] font-black text-slate-400">{t.date?.split('-').reverse().slice(0, 2).join('/')}</span>
                                                     <div>
-                                                        <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
+                                                        <p className="font-black text-xs uppercase">{t.description}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase">{t.account}</p>
                                                     </div>
                                                 </div>
-                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : t.type === 'saida' ? 'text-red-600' : 'text-blue-600'}`}>
-                                                    {formatMoney(t.amount)}
-                                                </p>
+                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -402,39 +340,32 @@
                             </div>
                         )}
 
-                        { }
                         {activeTab === 'saldos' && (
-                            <div className="space-y-12 fade-in">
+                            <div className="space-y-12">
                                 <div className="stat-banner !bg-[#D97757] !border-black">
                                     <p className="text-[11px] font-black uppercase tracking-widest opacity-80 mb-2">Património Líquido Total</p>
                                     <h3 className="text-5xl font-black text-white">{formatMoney(totalBalance)}</h3>
                                 </div>
-
-                                {groupedAccounts.highlighted.length > 0 && (
-                                    <div className="space-y-6">
-                                        <h2 className="section-label">Contas em Destaque</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            {groupedAccounts.highlighted.map(acc => (
-                                                <div key={acc.id} className="glass-card p-12 rounded-[4rem] border-t-[12px] border-orange-500 text-center shadow-xl transition-all hover:translate-y-[-5px]">
-                                                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">{acc.name}</p>
-                                                    <h3 className={`text-5xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
-                                                        {formatMoney(accountBalances[acc.name] || 0)}
-                                                    </h3>
-                                                </div>
-                                            ))}
+                                <div className="space-y-8">
+                                    {groupedAccounts.highlighted.length > 0 && (
+                                        <div className="space-y-4">
+                                            <h2 className="section-label">Contas Principais</h2>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                {groupedAccounts.highlighted.map(acc => (
+                                                    <div key={acc.id} className="glass-card p-12 rounded-[4rem] border-t-[12px] border-orange-500 text-center shadow-xl">
+                                                        <p className="text-[12px] font-black text-slate-400 uppercase mb-2">{acc.name}</p>
+                                                        <h3 className="text-5xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                <div className="space-y-6">
-                                    <h2 className="section-label">Restante das Contas</h2>
+                                    )}
+                                    <h2 className="section-label">Outras Contas</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                         {groupedAccounts.others.map(acc => (
-                                            <div key={acc.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-black text-center shadow-md transition-all hover:scale-105">
-                                                <p className="text-[11px] font-black text-slate-400 uppercase mb-1 tracking-wider">{acc.name}</p>
-                                                <h3 className={`text-2xl font-black ${accountBalances[acc.name] >= 0 ? 'text-slate-900' : 'text-red-500'}`}>
-                                                    {formatMoney(accountBalances[acc.name] || 0)}
-                                                </h3>
+                                            <div key={acc.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-black text-center shadow-md">
+                                                <p className="text-[11px] font-black text-slate-400 uppercase mb-1">{acc.name}</p>
+                                                <h3 className="text-2xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
                                             </div>
                                         ))}
                                     </div>
@@ -442,118 +373,98 @@
                             </div>
                         )}
 
-                        {/* PLANILHA VENDAS */}
-                        {activeTab === 'planilha' && (
-                             <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                                <table className="w-full text-center text-[11px] min-w-[1500px]">
-                                    <thead>
-                                        <tr className="header-black text-white">
-                                            <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
-                                            <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                            {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
-                                            <th className="p-4 text-orange-400">Taxa Entrega</th>
-                                            <th className="p-4 text-red-400">Motoboy</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y font-bold">
-                                        {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => { 
-                                            const r = dailyRecords[d];
-                                            const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
-                                            const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
-                                            return (
-                                                <tr key={d} className="hover:bg-slate-50 h-12">
-                                                    <td className="p-0 sticky left-0 bg-white border-r font-black">{d.split('-').reverse().join('/')}</td>
-                                                    <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                    {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
-                                                        <td key={f} className="p-0 border-r">
-                                                            <input className="table-input" value={r[f] || ''} onChange={async(e) => { await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true }); }} placeholder="0,00" />
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                        {activeTab === 'a_pagar' && (
+                            <div className="space-y-6">
+                                <div className="stat-banner !border-red-500">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Total a Pagar no Mês</p>
+                                    <h3 className="text-4xl font-black text-white">{formatMoney(pendingPaymentsConsolidated.reduce((a,b) => a + b.amount, 0))}</h3>
+                                </div>
+                                <div className="glass-card rounded-[3rem] overflow-hidden border shadow-xl">
+                                    <div className="bg-slate-50 p-6 border-b font-black text-[10px] uppercase text-slate-400">Contas e Faturas Agrupadas</div>
+                                    <div className="divide-y">
+                                        {pendingPaymentsConsolidated.length === 0 ? (
+                                            <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest">Nenhum pagamento pendente</div>
+                                        ) : (
+                                            pendingPaymentsConsolidated.map(item => (
+                                                <div key={item.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-all">
+                                                    <div className="flex items-center gap-6">
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.isCard ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'}`}>
+                                                            <Icon name={item.isCard ? 'credit-card' : 'file-text'} size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-lg uppercase leading-tight">{item.description}</p>
+                                                            <div className="flex gap-3 mt-1">
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase">Vence em: {item.clearanceDate.split('-').reverse().join('/')}</span>
+                                                                <span className="text-[10px] font-black text-orange-500 uppercase">{item.account}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-6">
+                                                        <p className="text-xl font-black">{formatMoney(item.amount)}</p>
+                                                        <button onClick={() => markAsPaid(item)} className="w-12 h-12 bg-green-500 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all">
+                                                            <Icon name="check" size={20} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        {/* RESULTADOS */}
                         {activeTab === 'resultados' && (
                             <div className="space-y-8">
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#F8CC82] text-center">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-yellow-500 text-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Meta de Vendas</p>
-                                        <input type="number" className="w-full text-2xl font-black text-center bg-slate-50 p-4 rounded-2xl border mb-4" value={salesGoal} onChange={async(e) => {
-                                            const newGoal = e.target.value;
-                                            setSalesGoal(newGoal);
-                                            await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ salesGoal: parseFloat(newGoal) }, { merge: true });
+                                        <input type="number" className="w-full text-3xl font-black text-center bg-slate-50 p-4 rounded-3xl border-2 mb-4" value={salesGoal} onChange={async(e) => {
+                                            const v = e.target.value; setSalesGoal(v);
+                                            await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ salesGoal: parseFloat(v) || 0 }, { merge: true });
                                         }} />
                                         <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                                            <div className="bg-green-500 h-full transition-all" style={{ width: `${Math.min(100, (stats.rb / (salesGoal || 1)) * 100)}%` }}></div>
+                                            <div className="bg-green-500 h-full" style={{ width: `${Math.min(100, (stats.rb / (salesGoal || 1)) * 100)}%` }}></div>
                                         </div>
-                                        <p className="text-[9px] font-black uppercase mt-2 text-slate-400">{((stats.rb / (salesGoal || 1)) * 100).toFixed(1)}% do objetivo</p>
                                     </div>
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Faturamento Bruto</p>
-                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.rb)}</h3>
-                                        <p className="text-[9px] font-black uppercase mt-2 text-slate-300">{stats.diasComVenda} dias ativos</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Bruto do Mês</p>
+                                        <h3 className="text-4xl font-black text-green-600">{formatMoney(stats.rb)}</h3>
+                                        <p className="text-[9px] font-black text-slate-300 uppercase mt-4">{stats.diasComVenda} dias faturados</p>
                                     </div>
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Média Diária</p>
-                                        <h3 className="text-3xl font-black text-blue-600">{formatMoney(stats.mediaDiaria)}</h3>
-                                        <p className="text-[9px] font-black uppercase mt-2 text-slate-300">Baseado em dias trabalhados</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Ticket Médio Dia</p>
+                                        <h3 className="text-4xl font-black text-blue-600">{formatMoney(stats.mediaDiaria)}</h3>
+                                        <p className="text-[9px] font-black text-slate-300 uppercase mt-4">Produtividade Diária</p>
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        {/* AJUSTES */}
+                        
                         {activeTab === 'ajustes' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-black space-y-6">
-                                    <h2 className="text-sm font-black uppercase tracking-widest border-b pb-4">{editingAccId ? 'Editar Conta' : 'Gestão de Contas'}</h2>
-                                    <form onSubmit={saveAccount} className="space-y-4">
-                                        <input type="text" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Tipo</label>
-                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={accType} onChange={e => setAccType(e.target.value)}>
-                                                    <option value="corrente">Conta Corrente</option>
-                                                    <option value="cartao">Cartão de Crédito</option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase ml-2 text-slate-400">Posição</label>
-                                                <input type="number" className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={accPosition} onChange={e => setAccPosition(e.target.value)} />
-                                            </div>
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-black space-y-6">
+                                    <h2 className="font-black uppercase text-sm border-b pb-4">Gestão de Bancos e Cartões</h2>
+                                    <div className="p-6 bg-slate-50 rounded-3xl border-2 border-dashed space-y-4">
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs" placeholder="Nome da Conta" value={accName} onChange={e => setAccName(e.target.value)} />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black uppercase ${accType === 'corrente' ? 'bg-black text-white' : 'bg-white border'}`}>CORRENTE</button>
+                                            <button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black uppercase ${accType === 'cartao' ? 'bg-orange-500 text-white' : 'bg-white border'}`}>CARTÃO</button>
                                         </div>
-                                        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border">
-                                            <input type="checkbox" id="chk-destaque" className="w-5 h-5 rounded accent-black" checked={accHighlight} onChange={e => setAccHighlight(e.target.checked)} />
-                                            <label htmlFor="chk-destaque" className="text-[10px] font-black uppercase cursor-pointer">Marcar como Destaque</label>
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" checked={accHighlight} onChange={e => setAccHighlight(e.target.checked)} />
+                                            <span className="text-[10px] font-black uppercase">Conta Principal (Destaque)</span>
                                         </div>
-                                        <button className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">{editingAccId ? 'Guardar' : 'Adicionar'}</button>
-                                    </form>
-                                    <div className="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
-                                        {accounts.sort((a,b) => (parseInt(a.position)||0) - (parseInt(b.position)||0)).map(acc => (
-                                            <div key={acc.id} className="p-4 border rounded-2xl flex justify-between items-center group bg-white">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] font-black text-slate-300">#{acc.position}</span>
-                                                    <p className="font-black text-xs uppercase">{acc.name}</p>
-                                                    {acc.highlight && <span className="bg-orange-100 text-orange-600 text-[6px] px-1.5 py-0.5 rounded font-black uppercase">Destaque</span>}
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => { setEditingAccId(acc.id); setAccName(acc.name); setAccType(acc.type); setAccHighlight(acc.highlight); setAccPosition(acc.position); }} className="text-blue-500 opacity-0 group-hover:opacity-100"><Icon name="edit-2" size={14}/></button>
-                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${acc.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                        <button onClick={async() => {
+                                            await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add({ name: accName, type: accType, highlight: accHighlight });
+                                            setAccName('');
+                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">Cadastrar</button>
                                     </div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Business Intelligence • v14.6.0</footer>
+                    <footer className="py-8 text-center opacity-20 font-black text-[8px] uppercase tracking-[0.5em]">Tribo Business Intelligence v14.7.0</footer>
                 </div>
             );
         }
