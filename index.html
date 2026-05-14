@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v16.6.0</title>
+    <title>Tribo Burger | Gestão Financeira v16.7.1</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -27,10 +27,6 @@
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
-        .card-bank-mercado { border-top: 8px solid #009EE3; }
-        .card-bank-c6 { border-top: 8px solid #000000; }
-        .card-bank-ifood { border-top: 8px solid #EA1D2C; }
-        .card-bank-fundo { border-top: 8px solid #94A3B8; }
         .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
@@ -73,6 +69,10 @@
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
             
+            /* Estados de Login (Correção do ReferenceError) */
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
             /* Estados de Dados */
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
@@ -107,7 +107,7 @@
             /* Ajustes e Fornecedores */
             const [accForm, setAccForm] = useState({ id: null, name: '', type: 'corrente', group: 'operacional', closing: '25', due: '10', pos: '1', highlight: false });
             const [supplierInput, setSupplierInput] = useState('');
-            const [payDates, setPayDates] = useState({}); // Controle local para datas de pagamento na aba A Pagar
+            const [payDates, setPayDates] = useState({});
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
@@ -248,8 +248,8 @@
                     <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
                         <h2 className="text-3xl font-black text-[#1A202C] uppercase text-center mb-10">Tribo Burger</h2>
                         <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(a => alert(a.message)); }} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={email} onChange={e=>setEmail(e.target.value)} />
-                            <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={password} onChange={e=>setPassword(e.target.value)} />
+                            <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={email} onChange={e=>setEmail(e.target.value)} />
+                            <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={password} onChange={e=>setPassword(e.target.value)} />
                             <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-all">Entrar no Sistema</button>
                         </form>
                     </div>
@@ -262,7 +262,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.6</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.7.1</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -277,7 +277,6 @@
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
                         <div className="flex justify-center"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm"><span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
 
-                        {}
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit">
@@ -334,7 +333,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'saldos' && (
                             <div className="space-y-12 animate-in fade-in">
                                 <div className="stat-banner !border-black !bg-[#D97757]">
@@ -361,43 +359,57 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'vendas' && (
-                            <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                                <table className="w-full text-center text-[11px] min-w-[1500px]">
-                                    <thead>
-                                        <tr className="header-black text-white">
-                                            <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
-                                            <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                            {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h=><th key={h} className="p-4">{h}</th>)}
-                                            <th className="p-4 text-orange-400">Taxa Entrega</th>
-                                            <th className="p-4 text-red-400">Motoboy</th>
-                                            <th className="p-4">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y font-bold">
-                                        {Object.keys(dailyRecords).filter(d=>d.startsWith(filterMonth)).sort((a,b)=>new Date(b)-new Date(a)).map(d => {
-                                            const r = dailyRecords[d] || {};
-                                            const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
-                                            return (
-                                                <tr key={d} className="hover:bg-slate-50 h-12">
-                                                    <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
-                                                    <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                    {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
-                                                        <td key={f} className="p-0 border-r">
-                                                            <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
+                            <div className="space-y-6 animate-in fade-in">
+                                <div className="stat-banner !border-black !bg-[#D97757]">
+                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Faturamento Total do Mês ({filterMonth})</p>
+                                    <h3 className="text-5xl font-black drop-shadow-xl">{formatMoney(stats.rb)}</h3>
+                                </div>
+                                
+                                <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
+                                    <table className="w-full text-center text-[11px] min-w-[1700px]">
+                                        <thead>
+                                            <tr className="header-black text-white">
+                                                <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
+                                                <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
+                                                <th className="p-4 bg-blue-600 text-white">Pedidos</th>
+                                                <th className="p-4 bg-blue-800 text-white">Ticket Médio</th>
+                                                {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h=><th key={h} className="p-4">{h}</th>)}
+                                                <th className="p-4 text-orange-400">Taxa Entrega</th>
+                                                <th className="p-4 text-red-400">Motoboy</th>
+                                                <th className="p-4">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y font-bold">
+                                            {Object.keys(dailyRecords).filter(d=>d.startsWith(filterMonth)).sort((a,b)=>new Date(b)-new Date(a)).map(d => {
+                                                const r = dailyRecords[d] || {};
+                                                const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
+                                                const pedidos = p(r.qtdPedidos);
+                                                const ticketMedio = pedidos > 0 ? total / pedidos : 0;
+                                                
+                                                return (
+                                                    <tr key={d} className="hover:bg-slate-50 h-12">
+                                                        <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
+                                                        <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
+                                                        <td className="p-0 border-r bg-blue-50/30">
+                                                            <input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" />
                                                         </td>
-                                                    ))}
-                                                    <td className="p-4"><button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                        <td className="p-4 bg-blue-50/50 font-black text-blue-900">{formatMoney(ticketMedio)}</td>
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
+                                                            <td key={f} className="p-0 border-r">
+                                                                <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
+                                                            </td>
+                                                        ))}
+                                                        <td className="p-4"><button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-600 transition-colors"><Icon name="trash-2" size={14}/></button></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -424,7 +436,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'fornecedores' && (
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] h-fit space-y-6 shadow-sm border-t-4 border-black">
@@ -462,7 +473,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'a_pagar' && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
@@ -492,7 +502,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'a_receber' && (
                              <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
@@ -513,7 +522,6 @@
                              </div>
                         )}
 
-                        {}
                         {activeTab === 'ajustes' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-orange-500 space-y-6 shadow-xl">
@@ -555,7 +563,6 @@
                             </div>
                         )}
                         
-                        {}
                         {activeTab === 'dre' && (
                             <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
                                 <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
@@ -573,7 +580,6 @@
                             </div>
                         )}
                         
-                        {}
                         {activeTab === 'cartoes' && (
                             <div className="space-y-12 animate-in zoom-in duration-300">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
@@ -610,7 +616,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.6.0 Baseline</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.7.1 Baseline</footer>
                 </div>
             );
         }
