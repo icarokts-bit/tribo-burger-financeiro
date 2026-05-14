@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão v13.3.0</title>
+    <title>Tribo Burger | Gestão v13.4.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Firebase SDKs (Versão Compat para máxima estabilidade no preview) -->
+    <!-- Firebase SDKs Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -25,14 +25,17 @@
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .table-input { width: 100%; height: 100%; text-align: center; background: transparent; border: none; font-weight: 800; font-size: 11px; outline: none; }
+        .btn-action { transition: all 0.2s; }
+        .btn-action:active { transform: scale(0.95); }
     </style>
 </head>
 <body class="antialiased">
     <div id="root">
+        <!-- Loader inicial para evitar tela branca -->
         <div class="min-h-screen flex items-center justify-center bg-[#1A202C] text-white">
             <div class="text-center">
-                <div class="w-16 h-16 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p class="font-black uppercase tracking-widest text-sm">A carregar Tribo Management...</p>
+                <div class="w-12 h-12 border-4 border-[#F8CC82] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="font-black uppercase tracking-widest text-[10px]">A iniciar Tribo Management v13.4...</p>
             </div>
         </div>
     </div>
@@ -54,7 +57,7 @@
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
 
-        // Componente de Ícone Lucide Reutilizável
+        // Componente de Ícone Lucide Seguro
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -74,7 +77,7 @@
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            // Dados Firestore
+            // Dados Firestore inicializados com valores padrão para evitar erros
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
@@ -82,18 +85,18 @@
             
             // Filtros
             const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
-            const [typeFilter, setTypeFilter] = useState('todos'); // Filtro Entradas/Saídas
+            const [typeFilter, setTypeFilter] = useState('todos');
 
             // Form States
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
 
             useEffect(() => {
-                const unsub = auth.onAuthStateChanged(u => {
+                const unsubAuth = auth.onAuthStateChanged(u => {
                     setUser(u);
                     setLoading(false);
                 });
-                return () => unsub();
+                return () => unsubAuth();
             }, []);
 
             useEffect(() => {
@@ -127,7 +130,7 @@
                 let rb = 0; 
                 let activeDays = 0;
 
-                // Cálculo de Vendas (Planilha)
+                // Cálculo de Vendas (Baseado na Planilha)
                 Object.keys(dailyRecords).forEach(day => {
                     if (day.startsWith(filterMonth)) {
                         const r = dailyRecords[day];
@@ -157,19 +160,19 @@
                 return Object.values(balances).reduce((a, b) => a + b, 0);
             }, [transactions, accounts]);
 
-            if (loading) return null; // Já temos o loader inicial no HTML
+            if (loading) return null;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] p-4 fade-in">
                     <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757]">
                         <div className="text-center mb-8">
                             <h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Acesso Restrito v13.3.0</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Acesso Restrito v13.4.0</p>
                         </div>
                         <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => alert(err.message)); }} className="space-y-4">
                             <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={email} onChange={e => setEmail(e.target.value)} />
                             <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={password} onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs">Entrar</button>
+                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs btn-action">Entrar</button>
                         </form>
                     </div>
                 </div>
@@ -185,7 +188,7 @@
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'planilha', 'resultados', 'cartoes'].map(tab => (
-                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase whitespace-nowrap transition-all ${activeTab === tab ? 'tab-active' : 'text-slate-400'}`}>
+                                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase whitespace-nowrap transition-all ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
                                         {tab === 'planilha' ? 'Vendas' : tab}
                                     </button>
                                 ))}
@@ -199,20 +202,19 @@
                         <div className="flex justify-center">
                             <div className="glass-card px-6 py-2 rounded-full border shadow-sm flex items-center gap-2">
                                 <Icon name="calendar" size={14} className="text-slate-400" />
-                                <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm" />
+                                <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
                             </div>
                         </div>
 
-                        {/* ABA: LANÇAMENTOS (DASHBOARD) */}
+                        {/* ABA: LANÇAMENTOS (DASHBOARD) - COM FILTROS DE TIPO */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-6">
+                            <div className="space-y-6 fade-in">
                                 <div className="glass-card rounded-[2.5rem] shadow-sm flex flex-col border overflow-hidden h-[600px]">
-                                    <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
+                                    <div className="p-5 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-4">
                                         <span className="font-black text-[10px] uppercase text-slate-400">Histórico de Lançamentos</span>
-                                        {/* NOVO FILTRO ENTRADA/SAÍDA */}
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-1 bg-white p-1 rounded-xl border">
                                             {['todos', 'entrada', 'saida'].map(f => (
-                                                <button key={f} onClick={() => setTypeFilter(f)} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${typeFilter === f ? 'bg-black text-[#F8CC82]' : 'bg-white border text-slate-400'}`}>
+                                                <button key={f} onClick={() => setTypeFilter(f)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${typeFilter === f ? 'bg-black text-[#F8CC82]' : 'text-slate-400 hover:bg-slate-50'}`}>
                                                     {f}
                                                 </button>
                                             ))}
@@ -226,9 +228,12 @@
                                                 <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50">
                                                     <div className="flex items-center gap-4">
                                                         <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.date?.split('-').reverse().slice(0,2).join('/')}</span>
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                            <Icon name={t.type === 'entrada' ? 'trending-up' : 'trending-down'} size={14} />
+                                                        </div>
                                                         <div>
                                                             <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
+                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                         </div>
                                                     </div>
                                                     <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
@@ -239,20 +244,23 @@
                             </div>
                         )}
 
-                        {/* ABA: SALDOS (SOMA TOTAL) */}
+                        {/* ABA: SALDOS - COM SOMA TOTAL NO TOPO */}
                         {activeTab === 'saldos' && (
-                            <div className="space-y-8 animate-in fade-in">
-                                <div className="bg-[#D97757] p-12 rounded-[3rem] border-b-8 border-black text-center text-white shadow-xl">
-                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Património Líquido Total</p>
-                                    <h3 className="text-5xl font-black">{formatMoney(totalSaldos)}</h3>
-                                    <p className="text-[9px] font-bold uppercase mt-4 opacity-60 tracking-widest">Soma de todas as contas e fundos</p>
+                            <div className="space-y-8 fade-in">
+                                <div className="bg-[#D97757] p-12 rounded-[3.5rem] border-b-8 border-black text-center text-white shadow-xl relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Património Líquido Total</p>
+                                        <h3 className="text-5xl font-black drop-shadow-md">{formatMoney(totalSaldos)}</h3>
+                                        <p className="text-[9px] font-bold uppercase mt-4 opacity-60 tracking-widest">Soma de todas as contas ativas</p>
+                                    </div>
+                                    <div className="absolute top-[-20%] right-[-10%] opacity-10 rotate-12"><Icon name="landmark" size={200} /></div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     {accounts.map(acc => {
                                         const p = (v) => parseFloat(v) || 0;
                                         const bal = transactions.filter(t => t.account === acc.name && t.status === 'pago').reduce((a, t) => t.type === 'entrada' ? a + p(t.amount) : a - p(t.amount), 0);
                                         return (
-                                            <div key={acc.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] text-center transition-transform hover:scale-105">
+                                            <div key={acc.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] text-center transition-transform hover:scale-105 shadow-sm">
                                                 <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">{acc.name}</p>
                                                 <h4 className={`text-2xl font-black ${bal >= 0 ? 'text-slate-800' : 'text-red-500'}`}>{formatMoney(bal)}</h4>
                                             </div>
@@ -262,17 +270,17 @@
                             </div>
                         )}
 
-                        {/* ABA: RESULTADOS (META E INDICADORES) */}
+                        {/* ABA: RESULTADOS - COM METAS E PERFORMANCE */}
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 fade-in">
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     {/* CARD META */}
-                                    <div className="lg:col-span-2 glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-[#D97757] flex flex-col justify-between h-[300px]">
+                                    <div className="lg:col-span-2 glass-card p-10 rounded-[3.5rem] shadow-xl border-t-8 border-[#D97757] flex flex-col justify-between h-[320px]">
                                         <div className="flex justify-between items-center mb-6">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Definir Meta do Mês</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Definir Meta Mensal</p>
                                             <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border">
                                                 <span className="text-[10px] font-black text-slate-400">R$</span>
-                                                <input type="number" className="bg-transparent border-0 outline-none font-black text-sm w-24" placeholder="0" 
+                                                <input type="number" className="bg-transparent border-0 outline-none font-black text-sm w-28" placeholder="0" 
                                                     value={settings.salesTarget || ''} 
                                                     onChange={e => {
                                                         const val = parseFloat(e.target.value) || 0;
@@ -283,67 +291,76 @@
                                         <div className="space-y-4">
                                             <div className="flex justify-between items-end">
                                                 <h3 className="text-4xl font-black text-[#1A202C] leading-none">{formatMoney(stats.rb)}</h3>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase">Faturado Atual</p>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase">Faturado Hoje</p>
                                             </div>
-                                            <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden border">
-                                                <div className="h-full bg-[#D97757] transition-all duration-500" style={{ width: `${Math.min(100, (stats.rb / (settings.salesTarget || 1)) * 100)}%` }}></div>
+                                            <div className="w-full bg-slate-100 h-5 rounded-full overflow-hidden border p-1">
+                                                <div className="h-full bg-[#D97757] rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (stats.rb / (settings.salesTarget || 1)) * 100)}%` }}></div>
                                             </div>
-                                            <p className="text-[9px] font-black uppercase text-center text-[#D97757] tracking-widest">
-                                                {((stats.rb / (settings.salesTarget || 1)) * 100).toFixed(1)}% da Meta Alcançada
-                                            </p>
+                                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-[#D97757]">
+                                                <span>{((stats.rb / (settings.salesTarget || 1)) * 100).toFixed(1)}% Alcançado</span>
+                                                <span className="opacity-40">Objetivo: {formatMoney(settings.salesTarget)}</span>
+                                            </div>
                                         </div>
                                     </div>
 
                                     {/* CARD DIAS ATIVOS */}
-                                    <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center items-center gap-2 h-[300px]">
-                                        <div className="bg-blue-50 p-3 rounded-full text-blue-500 mb-2"><Icon name="calendar-check" size={24} /></div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">Dias Ativos</p>
-                                        <h3 className="text-4xl font-black text-blue-600 leading-none">{stats.activeDays}</h3>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-2">(Dias faturados na planilha)</p>
+                                    <div className="glass-card p-8 rounded-[3.5rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center items-center gap-3 h-[320px]">
+                                        <div className="bg-blue-50 p-4 rounded-3xl text-blue-500 mb-2 shadow-inner"><Icon name="calendar-check" size={28} /></div>
+                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Dias com Vendas</p>
+                                        <h3 className="text-5xl font-black text-blue-600 leading-none">{stats.activeDays}</h3>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-2">Dias faturados no período</p>
                                     </div>
 
                                     {/* CARD MÉDIA DIÁRIA */}
-                                    <div className="glass-card p-8 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center items-center gap-2 h-[300px]">
-                                        <div className="bg-green-50 p-3 rounded-full text-green-500 mb-2"><Icon name="trending-up" size={24} /></div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">Média Diária</p>
+                                    <div className="glass-card p-8 rounded-[3.5rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center items-center gap-3 h-[320px]">
+                                        <div className="bg-green-50 p-4 rounded-3xl text-green-500 mb-2 shadow-inner"><Icon name="trending-up" size={28} /></div>
+                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Média Diária</p>
                                         <h3 className="text-3xl font-black text-green-600 leading-none">{formatMoney(stats.average)}</h3>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-2">(Faturado / Dias Ativos)</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-2">Total / Dias Ativos</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* ABA: CARTÕES (CORES DINÂMICAS) */}
+                        {/* ABA: CARTÕES - COM CORES DINÂMICAS (SAÍDAS VERMELHO / ENTRADAS VERDE) */}
                         {activeTab === 'cartoes' && (
-                            <div className="space-y-6">
+                            <div className="space-y-6 fade-in">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
                                     const cardTxs = transactions.filter(t => t.account === card.name && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth)));
                                     const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + parseFloat(t.amount || 0) : acc - parseFloat(t.amount || 0), 0);
                                     
                                     return (
-                                        <div key={card.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-black">
-                                            <div className="flex justify-between items-center border-b pb-6 mb-6">
-                                                <div><h3 className="text-xl font-black uppercase">{card.name}</h3><p className="text-[9px] font-bold text-slate-400 uppercase">Fatura de {filterMonth}</p></div>
-                                                <div className="text-right">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase">Total na Fatura</p>
-                                                    <h4 className="text-2xl font-black text-orange-600">{formatMoney(cardTotal)}</h4>
+                                        <div key={card.id} className="glass-card p-10 rounded-[3.5rem] border-t-8 border-black shadow-lg">
+                                            <div className="flex justify-between items-center border-b pb-8 mb-8">
+                                                <div>
+                                                    <h3 className="text-2xl font-black uppercase text-slate-800">{card.name}</h3>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Controlo de Fatura • {filterMonth}</p>
+                                                </div>
+                                                <div className="text-right bg-slate-50 p-4 rounded-3xl border">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Saldo da Fatura</p>
+                                                    <h4 className="text-3xl font-black text-orange-600">{formatMoney(cardTotal)}</h4>
                                                 </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                {cardTxs.map(t => (
-                                                    <div key={t.id} className="flex justify-between items-center p-3 bg-white/50 rounded-2xl border">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                                <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={14} />
+                                            <div className="space-y-3">
+                                                {cardTxs.length === 0 ? (
+                                                    <p className="text-center py-10 text-[10px] font-black uppercase text-slate-300">Sem movimentos neste cartão para o mês selecionado.</p>
+                                                ) : cardTxs.map(t => (
+                                                    <div key={t.id} className="flex justify-between items-center p-4 bg-white/50 rounded-[1.5rem] border hover:shadow-md transition-all">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                <Icon name={t.type === 'entrada' ? 'check-circle' : 'shopping-cart'} size={18} />
                                                             </div>
                                                             <div>
-                                                                <p className="font-black text-xs uppercase">{t.description}</p>
-                                                                <p className="text-[8px] text-slate-400 font-bold uppercase">{t.date?.split('-').reverse().join('/')}</p>
+                                                                <p className="font-black text-sm uppercase leading-tight">{t.description}</p>
+                                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{t.date?.split('-').reverse().join('/')}</p>
                                                             </div>
                                                         </div>
-                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {formatMoney(t.amount)}
-                                                        </p>
+                                                        <div className="text-right">
+                                                            <p className={`font-black text-base ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {t.type === 'entrada' ? '+' : '-'} {formatMoney(t.amount)}
+                                                            </p>
+                                                            <p className="text-[8px] font-black uppercase text-slate-300">{t.category}</p>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -355,22 +372,22 @@
 
                         {/* ABA: PLANILHA (VENDAS) */}
                         {activeTab === 'planilha' && (
-                            <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm">
-                                    <div className="flex items-center gap-2 font-black uppercase text-[10px] text-slate-500"><Icon name="table" /><span>Vendas Diárias</span></div>
+                            <div className="space-y-6 fade-in">
+                                <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] border shadow-sm">
+                                    <div className="flex items-center gap-2 font-black uppercase text-[11px] text-slate-600"><Icon name="table" /><span>Registo Diário de Vendas</span></div>
                                     <button onClick={() => {
                                         const d = new Date().toISOString().split('T')[0];
                                         db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ initialized: true }, { merge: true });
-                                    }} className="bg-black text-[#F8CC82] px-6 py-2 rounded-xl text-[9px] font-black uppercase">Abrir Hoje</button>
+                                    }} className="bg-black text-[#F8CC82] px-8 py-3 rounded-2xl text-[10px] font-black uppercase btn-action shadow-lg">Abrir Caixa de Hoje</button>
                                 </div>
                                 <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
-                                    <table className="w-full text-center text-[11px] min-w-[1000px]">
+                                    <table className="w-full text-center text-[11px] min-w-[1200px]">
                                         <thead>
-                                            <tr className="bg-black text-white uppercase font-black text-[9px]">
-                                                <th className="p-4">Data</th>
-                                                <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                                {['Pix', 'Dinheiro', 'Ifood', 'Débito', 'Crédito'].map(h => <th key={h} className="p-4">{h}</th>)}
-                                                <th className="p-4 text-red-400">Motoboy</th>
+                                            <tr className="bg-black text-white uppercase font-black text-[10px]">
+                                                <th className="p-5">Data</th>
+                                                <th className="p-5 bg-yellow-500 text-black">Total Faturado</th>
+                                                {['Pix', 'Dinheiro', 'Ifood', 'Débito', 'Crédito'].map(h => <th key={h} className="p-5">{h}</th>)}
+                                                <th className="p-5 text-red-400">Motoboy</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y font-bold">
@@ -379,13 +396,14 @@
                                                 const p = (v) => parseFloat(v) || 0;
                                                 const dayTotal = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc, f) => acc + p(r[f]), 0);
                                                 return (
-                                                    <tr key={d} className="hover:bg-slate-50 h-12">
-                                                        <td className="p-4 font-black">{d.split('-').reverse().join('/')}</td>
-                                                        <td className="p-4 bg-yellow-50 font-black">{formatMoney(dayTotal)}</td>
+                                                    <tr key={d} className="hover:bg-slate-50 h-14">
+                                                        <td className="p-5 font-black text-slate-500">{d.split('-').reverse().join('/')}</td>
+                                                        <td className="p-5 bg-yellow-50 font-black text-[#1A202C]">{formatMoney(dayTotal)}</td>
                                                         {['pix', 'dinheiro', 'ifood', 'debito', 'credito', 'motoboy'].map(f => (
                                                             <td key={f} className="p-0 border-r">
                                                                 <input className="table-input" value={r[f] || ''} onChange={async(e) => {
-                                                                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: e.target.value.replace(',', '.') }, { merge: true });
+                                                                    const val = e.target.value.replace(',', '.');
+                                                                    await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({ [f]: val }, { merge: true });
                                                                 }} placeholder="0,00" />
                                                             </td>
                                                         ))}
@@ -399,7 +417,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.3.0</footer>
+                    <footer className="py-12 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Management • v13.4.0</footer>
                 </div>
             );
         }
