@@ -193,16 +193,36 @@
             }, [dailyRecords, filterMonth]);
 
             const pendingPaymentsConsolidated = useMemo(() => {
+                const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
+                
                 const normalPendings = transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
                 
                 const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
-                    const total = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    // CRITICAL FIX: Filter by billingMonth to ensure purchases AND payments (advances) for that invoice match
+                    const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || t.clearanceDate?.startsWith(filterMonth)));
+                    
+                    // Sum debts (saida) and subtract credits (entrada/advances)
+                    const total = cardTxs.reduce((acc, t) => {
+                        const val = p(t.amount);
+                        if (t.type === 'saida') return acc + val;
+                        if (t.type === 'entrada' || t.category === 'Pagamento de Fatura') return acc - val;
+                        return acc;
+                    }, 0);
+
+                    // Only show if there is a debt higher than 1 cent
                     if (total <= 0.01) return null;
-                    return { id: `inv-${card.name}`, description: `Fatura: ${card.name}`, amount: total, clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, account: card.name, isInvoice: true };
+                    
+                    return { 
+                        id: `inv-${card.name}`, 
+                        description: `Fatura: ${card.name}`, 
+                        amount: total, 
+                        clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, 
+                        account: card.name, 
+                        isInvoice: true 
+                    };
                 }).filter(Boolean);
                 
                 return [...normalPendings, ...cardInvoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
@@ -447,67 +467,26 @@
                         {activeTab === 'cartoes' && (
                             <div className="space-y-8">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                                    const cardTxs = transactions.filter(t => t.account === card.name && t.billingMonth === filterMonth).sort((a,b) => a.date.localeCompare(b.date));
-                                    const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                                    // REFINED FILTER: Shows everything linked to this billing month
+                                    const cardTxs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (t.type === 'entrada' && t.clearanceDate?.startsWith(filterMonth))))
+                                                   .sort((a,b) => a.date.localeCompare(b.date));
+                                    
+                                    const cardTotal = cardTxs.reduce((acc, t) => {
+                                        const val = p(t.amount);
+                                        return t.type === 'saida' ? acc + val : acc - val;
+                                    }, 0);
+
                                     return (
                                         <div key={card.id} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-black">
                                             <div className="flex justify-between items-center border-b pb-6 mb-6">
                                                 <div><h2 className="text-xl font-black uppercase">{card.name}</h2><p className="text-[10px] text-slate-400 uppercase">Fecha dia {card.closingDay} • Vence dia {card.dueDay}</p></div>
-                                                <div className="text-right"><p className="text-[10px] font-black text-slate-400 uppercase">Fatura Atual</p><h3 className="text-3xl font-black text-orange-500">{formatMoney(cardTotal)}</h3></div>
-                                            </div>
-                                            <div className="divide-y">
-                                                {cardTxs.map(t => (
-                                                    <div key={t.id} className="py-3 flex justify-between items-center group">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
-                                                                <Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/>
-                                                            </div>
-                                                            <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] text-slate-400 uppercase font-bold mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
-                                                        </div>
-                                                        <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {activeTab === 'ajustes' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="glass-card p-8 rounded-[3rem] border shadow-sm h-fit">
-                                    <h2 className="text-sm font-black uppercase mb-6">Gerir Contas</h2>
-                                    <div className="space-y-4">
-                                        <input type="text" placeholder="Nome" className="w-full p-4 border rounded-2xl text-xs" value={accName} onChange={e => setAccName(e.target.value)} />
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType==='corrente'?'bg-black text-white':'bg-slate-100'}`}>CORRENTE</button>
-                                            <button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType==='cartao'?'bg-orange-500 text-white':'bg-slate-100'}`}>CARTÃO</button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <input type="number" placeholder="Posição" className="p-4 border rounded-2xl text-xs" value={accPosition} onChange={e => setAccPosition(e.target.value)} />
-                                            <button onClick={() => setAccHighlight(!accHighlight)} className={`p-4 border rounded-2xl text-[9px] font-black uppercase ${accHighlight?'bg-yellow-400':'bg-white'}`}>Destaque</button>
-                                        </div>
-                                        {accType === 'cartao' && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input type="number" placeholder="Fecha" className="p-4 border rounded-2xl text-xs" value={accClosing} onChange={e => setAccClosing(e.target.value)} />
-                                                <input type="number" placeholder="Vence" className="p-4 border rounded-2xl text-xs" value={accDue} onChange={e => setAccDue(e.target.value)} />
-                                            </div>
-                                        )}
-                                        <button onClick={async() => {
-                                            const payload = { name:accName, type:accType, highlight:accHighlight, position:accPosition, closingDay:accClosing, dueDay:accDue };
-                                            if(editingAccId) await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${editingAccId}`).update(payload);
-                                            else await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add(payload);
-                                            setAccName(''); setEditingAccId(null);
-                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">{editingAccId?'Salvar Alteração':'Criar Conta'}</button>
-                                    </div>
-                                    <div className="mt-8 space-y-2">
-                                        {accounts.sort((a,b)=>p(a.position)-p(b.position)).map(a => (
-                                            <div key={a.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group">
-                                                <div><p className="font-black text-xs uppercase">{a.name}</p><p className="text-[8px] text-slate-400 font-bold uppercase">{a.type}</p></div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100">
-                                                    <button onClick={() => {setEditingAccId(a.id); setAccName(a.name); setAccType(a.type); setAccHighlight(a.highlight); setAccPosition(a.position);}} className="text-blue-400"><Icon name="edit-2" size={14}/></button>
-                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                                                        {cardTotal < 0 ? "Crédito Sobrando" : "Total a Pagar"}
+                                                    </p>
+                                                    <h3 className={`text-3xl font-black ${cardTotal < 0 ? 'text-green-500' : 'text-orange-500'}`}>
+                                                        {formatMoney(Math.abs(cardTotal))}
+                                                    </h3>
                                                 </div>
                                             </div>
                                         ))}
