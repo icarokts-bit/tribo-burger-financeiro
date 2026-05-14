@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v16.1.0</title>
+    <title>Tribo Burger | Gestão Financeira v16.2.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -100,7 +100,10 @@
             const [typeFilter, setTypeFilter] = useState('todos');
             const [accountFilter, setAccountFilter] = useState('');
             const [categoryFilter, setCategoryFilter] = useState('');
+            
+            // Estado para data de liquidação (usado em A Pagar e A Receber)
             const [payDateForConfirmation, setPayDateForConfirmation] = useState(new Date().toISOString().split('T')[0]);
+            const [receiveDateForConfirmation, setReceiveDateForConfirmation] = useState(new Date().toISOString().split('T')[0]);
             const [localPayments, setLocalPayments] = useState({});
 
             const [desc, setDesc] = useState('');
@@ -238,7 +241,7 @@
                     const matchesCat = !categoryFilter || t.category === categoryFilter;
                     const isMonth = t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth);
                     return matchesSearch && matchesType && matchesAcc && matchesCat && isMonth;
-                }).sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+                }).sort((a, b) => (b.clearanceDate || b.timestamp || "").localeCompare(a.clearanceDate || a.timestamp || ""));
             }, [transactions, filterMonth, searchTerm, typeFilter, accountFilter, categoryFilter]);
 
             const saveTx = async (e) => {
@@ -283,7 +286,7 @@
 
             const resetForm = () => { setEditingId(null); setDesc(''); setVal(''); setType('saida'); setInstallments(1); setDate(new Date().toLocaleDateString('en-CA')); setClearance(new Date().toLocaleDateString('en-CA')); };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase">Carregando v16.1.0...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase">Carregando v16.2.0...</div>;
 
             if (!user) return (
                 <div className="min-h-screen flex items-center justify-center bg-[#1A202C] p-4">
@@ -303,8 +306,8 @@
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <img src="logo.png" className="h-10 w-10 bg-white rounded-full p-1 shadow-lg" alt="logo" />
-                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase leading-none">Tribo Management</h1><p className="text-[8px] font-bold text-slate-400 uppercase mt-1">v16.1.0 Estável Completa</p></div>
+                                <div className="h-10 w-10 bg-white rounded-full p-1 shadow-lg flex items-center justify-center"><Icon name="utensils" size={20} className="text-[#1A202C]" /></div>
+                                <div><h1 className="text-lg font-black text-[#F8CC82] uppercase leading-none">Tribo Management</h1><p className="text-[8px] font-bold text-slate-400 uppercase mt-1">v16.2.0 Estável Completa</p></div>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -363,7 +366,7 @@
                                                     <span className="text-[10px] font-black text-slate-400 w-10 text-center">{t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')}</span>
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'entrada' ? 'bg-green-100 text-green-700' : t.type === 'saida' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}><Icon name={t.type === 'entrada' ? 'trending-up' : t.type === 'saida' ? 'trending-down' : 'refresh-cw'} size={14} /></div>
                                                     <div>
-                                                        <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status === 'pago' ? 'Liquidado' : 'Previsto'}</span></div>
+                                                        <div className="flex items-center gap-2"><p className="font-black text-sm uppercase leading-none">{t.description}</p><span className={`status-badge ${t.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{t.status === 'pago' ? `Liquidação (${t.clearanceDate?.split('-').reverse().slice(0, 2).join('/')})` : 'Previsto'}</span></div>
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                     </div>
                                                 </div>
@@ -472,7 +475,10 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-lg text-green-600">{formatMoney(t.amount)}</p>
-                                                <button onClick={() => markAsPaid(t.id)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all"><Icon name="check" size={18} /></button>
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="flex flex-col"><label className="text-[7px] font-black text-slate-400 uppercase ml-1">Data Recebido</label><input type="date" className="p-2 border rounded-xl text-[10px] font-bold outline-none" value={receiveDateForConfirmation} onChange={e => setReceiveDateForConfirmation(e.target.value)} /></div>
+                                                    <button onClick={() => markAsPaid(t.id, receiveDateForConfirmation)} className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all mt-3"><Icon name="check" size={18} /></button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -614,7 +620,7 @@
                         )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger • Consolidated Business Intelligence v16.1.0</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger • Consolidated Business Intelligence v16.2.0</footer>
                 </div>
             );
         }
