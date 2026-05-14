@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão v15.1.1</title>
+    <title>Tribo Burger | Baseline v15.2.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -96,8 +96,11 @@
 
             const [accName, setAccName] = useState('');
             const [accType, setAccType] = useState('corrente');
+            const [accGroup, setAccGroup] = useState('operacional'); 
             const [accHighlight, setAccHighlight] = useState(false);
             const [accPosition, setAccPosition] = useState(1);
+            const [accClosing, setAccClosing] = useState('25');
+            const [accDue, setAccDue] = useState('10');
             const [editingAccId, setEditingAccId] = useState(null);
 
             useEffect(() => {
@@ -122,9 +125,7 @@
                 });
                 
                 const unsubAccounts = db.collection(`${path}/accounts`).onSnapshot(snap => {
-                    const accList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setAccounts(accList);
-                    if (accList.length > 0 && !account) setAccount(accList[0].name);
+                    setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
                 
                 const unsubCategories = db.collection(`${path}/categories`).onSnapshot(snap => {
@@ -141,6 +142,15 @@
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
             const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
 
+            const uniqueDescriptions = useMemo(() => {
+                const seen = new Set();
+                return transactions.map(t => t.description).filter(d => {
+                    if (!d || seen.has(d.trim().toLowerCase())) return false;
+                    seen.add(d.trim().toLowerCase());
+                    return true;
+                }).sort();
+            }, [transactions]);
+
             const accountBalances = useMemo(() => {
                 const balances = {}; 
                 accounts.forEach(acc => balances[acc.name] = 0);
@@ -150,24 +160,23 @@
                         if (t.type === 'entrada') balances[t.account] = (balances[t.account] || 0) + amt;
                         else if (t.type === 'saida') balances[t.account] = (balances[t.account] || 0) - amt;
                         else if (t.type === 'transferencia') { 
-                            balances[t.account] -= amt; 
-                            balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
+                            balances[t.account] -= amt; balances[t.destinationAccount] = (balances[t.destinationAccount] || 0) + amt; 
                         }
                     }
                 });
                 return balances;
             }, [transactions, accounts]);
 
-            const totalBalance = useMemo(() => {
+            const totalGeneralBalance = useMemo(() => {
                 return accounts.filter(acc => acc.type === 'corrente')
                     .reduce((acc, curr) => acc + (accountBalances[curr.name] || 0), 0);
             }, [accounts, accountBalances]);
 
             const groupedAccounts = useMemo(() => {
-                const currentAccs = accounts.filter(acc => acc.type === 'corrente');
+                const items = accounts.filter(acc => acc.type === 'corrente');
                 return {
-                    highlighted: currentAccs.filter(acc => acc.highlight).sort((a,b) => p(a.position) - p(b.position)),
-                    others: currentAccs.filter(acc => !acc.highlight).sort((a,b) => p(a.position) - p(b.position))
+                    highlighted: items.filter(acc => acc.highlight).sort((a,b) => p(a.position) - p(b.position)),
+                    others: items.filter(acc => !acc.highlight).sort((a,b) => p(a.position) - p(b.position))
                 };
             }, [accounts]);
 
@@ -183,6 +192,22 @@
                 return { rb, diasComVenda, mediaDiaria: diasComVenda > 0 ? rb / diasComVenda : 0 };
             }, [dailyRecords, filterMonth]);
 
+            const pendingPaymentsConsolidated = useMemo(() => {
+                const normalPendings = transactions.filter(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
+                });
+                
+                const cardInvoices = accounts.filter(a => a.type === 'cartao').map(card => {
+                    const cardTxs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
+                    const total = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    if (total <= 0.01) return null;
+                    return { id: `inv-${card.name}`, description: `Fatura: ${card.name}`, amount: total, clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, account: card.name, isInvoice: true };
+                }).filter(Boolean);
+                
+                return [...normalPendings, ...cardInvoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+            }, [transactions, filterMonth, accounts]);
+
             const filteredHistory = useMemo(() => {
                 return transactions.filter(t => {
                     const isDateMatch = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth));
@@ -192,6 +217,40 @@
                     return isDateMatch && isAccountMatch && isCategoryMatch && isTypeMatch;
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
             }, [transactions, filterMonth, dashboardFilterAccount, dashboardFilterCategory, typeFilter]);
+
+            const saveTransaction = async (e) => {
+                e.preventDefault();
+                const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                const totalVal = p(val);
+                const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
+                const numP = cardInfo ? installments : 1;
+                
+                for(let i=0; i<numP; i++) {
+                    const dObj = new Date(date + 'T12:00:00'); dObj.setMonth(dObj.getMonth() + i);
+                    let finalDate = dObj.toISOString().split('T')[0];
+                    let finalClearance = clearance;
+                    let billingMonth = finalDate.slice(0, 7);
+
+                    if(cardInfo) {
+                        const closingDay = parseInt(cardInfo.closingDay) || 25;
+                        const dueDay = parseInt(cardInfo.dueDay) || 10;
+                        if (dObj.getDate() > closingDay) { dObj.setMonth(dObj.getMonth() + 1); }
+                        billingMonth = dObj.toISOString().slice(0, 7);
+                        dObj.setDate(dueDay);
+                        finalClearance = dObj.toISOString().split('T')[0];
+                    }
+
+                    const payload = {
+                        description: numP > 1 ? `${desc} (${i+1}/${numP})` : desc,
+                        amount: totalVal / numP, type, status, 
+                        date: finalDate, clearanceDate: finalClearance, billingMonth,
+                        account, category: cat || 'Geral', destinationAccount: destAccount,
+                        timestamp: new Date().toISOString()
+                    };
+                    await db.collection(path).add(payload);
+                }
+                setDesc(''); setVal('');
+            };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82]">Tribo v15...</div>;
 
@@ -217,7 +276,7 @@
                                 <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Business</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'resultados', 'ajustes'].map(tab => (
+                                {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'ajustes'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-slate-400 hover:text-white'}`}>
                                         {tab === 'vendas' ? 'Vendas' : tab.replace('_', ' ')}
                                     </button>
@@ -234,49 +293,25 @@
                             </div>
                         </div>
 
-                        {}
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm border-t-4 border-black h-fit">
                                     <h2 className="text-xs font-black uppercase border-b pb-3 mb-4">Novo Registro</h2>
-                                    <form onSubmit={async(e) => {
-                                        e.preventDefault();
-                                        const path = `artifacts/${appId}/users/${user.uid}/transactions`;
-                                        const totalVal = p(val);
-                                        const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
-                                        const numP = cardInfo ? installments : 1;
-                                        
-                                        for(let i=0; i<numP; i++) {
-                                            const dObj = new Date(date + 'T12:00:00'); dObj.setMonth(dObj.getMonth() + i);
-                                            let finalDate = dObj.toISOString().split('T')[0];
-                                            let finalClearance = clearance;
-                                            
-                                            if(cardInfo) {
-                                                const dueDay = parseInt(cardInfo.dueDay) || 10;
-                                                const dueDate = new Date(dObj); dueDate.setMonth(dueDate.getMonth() + 1); dueDate.setDate(dueDay);
-                                                finalClearance = dueDate.toISOString().split('T')[0];
-                                            }
-
-                                            await db.collection(path).add({
-                                                description: numP > 1 ? `${desc} (${i+1}/${numP})` : desc,
-                                                amount: totalVal / numP, type, status, 
-                                                date: finalDate, clearanceDate: finalClearance,
-                                                account, category: cat || 'Geral', destinationAccount: destAccount,
-                                                timestamp: new Date().toISOString()
-                                            });
-                                        }
-                                        setDesc(''); setVal('');
-                                    }} className="space-y-4">
+                                    <form onSubmit={saveTransaction} className="space-y-4">
                                         <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                                             {['entrada', 'saida', 'transferencia'].map(t => (<button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase ${type === t ? 'bg-white shadow-sm text-black' : 'text-slate-400'}`}>{t}</button>))}
                                         </div>
-                                        <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        <input list="desc-suggest" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl text-sm" value={desc} onChange={e => setDesc(e.target.value)} />
+                                        <datalist id="desc-suggest">{uniqueDescriptions.map(d => <option key={d} value={d} />)}</datalist>
                                         <div className="grid grid-cols-2 gap-2">
                                             <input type="text" placeholder="Valor" required className="p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e => setVal(e.target.value)} />
                                             <select className="p-4 bg-white border rounded-2xl text-[10px] font-black uppercase" value={account} onChange={e => setAccount(e.target.value)}>
                                                 {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
                                         </div>
+                                        {accounts.find(a => a.name === account)?.type === 'cartao' && (
+                                            <input type="number" placeholder="Parcelas" className="w-full p-4 border rounded-2xl text-xs" value={installments} onChange={e => setInstallments(e.target.value)} />
+                                        )}
                                         <select className="w-full p-4 bg-white border rounded-2xl text-[10px] font-black uppercase" value={cat} onChange={e => setCat(e.target.value)}>
                                             <option value="">Categoria...</option>
                                             {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -290,28 +325,19 @@
                                     <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
                                         <span className="text-[10px] font-black uppercase text-slate-400">Histórico de Fluxo</span>
                                         <div className="flex gap-2">
-                                            <select className="text-[8px] p-2 border rounded-lg" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                                                <option value="todos">Tipos...</option><option value="entrada">Entradas</option><option value="saida">Saídas</option>
-                                            </select>
-                                            <select className="text-[8px] p-2 border rounded-lg" value={dashboardFilterAccount} onChange={e => setDashboardFilterAccount(e.target.value)}>
-                                                <option value="">Contas...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                                            </select>
+                                            <select className="text-[8px] p-2 border rounded-lg" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="todos">Todos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
+                                            <select className="text-[8px] p-2 border rounded-lg" value={dashboardFilterAccount} onChange={e => setDashboardFilterAccount(e.target.value)}><option value="">Banco...</option>{accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</select>
+                                            <select className="text-[8px] p-2 border rounded-lg" value={dashboardFilterCategory} onChange={e => setDashboardFilterCategory(e.target.value)}><option value="">Categoria...</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredHistory.map(t => (
-                                            <div key={t.id} className="p-4 flex justify-between items-center group hover:bg-slate-50 transition-colors">
+                                            <div key={t.id} className="p-4 flex justify-between items-center group hover:bg-slate-50">
                                                 <div className="flex items-center gap-4">
                                                     <span className="text-[9px] font-black text-slate-400">{t.date?.split('-').reverse().slice(0, 2).join('/')}</span>
-                                                    <div>
-                                                        <p className="font-black text-sm uppercase">{t.description}</p>
-                                                        <p className="text-[9px] font-bold text-slate-300 uppercase">{t.account} • {t.category}</p>
-                                                    </div>
+                                                    <div><p className="font-black text-sm uppercase">{t.description}</p><p className="text-[9px] font-bold text-slate-300 uppercase">{t.account} • {t.category}</p></div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button>
-                                                </div>
+                                                <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-200 opacity-0 group-hover:opacity-100"><Icon name="trash-2" size={14}/></button></div>
                                             </div>
                                         ))}
                                     </div>
@@ -323,14 +349,28 @@
                             <div className="space-y-8">
                                 <div className="stat-banner !bg-[#D97757]">
                                     <p className="text-[11px] font-black uppercase mb-2">Liquidez Total Consolidada</p>
-                                    <h3 className="text-5xl font-black text-white">{formatMoney(totalBalance)}</h3>
+                                    <h3 className="text-5xl font-black text-white">{formatMoney(totalGeneralBalance)}</h3>
                                 </div>
-                                {groupedAccounts.highlighted.map(acc => (
-                                    <div key={acc.id} className="glass-card p-10 rounded-[3.5rem] border-t-8 border-black text-center shadow-xl">
-                                        <p className="text-xs font-black text-slate-400 uppercase mb-2">{acc.name}</p>
-                                        <h3 className="text-4xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                <div className="space-y-4">
+                                    <h2 className="text-xs font-black uppercase border-l-4 border-black pl-3 ml-2">Contas em Destaque</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {groupedAccounts.highlighted.map(acc => (
+                                            <div key={acc.id} className="glass-card p-8 rounded-[3rem] border-t-8 border-black text-center shadow-xl">
+                                                <p className="text-xs font-black text-slate-400 uppercase mb-1">{acc.name}</p>
+                                                <h3 className="text-2xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                    <h2 className="text-xs font-black uppercase border-l-4 border-slate-300 pl-3 ml-2">Outras Contas</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {groupedAccounts.others.map(acc => (
+                                            <div key={acc.id} className="glass-card p-6 rounded-[2.5rem] border border-slate-100 text-center shadow-sm">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{acc.name}</p>
+                                                <h3 className="text-xl font-black">{formatMoney(accountBalances[acc.name] || 0)}</h3>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -349,7 +389,7 @@
                                     <tbody className="divide-y font-bold">
                                         {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b) => new Date(b)-new Date(a)).map(d => {
                                             const r = dailyRecords[d];
-                                            const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + p(r[f]), 0);
+                                            const total = ['pix','dinheiro','ifood','debito','credito'].reduce((acc,f) => acc + p(r[f]), 0);
                                             return (
                                                 <tr key={d} className="h-12 hover:bg-slate-50">
                                                     <td className="p-0 border-r sticky left-0 bg-white font-black">{d.split('-').reverse().join('/')}</td>
@@ -365,6 +405,21 @@
                                     </tbody>
                                 </table>
                             </div>
+                        )}
+
+                        {activeTab === 'a_pagar' && (
+                             <div className="glass-card rounded-[2.5rem] divide-y overflow-hidden border">
+                                {pendingPaymentsConsolidated.length === 0 ? <p className="p-20 text-center font-black text-slate-300 uppercase">Sem contas para este período</p> : 
+                                    pendingPaymentsConsolidated.map(t => (
+                                    <div key={t.id} className="p-6 flex justify-between items-center hover:bg-slate-50">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center"><Icon name={t.isInvoice ? "credit-card" : "calendar"} size={24} /></div>
+                                            <div><p className="font-black uppercase">[{t.clearanceDate.split('-').reverse().join('/')}] {t.description}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{t.account}</p></div>
+                                        </div>
+                                        <div className="flex items-center gap-6"><p className="font-black text-lg text-red-700">{formatMoney(t.amount)}</p><button onClick={() => !t.isInvoice && db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({status:'pago'})} className="p-2 text-green-500"><Icon name="check-circle" size={20}/></button></div>
+                                    </div>
+                                ))}
+                             </div>
                         )}
 
                         {activeTab === 'resultados' && (
@@ -388,9 +443,93 @@
                                 </div>
                             </div>
                         )}
+
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-8">
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const cardTxs = transactions.filter(t => t.account === card.name && t.billingMonth === filterMonth).sort((a,b) => a.date.localeCompare(b.date));
+                                    const cardTotal = cardTxs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                                    return (
+                                        <div key={card.id} className="glass-card p-8 rounded-[3rem] shadow-lg border-t-8 border-black">
+                                            <div className="flex justify-between items-center border-b pb-6 mb-6">
+                                                <div><h2 className="text-xl font-black uppercase">{card.name}</h2><p className="text-[10px] text-slate-400 uppercase">Fecha dia {card.closingDay} • Vence dia {card.dueDay}</p></div>
+                                                <div className="text-right"><p className="text-[10px] font-black text-slate-400 uppercase">Fatura Atual</p><h3 className="text-3xl font-black text-orange-500">{formatMoney(cardTotal)}</h3></div>
+                                            </div>
+                                            <div className="divide-y">
+                                                {cardTxs.map(t => (
+                                                    <div key={t.id} className="py-3 flex justify-between items-center group">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                                                                <Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/>
+                                                            </div>
+                                                            <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] text-slate-400 uppercase font-bold mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
+                                                        </div>
+                                                        <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'ajustes' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div className="glass-card p-8 rounded-[3rem] border shadow-sm h-fit">
+                                    <h2 className="text-sm font-black uppercase mb-6">Gerir Contas</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" placeholder="Nome" className="w-full p-4 border rounded-2xl text-xs" value={accName} onChange={e => setAccName(e.target.value)} />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setAccType('corrente')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType==='corrente'?'bg-black text-white':'bg-slate-100'}`}>CORRENTE</button>
+                                            <button onClick={() => setAccType('cartao')} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accType==='cartao'?'bg-orange-500 text-white':'bg-slate-100'}`}>CARTÃO</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input type="number" placeholder="Posição" className="p-4 border rounded-2xl text-xs" value={accPosition} onChange={e => setAccPosition(e.target.value)} />
+                                            <button onClick={() => setAccHighlight(!accHighlight)} className={`p-4 border rounded-2xl text-[9px] font-black uppercase ${accHighlight?'bg-yellow-400':'bg-white'}`}>Destaque</button>
+                                        </div>
+                                        {accType === 'cartao' && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input type="number" placeholder="Fecha" className="p-4 border rounded-2xl text-xs" value={accClosing} onChange={e => setAccClosing(e.target.value)} />
+                                                <input type="number" placeholder="Vence" className="p-4 border rounded-2xl text-xs" value={accDue} onChange={e => setAccDue(e.target.value)} />
+                                            </div>
+                                        )}
+                                        <button onClick={async() => {
+                                            const payload = { name:accName, type:accType, highlight:accHighlight, position:accPosition, closingDay:accClosing, dueDay:accDue };
+                                            if(editingAccId) await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${editingAccId}`).update(payload);
+                                            else await db.collection(`artifacts/${appId}/users/${user.uid}/accounts`).add(payload);
+                                            setAccName(''); setEditingAccId(null);
+                                        }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px]">{editingAccId?'Salvar Alteração':'Criar Conta'}</button>
+                                    </div>
+                                    <div className="mt-8 space-y-2">
+                                        {accounts.sort((a,b)=>p(a.position)-p(b.position)).map(a => (
+                                            <div key={a.id} className="p-4 bg-white border rounded-2xl flex justify-between items-center group">
+                                                <div><p className="font-black text-xs uppercase">{a.name}</p><p className="text-[8px] text-slate-400 font-bold uppercase">{a.type}</p></div>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100">
+                                                    <button onClick={() => {setEditingAccId(a.id); setAccName(a.name); setAccType(a.type); setAccHighlight(a.highlight); setAccPosition(a.position);}} className="text-blue-400"><Icon name="edit-2" size={14}/></button>
+                                                    <button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${a.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] border shadow-sm h-fit">
+                                    <h2 className="text-sm font-black uppercase mb-6">Categorias</h2>
+                                    <div className="flex gap-2 mb-6">
+                                        <input type="text" className="flex-1 p-4 border rounded-2xl text-xs" value={accName} onChange={e=>setAccName(e.target.value)} />
+                                        <button onClick={async() => { await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({name:accName}); setAccName(''); }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {categories.map(c => (
+                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center"><span className="text-[10px] font-black uppercase">{c.name}</span><button onClick={() => db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-200"><Icon name="trash-2" size={14}/></button></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • v15.1.1 Baseline</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.4em]">Tribo Business • Baseline v15.2.0</footer>
                 </div>
             );
         }
