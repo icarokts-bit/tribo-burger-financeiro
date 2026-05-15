@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.1.0 STABLE BASELINE</title>
+    <title>Tribo Burger | v2.2.0 STABLE BASELINE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -218,10 +218,14 @@
                 const path = `artifacts/${appId}/users/${user.uid}/transactions`;
                 const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
                 const batch = db.batch();
-                const numInst = cardInfo ? inst : 1;
+                
+                // Se for transferência, não parcela. Se for entrada/saída, usa o valor de inst.
+                const numInst = (type === 'transferencia') ? 1 : inst;
 
                 for (let i = 0; i < numInst; i++) {
-                    const d = new Date(date + 'T00:00:00'); d.setMonth(d.getMonth() + i);
+                    const d = new Date(date + 'T00:00:00'); 
+                    d.setMonth(d.getMonth() + i);
+                    
                     let finalClearance = clearance;
                     let billingM = d.toISOString().slice(0, 7);
                     
@@ -233,13 +237,26 @@
                         billingM = billingDate.toISOString().slice(0, 7);
                         let dueDate = new Date(billingDate); dueDate.setMonth(dueDate.getMonth() + 1); dueDate.setDate(due);
                         finalClearance = dueDate.toISOString().split('T')[0];
+                    } else {
+                        // Parcelamento em conta corrente (Boleto, Pix parcelado, etc)
+                        const cDate = new Date(clearance + 'T00:00:00');
+                        cDate.setMonth(cDate.getMonth() + i);
+                        finalClearance = cDate.toISOString().split('T')[0];
                     }
 
                     const payload = {
                         description: numInst > 1 ? `${desc} (${i+1}/${numInst})` : desc,
-                        amount: p(val) / numInst, type, status: cardInfo ? 'pendente' : status,
-                        date: d.toISOString().split('T')[0], clearanceDate: finalClearance, billingMonth: billingM,
-                        account, destinationAccount: destAcc, category: cat || 'Geral', supplier: sup, timestamp: new Date().toISOString()
+                        amount: p(val) / numInst, 
+                        type, 
+                        status: (cardInfo || type === 'entrada' || status === 'pendente') ? 'pendente' : status,
+                        date: d.toISOString().split('T')[0], 
+                        clearanceDate: finalClearance, 
+                        billingMonth: billingM,
+                        account, 
+                        destinationAccount: destAcc, 
+                        category: cat || 'Geral', 
+                        supplier: sup, 
+                        timestamp: new Date().toISOString()
                     };
 
                     if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
@@ -299,7 +316,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.1.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.2.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -329,7 +346,15 @@
                                         <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e=>setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={account} onChange={e=>setAccount(e.target.value)}><option value="">Conta...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                     </div>
-                                    {accounts.find(a=>a.name===account)?.type === 'cartao' && <input type="number" placeholder="Parcelas" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={inst} onChange={e=>setInst(parseInt(e.target.value)||1)} />}
+                                    
+                                    {/* Opção de parcelamento agora disponível para Entradas e Saídas em qualquer conta */}
+                                    {type !== 'transferencia' && (
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas (Vezes)</label>
+                                            <input type="number" min="1" placeholder="Ex: 1" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={inst} onChange={e=>setInst(parseInt(e.target.value)||1)} />
+                                        </div>
+                                    )}
+
                                     {type === 'transferencia' && <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={destAcc} onChange={e=>setDestAcc(e.target.value)}><option value="">Para...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>}
                                     <div className="grid grid-cols-2 gap-3">
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={cat} onChange={e=>setCat(e.target.value)}><option value="">Categoria...</option>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
@@ -691,7 +716,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.1.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.2.0 GOLDEN STABLE</footer>
                 </div>
             );
         }
