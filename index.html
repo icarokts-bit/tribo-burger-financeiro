@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.3 STABLE</title>
+    <title>Tribo Burger | v2.4.4 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -120,11 +120,13 @@
             useEffect(() => {
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
-                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                
+                // Correção Crítica: O ID do Firestore deve vir depois dos dados (...d.data()) para não ser sobrescrito por campos vazios
+                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); });
-                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+                const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ ...d.data(), id: d.id }))));
+                const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); });
 
                 return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
@@ -142,7 +144,7 @@
                 return transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     const isMonth = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth) || t.billingMonth === filterMonth);
-                    const matchSearch = t.description?.toLowerCase().includes(searchQuery.toLowerCase()) || t.category?.toLowerCase().includes(searchQuery.toLowerCase());
+                    const matchSearch = (t.description || "").toLowerCase().includes(searchQuery.toLowerCase()) || (t.category || "").toLowerCase().includes(searchQuery.toLowerCase());
                     const matchType = typeFilter === 'todos' || t.type === typeFilter;
                     const matchAcc = accFilter === '' || t.account === accFilter;
                     const matchCat = catFilter === '' || t.category === catFilter;
@@ -320,24 +322,30 @@
                 }
             };
 
+            // Função de Exclusão Reforçada: Proteção contra IDs nulos/vazios
             const executeDelete = async (collection, id) => {
-                if (!user) return;
+                if (!user || !id || id === "") {
+                    console.error("Tentativa de excluir sem um ID válido.");
+                    return;
+                }
+                
                 if (deleteConfirmId === id) {
                     setIsActionLoading(true);
                     try {
-                        const path = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection);
-                        await path.doc(id).delete();
+                        const collPath = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection);
+                        await collPath.doc(id).delete();
                         setDeleteConfirmId(null);
                     } catch (e) {
-                        console.error("Erro na exclusão:", e);
+                        console.error("Erro na exclusão definitiva:", e);
                     } finally {
                         setIsActionLoading(false);
                     }
                 } else {
                     setDeleteConfirmId(id);
+                    // Aumentado para 5 segundos para dar tempo de clique em dispositivos lentos
                     setTimeout(() => {
                         setDeleteConfirmId(prev => prev === id ? null : prev);
-                    }, 4000);
+                    }, 5000);
                 }
             };
 
@@ -364,7 +372,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.3</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.4</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -850,7 +858,7 @@
                         )}
 
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.3 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.4 GOLDEN STABLE</footer>
                 </div>
             );
         }
