@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.1 STABLE</title>
+    <title>Tribo Burger | v2.4.2 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -267,13 +267,13 @@
             };
 
             const handleOpenNewDay = async () => {
-                if (!user || !newDayDate) return;
-                await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${newDayDate}`).set({ initialized: true }, { merge: true });
+                if (!user) return;
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true });
             };
 
             const markPaid = async (t, payDate) => {
                 if (t.isInvoice) { setActiveTab('cartoes'); return; }
-                await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).update({ status: 'pago', clearanceDate: payDate });
+                await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(t.id).update({ status: 'pago', clearanceDate: payDate });
             };
 
             const saveMeta = async (v) => {
@@ -292,26 +292,27 @@
                     return;
                 }
                 setAccFormError('');
-                const pth = `artifacts/${appId}/users/${user.uid}/accounts`;
-                if (accForm.id) await db.doc(`${pth}/${accForm.id}`).update(accForm);
-                else await db.collection(pth).add(accForm);
+                const pth = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('accounts');
+                if (accForm.id) await pth.doc(accForm.id).update(accForm);
+                else await pth.add(accForm);
                 setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
             };
 
-            const requestDelete = (id) => {
+            // Nova lógica de exclusão reforçada
+            const executeDelete = async (collection, id) => {
+                if (!user) return;
                 if (deleteConfirmId === id) {
-                    return true;
+                    try {
+                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection).doc(id).delete();
+                        setDeleteConfirmId(null);
+                    } catch (e) {
+                        console.error("Erro na exclusão:", e);
+                    }
                 } else {
                     setDeleteConfirmId(id);
-                    setTimeout(() => setDeleteConfirmId(null), 3000);
-                    return false;
-                }
-            };
-
-            const executeDelete = async (collection, id) => {
-                if (requestDelete(id)) {
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/${collection}/${id}`).delete();
-                    setDeleteConfirmId(null);
+                    setTimeout(() => {
+                        setDeleteConfirmId(prev => prev === id ? null : prev);
+                    }, 3000);
                 }
             };
 
@@ -336,7 +337,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.1</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.2</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -403,7 +404,7 @@
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredDashboard.map(t => (
-                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>{t.type==='entrada'?'IN':'OUT'}</div>
                                                     <div>
@@ -413,9 +414,9 @@
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                        <button onClick={()=>startEdit(t)} className="text-blue-400 hover:text-blue-600 p-2"><Icon name="edit-2" size={14}/></button>
-                                                        <button onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-200 hover:text-red-500'}`}>
+                                                    <div className="flex gap-1">
+                                                        <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 hover:text-blue-600 p-2"><Icon name="edit-2" size={14}/></button>
+                                                        <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
                                                             {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
                                                         </button>
                                                     </div>
@@ -509,7 +510,7 @@
                                                             </td>
                                                         ))}
                                                         <td className="p-4">
-                                                            <button onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>
+                                                            <button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>
                                                                 {deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
                                                             </button>
                                                         </td>
@@ -559,7 +560,7 @@
                                     <h2 className="text-sm font-black uppercase border-b pb-4">Novo Fornecedor</h2>
                                     <div className="space-y-4">
                                         <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50 outline-none focus:border-[#D97757]" placeholder="Nome do Parceiro/Fornecedor" value={supplierInput} onChange={e => setSupplierInput(e.target.value)} />
-                                        <button onClick={async() => { if(!supplierInput) return; await db.collection(`artifacts/${appId}/users/${user.uid}/suppliers`).add({ name: supplierInput, timestamp: new Date().toISOString() }); setSupplierInput(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Cadastrar Fornecedor</button>
+                                        <button type="button" onClick={async() => { if(!supplierInput) return; await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('suppliers').add({ name: supplierInput, timestamp: new Date().toISOString() }); setSupplierInput(''); }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Cadastrar Fornecedor</button>
                                     </div>
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] shadow-sm max-h-[550px] flex flex-col border border-t-4 border-slate-400">
@@ -579,7 +580,7 @@
                                                         </div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
+                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
                                                         {deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
                                                     </button>
                                                 </div>
@@ -608,10 +609,10 @@
                                                 {!t.isInvoice && (
                                                     <div className="flex gap-2 items-center">
                                                         <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toISOString().split('T')[0]} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
-                                                        <button onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                                        <button type="button" onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
                                                     </div>
                                                 )}
-                                                {t.isInvoice && <button onClick={()=>setActiveTab('cartoes')} className="bg-orange-500 text-white px-4 py-2 rounded-2xl text-[9px] font-black uppercase">Ver Fatura</button>}
+                                                {t.isInvoice && <button type="button" onClick={()=>setActiveTab('cartoes')} className="bg-orange-500 text-white px-4 py-2 rounded-2xl text-[9px] font-black uppercase">Ver Fatura</button>}
                                             </div>
                                         </div>
                                     ))}
@@ -633,7 +634,7 @@
                                                 <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
                                                 <div className="flex gap-2 items-center">
                                                     <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toISOString().split('T')[0]} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
-                                                    <button onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                                    <button type="button" onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -649,7 +650,7 @@
                                     <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed">
                                         {accFormError && <div className="p-3 bg-red-100 text-red-700 rounded-xl text-[10px] font-black uppercase">{accFormError}</div>}
                                         <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none focus:border-black" placeholder="Nome da Conta ou Cartão" value={accForm.name} onChange={e=>setAccForm({...accForm, name:e.target.value})} />
-                                        <div className="flex gap-2"><button onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button><button onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button></div>
+                                        <div className="flex gap-2"><button type="button" onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button><button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button></div>
                                         <div className="grid grid-cols-2 gap-3">
                                             {accForm.type === 'corrente' ? (
                                                 <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none" value={accForm.group} onChange={e=>setAccForm({...accForm, group:e.target.value})}><option value="operacional">Operacional</option><option value="reserva">Reserva</option><option value="outros">Outros</option></select>
@@ -659,11 +660,11 @@
                                         </div>
                                         <div className="flex items-center justify-between p-2">
                                             <div className="flex items-center gap-2"><span className="text-[9px] font-black uppercase text-slate-400">Posição</span><input type="number" className="w-16 p-2 border rounded-xl text-center font-black outline-none" value={accForm.pos} onChange={e=>setAccForm({...accForm, pos:e.target.value})} /></div>
-                                            <button onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>{accForm.highlight?'Em Destaque':'Destaque Off'}</button>
+                                            <button type="button" onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>{accForm.highlight?'Em Destaque':'Destaque Off'}</button>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">{accForm.id?'Gravar Alterações':'Criar Conta'}</button>
-                                            {accForm.id && <button onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
+                                            <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">{accForm.id?'Gravar Alterações':'Criar Conta'}</button>
+                                            {accForm.id && <button type="button" onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
                                         </div>
                                     </div>
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
@@ -671,8 +672,8 @@
                                             <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl transition-all">
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} • {a.type === 'cartao' ? `Fecha ${a.closing}/Vence ${a.due}` : a.group}</p></div>
                                                 <div className="flex gap-2 items-center">
-                                                    <button onClick={()=>setAccForm(a)} className="flex items-center gap-2 bg-blue-50 text-blue-500 p-2 px-3 rounded-xl hover:bg-blue-100 transition-all"><Icon name="edit-2" size={14}/><span className="text-[10px] font-black uppercase">Editar</span></button>
-                                                    <button onClick={() => executeDelete('accounts', a.id)} className={`flex items-center gap-2 transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
+                                                    <button type="button" onClick={()=>setAccForm(a)} className="flex items-center gap-2 bg-blue-50 text-blue-500 p-2 px-3 rounded-xl hover:bg-blue-100 transition-all"><Icon name="edit-2" size={14}/><span className="text-[10px] font-black uppercase">Editar</span></button>
+                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`flex items-center gap-2 transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
                                                         {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Excluir?</span> : <><Icon name="trash-2" size={14}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
                                                     </button>
                                                 </div>
@@ -682,12 +683,12 @@
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] space-y-6 h-fit">
                                      <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
-                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({name:v}); document.getElementById('new-cat').value='';}} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
+                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value='';}} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
                                         {categories.sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black">
                                                 <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
-                                                <button onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-100 group-hover:text-red-500'}`}>
+                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
                                                     {deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}
                                                 </button>
                                             </div>
@@ -732,14 +733,14 @@
                                                 <h4 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Lançamentos da Fatura</h4>
                                                 <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
                                                     {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem dados</p> : txs.map(t => (
-                                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group">
+                                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
                                                             <div className="flex items-center gap-4">
                                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
                                                                 <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
                                                                 <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                                <button onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-100 group-hover:text-red-500 opacity-0 group-hover:opacity-100'}`}>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
                                                                     {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
                                                                 </button>
                                                             </div>
@@ -754,7 +755,7 @@
                         )}
 
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.1 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.2 GOLDEN STABLE</footer>
                 </div>
             );
         }
