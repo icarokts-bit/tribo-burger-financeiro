@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v16.8.0</title>
+    <title>Tribo Burger | Gestão Financeira v16.9.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -272,7 +272,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.8.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Gestão Tribo v16.9.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -529,7 +529,10 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                <button onClick={()=>markPaid(t, new Date().toLocaleDateString('en-CA'))} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                                <div className="flex gap-2 items-center">
+                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toLocaleDateString('en-CA')} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
+                                                    <button onClick={()=>markPaid(t, payDates[t.id] || new Date().toLocaleDateString('en-CA'))} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -631,7 +634,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.8.0 Baseline</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v16.9.0 Baseline</footer>
                 </div>
             );
         }
