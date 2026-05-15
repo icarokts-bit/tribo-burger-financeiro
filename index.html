@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.0 STABLE</title>
+    <title>Tribo Burger | v2.4.1 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -108,7 +108,6 @@
             const [supplierInput, setSupplierInput] = useState('');
             const [payDates, setPayDates] = useState({});
 
-            // Estado para confirmação de exclusão (evita o window.confirm que falha em iframes)
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
             useEffect(() => {
@@ -299,13 +298,12 @@
                 setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
             };
 
-            // Nova lógica de exclusão sem confirm nativo
             const requestDelete = (id) => {
                 if (deleteConfirmId === id) {
-                    return true; // Confirmado segunda vez
+                    return true;
                 } else {
                     setDeleteConfirmId(id);
-                    setTimeout(() => setDeleteConfirmId(null), 3000); // Reseta após 3 segundos
+                    setTimeout(() => setDeleteConfirmId(null), 3000);
                     return false;
                 }
             };
@@ -338,7 +336,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.1</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -581,8 +579,8 @@
                                                         </div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button onClick={() => executeDelete('suppliers', s.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-200 hover:text-red-500'}`}>
-                                                        {deleteConfirmId === s.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={16}/>}
+                                                    <button onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
+                                                        {deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
                                                     </button>
                                                 </div>
                                             ))
@@ -670,12 +668,12 @@
                                     </div>
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
                                         {accounts.sort((a,b)=>parseInt(a.pos)-parseInt(b.pos)).map(a => (
-                                            <div key={a.id} className="p-4 flex justify-between items-center group">
+                                            <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl transition-all">
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} • {a.type === 'cartao' ? `Fecha ${a.closing}/Vence ${a.due}` : a.group}</p></div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={()=>setAccForm(a)} className="text-blue-500 p-2"><Icon name="edit-2" size={14}/></button>
-                                                    <button onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>
-                                                        {deleteConfirmId === a.id ? <span className="text-[8px] font-black uppercase px-2">Confirma?</span> : <Icon name="trash-2" size={14}/>}
+                                                <div className="flex gap-2 items-center">
+                                                    <button onClick={()=>setAccForm(a)} className="flex items-center gap-2 bg-blue-50 text-blue-500 p-2 px-3 rounded-xl hover:bg-blue-100 transition-all"><Icon name="edit-2" size={14}/><span className="text-[10px] font-black uppercase">Editar</span></button>
+                                                    <button onClick={() => executeDelete('accounts', a.id)} className={`flex items-center gap-2 transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
+                                                        {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Excluir?</span> : <><Icon name="trash-2" size={14}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
                                                     </button>
                                                 </div>
                                             </div>
@@ -756,7 +754,7 @@
                         )}
 
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.1 GOLDEN STABLE</footer>
                 </div>
             );
         }
