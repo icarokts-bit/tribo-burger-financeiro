@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.3.0 STABLE</title>
+    <title>Tribo Burger | v2.4.0 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -28,6 +28,8 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .stat-banner { background: #1A202C; border-bottom: 6px solid #D97757; color: white; padding: 2rem; border-radius: 2.5rem; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
         .status-badge { font-size: 7px; font-weight: 900; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .delete-confirm { background-color: #EF4444 !important; color: white !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="antialiased">
@@ -105,6 +107,9 @@
             const [accFormError, setAccFormError] = useState('');
             const [supplierInput, setSupplierInput] = useState('');
             const [payDates, setPayDates] = useState({});
+
+            // Estado para confirmação de exclusão (evita o window.confirm que falha em iframes)
+            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
@@ -282,29 +287,33 @@
                     setAccFormError('Por favor, defina um nome.');
                     return;
                 }
-                
-                // Verificar se já existe uma conta com o mesmo nome (exceto a que estamos editando)
                 const exists = accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id);
                 if (exists) {
                     setAccFormError('Já existe uma conta ou cartão com este nome.');
                     return;
                 }
-
                 setAccFormError('');
                 const pth = `artifacts/${appId}/users/${user.uid}/accounts`;
-                if (accForm.id) {
-                    await db.doc(`${pth}/${accForm.id}`).update(accForm);
-                } else {
-                    await db.collection(pth).add(accForm);
-                }
-                
+                if (accForm.id) await db.doc(`${pth}/${accForm.id}`).update(accForm);
+                else await db.collection(pth).add(accForm);
                 setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
             };
 
-            const handleDeleteAccount = async (id, name) => {
-                const confirmed = window.confirm(`Tem a certeza que deseja eliminar a conta/cartão "${name}"?`);
-                if (confirmed) {
-                    await db.doc(`artifacts/${appId}/users/${user.uid}/accounts/${id}`).delete();
+            // Nova lógica de exclusão sem confirm nativo
+            const requestDelete = (id) => {
+                if (deleteConfirmId === id) {
+                    return true; // Confirmado segunda vez
+                } else {
+                    setDeleteConfirmId(id);
+                    setTimeout(() => setDeleteConfirmId(null), 3000); // Reseta após 3 segundos
+                    return false;
+                }
+            };
+
+            const executeDelete = async (collection, id) => {
+                if (requestDelete(id)) {
+                    await db.doc(`artifacts/${appId}/users/${user.uid}/${collection}/${id}`).delete();
+                    setDeleteConfirmId(null);
                 }
             };
 
@@ -329,7 +338,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.3.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -408,7 +417,9 @@
                                                     <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                         <button onClick={()=>startEdit(t)} className="text-blue-400 hover:text-blue-600 p-2"><Icon name="edit-2" size={14}/></button>
-                                                        <button onClick={async()=>{if(confirm('Eliminar?')) await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete();}} className="text-red-200 hover:text-red-500 transition-all p-2"><Icon name="trash-2" size={14}/></button>
+                                                        <button onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-200 hover:text-red-500'}`}>
+                                                            {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -499,7 +510,11 @@
                                                                 <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
                                                             </td>
                                                         ))}
-                                                        <td className="p-4"><button onClick={()=>db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).delete()} className="text-red-200 hover:text-red-600 transition-colors"><Icon name="trash-2" size={14}/></button></td>
+                                                        <td className="p-4">
+                                                            <button onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>
+                                                                {deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                            </button>
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -566,8 +581,8 @@
                                                         </div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button onClick={async () => { if(confirm(`Remover fornecedor ${s.name}?`)) await db.doc(`artifacts/${appId}/users/${user.uid}/suppliers/${s.id}`).delete(); }} className="text-red-200 hover:text-red-500 transition-colors p-2">
-                                                        <Icon name="trash-2" size={16}/>
+                                                    <button onClick={() => executeDelete('suppliers', s.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-200 hover:text-red-500'}`}>
+                                                        {deleteConfirmId === s.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={16}/>}
                                                     </button>
                                                 </div>
                                             ))
@@ -657,7 +672,12 @@
                                         {accounts.sort((a,b)=>parseInt(a.pos)-parseInt(b.pos)).map(a => (
                                             <div key={a.id} className="p-4 flex justify-between items-center group">
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} • {a.type === 'cartao' ? `Fecha ${a.closing}/Vence ${a.due}` : a.group}</p></div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>setAccForm(a)} className="text-blue-500 p-2"><Icon name="edit-2" size={14}/></button><button onClick={()=>handleDeleteAccount(a.id, a.name)} className="text-red-400 p-2"><Icon name="trash-2" size={14}/></button></div>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button onClick={()=>setAccForm(a)} className="text-blue-500 p-2"><Icon name="edit-2" size={14}/></button>
+                                                    <button onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>
+                                                        {deleteConfirmId === a.id ? <span className="text-[8px] font-black uppercase px-2">Confirma?</span> : <Icon name="trash-2" size={14}/>}
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -667,7 +687,12 @@
                                      <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; await db.collection(`artifacts/${appId}/users/${user.uid}/categories`).add({name:v}); document.getElementById('new-cat').value='';}} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
                                         {categories.sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
-                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black"><span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span><button onClick={async()=>await db.doc(`artifacts/${appId}/users/${user.uid}/categories/${c.id}`).delete()} className="text-red-100 group-hover:text-red-500"><Icon name="trash-2" size={12}/></button></div>
+                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black">
+                                                <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
+                                                <button onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-100 group-hover:text-red-500'}`}>
+                                                    {deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}
+                                                </button>
+                                            </div>
                                         ))}
                                      </div>
                                 </div>
@@ -714,7 +739,12 @@
                                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
                                                                 <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
                                                             </div>
-                                                            <div className="flex items-center gap-4"><p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p><button onClick={async()=>await db.doc(`artifacts/${appId}/users/${user.uid}/transactions/${t.id}`).delete()} className="text-red-100 group-hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Icon name="trash-2" size={14}/></button></div>
+                                                            <div className="flex items-center gap-4">
+                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                                <button onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-100 group-hover:text-red-500 opacity-0 group-hover:opacity-100'}`}>
+                                                                    {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -726,7 +756,7 @@
                         )}
 
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.3.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.0 GOLDEN STABLE</footer>
                 </div>
             );
         }
