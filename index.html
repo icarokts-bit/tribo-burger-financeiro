@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.0.0 STABLE BASELINE</title>
+    <title>Tribo Burger | v2.1.0 STABLE BASELINE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -130,6 +130,12 @@
 
             const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            /* Sugestões baseadas no histórico */
+            const uniqueDescriptions = useMemo(() => {
+                const descs = transactions.map(t => t.description).filter(Boolean);
+                return [...new Set(descs)].sort();
+            }, [transactions]);
 
             const filteredDashboard = useMemo(() => {
                 return transactions.filter(t => {
@@ -293,7 +299,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.0.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.1.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -313,7 +319,12 @@
                                 <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit relative">
                                     {editingId && <div className="absolute -top-4 right-8 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase">Editando Lançamento</div>}
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada','saida','transferencia'].map(t=>(<button key={t} type="button" onClick={()=>setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type===t?'bg-white shadow-sm text-black':'text-slate-400'}`}>{t}</button>))}</div>
-                                    <input type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={desc} onChange={e=>setDesc(e.target.value)} />
+                                    <div className="relative">
+                                        <input list="history-descriptions" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none focus:border-black" value={desc} onChange={e=>setDesc(e.target.value)} />
+                                        <datalist id="history-descriptions">
+                                            {uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}
+                                        </datalist>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e=>setVal(e.target.value)} />
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={account} onChange={e=>setAccount(e.target.value)}><option value="">Conta...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
@@ -680,7 +691,7 @@
 
                     </main>
 
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.0.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.1.0 GOLDEN STABLE</footer>
                 </div>
             );
         }
