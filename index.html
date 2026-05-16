@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.6 STABLE</title>
+    <title>Tribo Burger | v2.4.7 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -32,6 +32,8 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
         .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); pointer-events: none; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .scale-up-center { animation: scale-up-center 0.2s cubic-bezier(0.390, 0.575, 0.565, 1.000) both; }
+        @keyframes scale-up-center { 0% { transform: scale(0.5); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body class="antialiased">
@@ -110,9 +112,7 @@
             const [accFormError, setAccFormError] = useState('');
             const [supplierInput, setSupplierInput] = useState('');
 
-            // Estado para o Modal de Confirmação de Valor
             const [liqModal, setLiqModal] = useState(null);
-
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
             useEffect(() => {
@@ -124,12 +124,12 @@
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
                 
-                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); });
-                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-                const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-                const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ ...d.data(), id: d.id }))));
-                const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); });
+                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
+                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); }, e => console.error(e));
+                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
+                const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
+                const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
+                const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); }, e => console.error(e));
 
                 return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
             }, [user]);
@@ -144,6 +144,7 @@
 
             const filteredDashboard = useMemo(() => {
                 return transactions.filter(t => {
+                    if (!t) return false;
                     const accInfo = accounts.find(a => a.name === t.account);
                     const isMonth = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth) || t.billingMonth === filterMonth);
                     const matchSearch = (t.description || "").toLowerCase().includes(searchQuery.toLowerCase()) || (t.category || "").toLowerCase().includes(searchQuery.toLowerCase());
@@ -157,13 +158,14 @@
             }, [transactions, filterMonth, searchQuery, typeFilter, accFilter, catFilter, hideCards, hideForecasts, accounts]);
 
             const accountBalances = useMemo(() => {
-                const bal = {}; accounts.forEach(a => bal[a.name] = 0);
+                const bal = {}; 
+                if (accounts) accounts.forEach(a => { if(a.name) bal[a.name] = 0; });
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
                         if (t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
                         else if (t.type === 'saida') bal[t.account] = (bal[t.account] || 0) - amt;
-                        else if (t.type === 'transferencia') { bal[t.account] -= amt; bal[t.destinationAccount] = (bal[t.destinationAccount] || 0) + amt; }
+                        else if (t.type === 'transferencia') { bal[t.account] = (bal[t.account] || 0) - amt; bal[t.destinationAccount] = (bal[t.destinationAccount] || 0) + amt; }
                     }
                 });
                 return bal;
@@ -214,7 +216,9 @@
                     if (sum <= 0.01) return null;
                     return { id: `card-${card.name}`, description: `Fatura ${card.name}`, amount: sum, account: card.name, clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, isInvoice: true };
                 }).filter(Boolean);
-                return [...pendings, ...invoices].sort((a,b) => a.clearanceDate.localeCompare(b.clearanceDate));
+                
+                // Correção Crítica v2.4.7: Proteção contra localeCompare em campos undefined que causa tela branca
+                return [...pendings, ...invoices].sort((a,b) => (a.clearanceDate || "").localeCompare(b.clearanceDate || ""));
             }, [transactions, accounts, filterMonth]);
 
             const handleSaveTx = async (e) => {
@@ -284,18 +288,16 @@
                 } finally { setIsActionLoading(false); }
             };
 
-            // Função para iniciar liquidação (abre o modal)
             const openLiquidation = (t) => {
                 if (t.isInvoice) { setActiveTab('cartoes'); return; }
                 setLiqModal({
                     id: t.id,
-                    description: t.description,
+                    description: t.description || 'Sem Descrição',
                     amount: String(t.amount || 0).replace('.', ','),
                     date: new Date().toISOString().split('T')[0]
                 });
             };
 
-            // Função para efetivar a liquidação após confirmação
             const executeLiquidation = async () => {
                 if (!user || !liqModal) return;
                 setIsActionLoading(true);
@@ -356,7 +358,6 @@
                 <div className="min-h-screen flex flex-col fade-in">
                     {isActionLoading && <div className="loading-overlay text-white font-black uppercase text-xs">Processando...</div>}
                     
-                    {/* Modal de Confirmação de Valor e Data */}
                     {liqModal && (
                         <div className="modal-overlay">
                             <div className="glass-card w-full max-w-sm p-8 rounded-[2.5rem] shadow-2xl border-t-8 border-green-500 flex flex-col gap-6 scale-up-center">
@@ -386,7 +387,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.6</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.7</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -399,7 +400,12 @@
                     </header>
 
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
-                        <div className="flex justify-center"><div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm"><span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span><input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" /></div></div>
+                        <div className="flex justify-center">
+                            <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span>
+                                <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
+                            </div>
+                        </div>
 
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -419,12 +425,6 @@
                                             {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
                                         </select>
                                     </div>
-                                    {type !== 'transferencia' && (
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Parcelas (Vezes)</label>
-                                            <input type="number" min="1" placeholder="Ex: 1" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={inst} onChange={e=>setInst(parseInt(e.target.value)||1)} />
-                                        </div>
-                                    )}
                                     <div className="grid grid-cols-2 gap-3">
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={cat} onChange={e=>setCat(e.target.value)}>
                                             <option value="">Categoria...</option>
@@ -443,10 +443,7 @@
                                         <button type="button" onClick={()=>setStatus('pago')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pago'?'bg-green-500 text-white':'bg-white text-slate-400'}`}>PAGO</button>
                                         <button type="button" onClick={()=>setStatus('pendente')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pendente'?'bg-orange-500 text-white':'bg-white text-slate-400'}`}>PENDENTE</button>
                                     </div>
-                                    <div className="flex gap-3">
-                                        <button className="flex-1 bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{editingId ? 'Atualizar Lançamento' : 'Gravar Movimento'}</button>
-                                        {editingId && <button type="button" onClick={()=>{setEditingId(null); setDesc(''); setVal('');}} className="bg-slate-200 text-slate-600 px-6 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
-                                    </div>
+                                    <button className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{editingId ? 'Atualizar' : 'Gravar'}</button>
                                 </form>
 
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
@@ -454,23 +451,21 @@
                                         <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
                                         <div className="flex flex-wrap gap-2 items-center">
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="todos">Todos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                             <div className="flex gap-2 ml-auto">
                                                 <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
-                                                <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts?'Apenas Pagos':'Tudo'}</button>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredDashboard.map(t => (
-                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
+                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>{t.type==='entrada'?'IN':'OUT'}</div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
                                                             <p className="font-black text-sm uppercase leading-none">{t.description}</p>
                                                             <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
-                                                                {t.status==='pago'?`Liquidação ${t.clearanceDate?.split('-').reverse().slice(0,2).join('/')}`:'Previsto'}
+                                                                {t.status==='pago' ? `Pago ${t.clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}
                                                             </span>
                                                         </div>
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
@@ -479,9 +474,9 @@
                                                 <div className="flex items-center gap-4">
                                                     <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                     <div className="flex gap-1">
-                                                        <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 hover:text-blue-600 p-2"><Icon name="edit-2" size={14}/></button>
-                                                        <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
-                                                            {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Confirmar?</span> : <Icon name="trash-2" size={14}/>}
+                                                        <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
+                                                        <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>
+                                                            {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -530,7 +525,6 @@
                                             <tr className="header-black text-white">
                                                 <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
                                                 <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
-                                                <th className="p-4 bg-blue-600 text-white">Pedidos</th>
                                                 {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h=><th key={h} className="p-4">{h}</th>)}
                                                 <th className="p-4">Ações</th>
                                             </tr>
@@ -543,17 +537,14 @@
                                                     <tr key={d} className="hover:bg-slate-50 h-12">
                                                         <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
                                                         <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                        <td className="p-0 border-r bg-blue-50/30">
-                                                            <input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" />
-                                                        </td>
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
                                                             <td key={f} className="p-0 border-r">
                                                                 <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
                                                             </td>
                                                         ))}
                                                         <td className="p-4">
-                                                            <button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>
-                                                                {deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                            <button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200'}`}>
+                                                                {deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -569,7 +560,7 @@
                             <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Nada pendente</p> : consolidatedAPagar.map(t => (
+                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Sem pendências</p> : consolidatedAPagar.map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-5">
                                                 <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}/></div>
@@ -577,7 +568,7 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2">
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
                                                     <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span>
                                                 </button>
                                             </div>
@@ -591,7 +582,7 @@
                              <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).sort((a,b)=>a.clearanceDate.localeCompare(b.clearanceDate)).map(t => (
+                                    {transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).sort((a,b)=>(a.clearanceDate||"").localeCompare(b.clearanceDate||"")).map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-5">
                                                 <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
@@ -599,7 +590,7 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2">
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
                                                     <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span>
                                                 </button>
                                             </div>
@@ -620,23 +611,19 @@
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button>
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
-                                        <div className="flex items-center justify-between p-2">
-                                            <div className="flex items-center gap-2"><span className="text-[9px] font-black uppercase text-slate-400">Posição</span><input type="number" className="w-16 p-2 border rounded-xl text-center font-black outline-none" value={accForm.pos} onChange={e=>setAccForm({...accForm, pos:e.target.value})} /></div>
-                                            <button type="button" onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>{accForm.highlight?'Destaque ON':'Destaque OFF'}</button>
-                                        </div>
                                         <div className="flex gap-2">
-                                            <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">{accForm.id?'Gravar':'Criar'}</button>
+                                            <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar</button>
                                             {accForm.id && <button type="button" onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
                                         </div>
                                     </div>
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
-                                        {accounts.sort((a,b)=>parseInt(a.pos)-parseInt(b.pos)).map(a => (
-                                            <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl transition-all">
+                                        {accounts.sort((a,b)=>parseInt(a.pos||0)-parseInt(b.pos||0)).map(a => (
+                                            <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl">
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type}</p></div>
                                                 <div className="flex gap-2 items-center">
-                                                    <button type="button" onClick={()=>setAccForm(a)} className="flex items-center gap-2 bg-blue-50 text-blue-500 p-2 px-3 rounded-xl hover:bg-blue-100 transition-all"><Icon name="edit-2" size={14}/><span className="text-[10px] font-black uppercase">Editar</span></button>
-                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`flex items-center gap-2 transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
-                                                        {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <React.Fragment><Icon name="trash-2" size={14}/><span className="text-[10px] font-black uppercase">Excluir</span></React.Fragment>}
+                                                    <button type="button" onClick={()=>setAccForm(a)} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}/></button>
+                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>
+                                                        {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
                                                     </button>
                                                 </div>
                                             </div>
@@ -647,10 +634,10 @@
                                      <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
                                      <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
-                                        {categories.sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
-                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black">
+                                        {categories.sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c => (
+                                            <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center hover:border-black">
                                                 <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
-                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
+                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>
                                                     {deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}
                                                 </button>
                                             </div>
@@ -678,9 +665,8 @@
                                 </div>
                             </div>
                         )}
-
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.6 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.7 GOLDEN STABLE</footer>
                 </div>
             );
         }
