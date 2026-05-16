@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.7 STABLE</title>
+    <title>Tribo Burger | v2.4.8 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -217,7 +217,6 @@
                     return { id: `card-${card.name}`, description: `Fatura ${card.name}`, amount: sum, account: card.name, clearanceDate: `${filterMonth}-${String(card.dueDay || 10).padStart(2, '0')}`, isInvoice: true };
                 }).filter(Boolean);
                 
-                // Correção Crítica v2.4.7: Proteção contra localeCompare em campos undefined que causa tela branca
                 return [...pendings, ...invoices].sort((a,b) => (a.clearanceDate || "").localeCompare(b.clearanceDate || ""));
             }, [transactions, accounts, filterMonth]);
 
@@ -311,6 +310,11 @@
                 } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
+            const saveMeta = async (v) => {
+                const path = `artifacts/${appId}/users/${user.uid}/settings/config`;
+                await db.doc(path).set({ meta: p(v) }, { merge: true });
+            };
+
             const handleSaveAccount = async () => {
                 if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
                 const exists = accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id);
@@ -387,7 +391,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.7</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.8</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -600,6 +604,138 @@
                              </div>
                         )}
 
+                        {/* RESTAURO DA ABA: CARTÕES (Fatura detalhada e listagem) */}
+                        {activeTab === 'cartoes' && (
+                            <div className="space-y-12 animate-in zoom-in duration-300">
+                                {accounts.filter(a => a.type === 'cartao').map(card => {
+                                    const txs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth)))).sort((a,b)=>(a.date || "").localeCompare(b.date || ""));
+                                    const total = txs.reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    return (
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
+                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
+                                                <div>
+                                                    <h3 className="text-2xl font-black uppercase">{card.name}</h3>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closing || card.closingDay || '25'} • Vencimento: {card.due || card.dueDay || '10'}</p>
+                                                </div>
+                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
+                                                    <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <h4 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Lançamentos da Fatura</h4>
+                                                <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
+                                                    {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem lançamentos</p> : txs.map(t => (
+                                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
+                                                                <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
+                                                            </div>
+                                                            <div className="flex items-center gap-4">
+                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
+                                                                    {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* RESTAURO DA ABA: RESULTADOS (Indicadores e KPIs) */}
+                        {activeTab === 'resultados' && (
+                            <div className="space-y-8 animate-in fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center space-y-4">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta de Vendas</p>
+                                        <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
+                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all" style={{width:`${Math.min(100, (stats.rb/(metaVendas || 1))*100)}%`}}></div></div>
+                                        <p className="text-[10px] font-black text-green-600">{((stats.rb/(metaVendas || 1))*100).toFixed(1)}% Atingido</p>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Dias com Venda</p>
+                                        <h3 className="text-5xl font-black">{stats.diasAtivos} <span className="text-sm text-slate-300">DIAS</span></h3>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Dia Ativo)</p>
+                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticketDiario)}</h3>
+                                    </div>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-purple-500 text-center flex flex-col justify-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ticket Médio (Pedidos)</p>
+                                        <h3 className="text-3xl font-black text-purple-600">{formatMoney(stats.ticketPedido)}</h3>
+                                        <p className="text-[8px] font-black text-slate-300 mt-2 uppercase">{(stats.totalPedidos || 0)} PEDIDOS TOTAIS</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Receita Bruta</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Custos Totais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalCosts)}</h3></div>
+                                     <div className={`glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 ${stats.lucro>=0?'border-blue-600':'border-red-600'}`}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro>=0?'text-blue-600':'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'dre' && (
+                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
+                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="py-4 border-b">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas por Categoria</h3>
+                                        {Object.entries(stats.catCosts).sort(([a],[b])=>a.localeCompare(b)).map(([c, v]) => (
+                                            <div key={c} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-400 font-black">{formatMoney(v)}</span></div>
+                                        ))}
+                                    </div>
+                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white'}`}>
+                                        <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                                        <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* RESTAURO DA ABA: FORNECEDORES (Registo de parceiros) */}
+                        {activeTab === 'fornecedores' && (
+                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
+                                <div className="glass-card p-8 rounded-[3rem] h-fit space-y-6 shadow-sm border-t-4 border-black">
+                                    <h2 className="text-sm font-black uppercase border-b pb-4">Novo Fornecedor</h2>
+                                    <div className="space-y-4">
+                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50 outline-none focus:border-[#D97757]" placeholder="Nome do Parceiro/Fornecedor" value={supplierInput} onChange={e => setSupplierInput(e.target.value)} />
+                                        <button type="button" onClick={async() => { if(!supplierInput) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('suppliers').add({ name: supplierInput, timestamp: new Date().toISOString() }); setSupplierInput(''); } finally { setIsActionLoading(false); } }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Cadastrar Fornecedor</button>
+                                    </div>
+                                </div>
+                                <div className="glass-card p-8 rounded-[3rem] shadow-sm max-h-[550px] flex flex-col border border-t-4 border-slate-400">
+                                    <div className="flex justify-between items-center border-b pb-4 mb-4">
+                                        <h2 className="text-sm font-black uppercase">Lista de Parceiros</h2>
+                                        <span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black">{(suppliers || []).length}</span>
+                                    </div>
+                                    <div className="space-y-2 overflow-y-auto no-scrollbar flex-1">
+                                        {(!suppliers || suppliers.length === 0) ? (
+                                            <p className="text-center py-10 text-[10px] font-black uppercase text-slate-300">Nenhum fornecedor cadastrado</p>
+                                        ) : (
+                                            suppliers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => (
+                                                <div key={s.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group hover:border-black transition-all">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-[10px] text-slate-400">
+                                                            {(s.name || "F").charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="text-xs font-black uppercase">{s.name}</span>
+                                                    </div>
+                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
+                                                        {deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'ajustes' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-orange-500 space-y-6 shadow-xl h-fit">
@@ -646,27 +782,8 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {activeTab === 'dre' && (
-                            <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
-                                <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
-                                    <div className="py-4 border-b">
-                                        <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas por Categoria</h3>
-                                        {Object.entries(stats.catCosts).sort(([a],[b])=>a.localeCompare(b)).map(([c, v]) => (
-                                            <div key={c} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-400 font-black">{formatMoney(v)}</span></div>
-                                        ))}
-                                    </div>
-                                    <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white'}`}>
-                                        <h3 className="text-xl font-black uppercase">Lucro Líquido</h3>
-                                        <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.7 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.8 GOLDEN STABLE</footer>
                 </div>
             );
         }
