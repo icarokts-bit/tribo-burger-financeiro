@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.4.5 STABLE</title>
+    <title>Tribo Burger | v2.4.6 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -31,6 +31,7 @@
         .delete-confirm { background-color: #EF4444 !important; color: white !important; animation: pulse 1s infinite; font-size: 9px !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
         .loading-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); pointer-events: none; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
     </style>
 </head>
 <body class="antialiased">
@@ -108,7 +109,9 @@
             const [accForm, setAccForm] = useState({ id: null, name: '', type: 'corrente', group: 'operacional', closing: '25', due: '10', pos: '1', highlight: false });
             const [accFormError, setAccFormError] = useState('');
             const [supplierInput, setSupplierInput] = useState('');
-            const [payDates, setPayDates] = useState({});
+
+            // Estado para o Modal de Confirmação de Valor
+            const [liqModal, setLiqModal] = useState(null);
 
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
@@ -121,18 +124,9 @@
                 if (!user) return;
                 const path = `artifacts/${appId}/users/${user.uid}`;
                 
-                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => {
-                    const data = d.data();
-                    return { ...data, id: d.id }; // Força o ID real do Firestore
-                })));
-                
+                const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); });
-                
-                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => {
-                    const data = d.data();
-                    return { ...data, id: d.id }; // Força o ID real do Firestore
-                })));
-                
+                const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ ...d.data(), id: d.id }))));
                 const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); });
@@ -232,14 +226,10 @@
                     const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
                     const batch = db.batch();
                     const numInst = (type === 'transferencia') ? 1 : inst;
-
-                    // Correção: Proteção contra data inválida que causa RangeError no console do utilizador
                     const baseDateString = date || new Date().toISOString().split('T')[0];
 
                     for (let i = 0; i < numInst; i++) {
-                        const d = new Date(baseDateString + 'T00:00:00'); 
-                        d.setMonth(d.getMonth() + i);
-                        
+                        const d = new Date(baseDateString + 'T00:00:00'); d.setMonth(d.getMonth() + i);
                         let finalClearance = clearance || baseDateString;
                         let billingM = d.toISOString().slice(0, 7);
                         
@@ -249,9 +239,7 @@
                             let billingDate = new Date(d);
                             if (d.getDate() > closing) billingDate.setMonth(billingDate.getMonth() + 1);
                             billingM = billingDate.toISOString().slice(0, 7);
-                            let dueDate = new Date(billingDate); 
-                            dueDate.setMonth(dueDate.getMonth() + 1); 
-                            dueDate.setDate(due);
+                            let dueDate = new Date(billingDate); dueDate.setMonth(dueDate.getMonth() + 1); dueDate.setDate(due);
                             finalClearance = dueDate.toISOString().split('T')[0];
                         } else {
                             const cDate = new Date((clearance || baseDateString) + 'T00:00:00');
@@ -271,11 +259,7 @@
                     }
                     await batch.commit(); 
                     setEditingId(null); setDesc(''); setVal(''); setType('saida'); setAccount(''); setCat(''); setSup(''); setInst(1);
-                } catch (err) {
-                    console.error("Erro ao salvar:", err);
-                } finally {
-                    setIsActionLoading(false);
-                }
+                } catch (err) { console.error(err); } finally { setIsActionLoading(false); }
             };
 
             const startEdit = (t) => {
@@ -297,36 +281,38 @@
                 setIsActionLoading(true);
                 try {
                     await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true });
-                } finally {
-                    setIsActionLoading(false);
-                }
+                } finally { setIsActionLoading(false); }
             };
 
-            const markPaid = async (t, payDate) => {
+            // Função para iniciar liquidação (abre o modal)
+            const openLiquidation = (t) => {
                 if (t.isInvoice) { setActiveTab('cartoes'); return; }
+                setLiqModal({
+                    id: t.id,
+                    description: t.description,
+                    amount: String(t.amount || 0).replace('.', ','),
+                    date: new Date().toISOString().split('T')[0]
+                });
+            };
+
+            // Função para efetivar a liquidação após confirmação
+            const executeLiquidation = async () => {
+                if (!user || !liqModal) return;
                 setIsActionLoading(true);
                 try {
-                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(t.id).update({ status: 'pago', clearanceDate: payDate });
-                } finally {
-                    setIsActionLoading(false);
-                }
-            };
-
-            const saveMeta = async (v) => {
-                const path = `artifacts/${appId}/users/${user.uid}/settings/config`;
-                await db.doc(path).set({ meta: p(v) }, { merge: true });
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(liqModal.id).update({ 
+                        status: 'pago', 
+                        clearanceDate: liqModal.date,
+                        amount: p(liqModal.amount)
+                    });
+                    setLiqModal(null);
+                } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
             const handleSaveAccount = async () => {
-                if (!accForm.name) {
-                    setAccFormError('Por favor, defina um nome.');
-                    return;
-                }
+                if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
                 const exists = accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id);
-                if (exists) {
-                    setAccFormError('Já existe uma conta ou cartão com este nome.');
-                    return;
-                }
+                if (exists) { setAccFormError('Já existe este nome.'); return; }
                 setAccFormError('');
                 setIsActionLoading(true);
                 try {
@@ -334,43 +320,20 @@
                     if (accForm.id) await pth.doc(accForm.id).update(accForm);
                     else await pth.add(accForm);
                     setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
-                } finally {
-                    setIsActionLoading(false);
-                }
+                } finally { setIsActionLoading(false); }
             };
 
-            // Função de Exclusão Blindada v2.4.5
             const executeDelete = async (collection, id) => {
                 if (!user || !id) return;
-                
                 if (deleteConfirmId === id) {
-                    // SEGUNDO CLIQUE: Executa a ação
                     setIsActionLoading(true);
                     try {
-                        const finalPath = `artifacts/${appId}/users/${user.uid}/${collection}/${id}`;
-                        console.log("Iniciando exclusão de:", finalPath);
-                        
-                        await db.collection('artifacts')
-                            .doc(appId)
-                            .collection('users')
-                            .doc(user.uid)
-                            .collection(collection)
-                            .doc(id)
-                            .delete();
-                            
+                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection).doc(id).delete();
                         setDeleteConfirmId(null);
-                        console.log("Exclusão concluída com sucesso.");
-                    } catch (e) {
-                        console.error("Erro fatal na exclusão:", e);
-                    } finally {
-                        setIsActionLoading(false);
-                    }
+                    } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
                 } else {
-                    // PRIMEIRO CLIQUE: Pede confirmação
                     setDeleteConfirmId(id);
-                    setTimeout(() => {
-                        setDeleteConfirmId(prev => prev === id ? null : prev);
-                    }, 5000);
+                    setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000);
                 }
             };
 
@@ -383,7 +346,7 @@
                         <form onSubmit={e => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(a => alert(a.message)); }} className="space-y-4">
                             <input type="email" placeholder="Email" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={email} onChange={e=>setEmail(e.target.value)} />
                             <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold" value={password} onChange={e=>setPassword(e.target.value)} />
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-all">Entrar no Sistema</button>
+                            <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">Entrar no Sistema</button>
                         </form>
                     </div>
                 </div>
@@ -393,11 +356,37 @@
                 <div className="min-h-screen flex flex-col fade-in">
                     {isActionLoading && <div className="loading-overlay text-white font-black uppercase text-xs">Processando...</div>}
                     
+                    {/* Modal de Confirmação de Valor e Data */}
+                    {liqModal && (
+                        <div className="modal-overlay">
+                            <div className="glass-card w-full max-w-sm p-8 rounded-[2.5rem] shadow-2xl border-t-8 border-green-500 flex flex-col gap-6 scale-up-center">
+                                <div className="text-center">
+                                    <h3 className="text-sm font-black uppercase text-slate-400 mb-1 tracking-widest">Confirmar Liquidação</h3>
+                                    <p className="font-black text-lg text-slate-800 uppercase leading-tight">{liqModal.description}</p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Data da Liquidação</label>
+                                        <input type="date" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none" value={liqModal.date} onChange={e=>setLiqModal({...liqModal, date: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Valor Final (R$)</label>
+                                        <input type="text" className="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl font-black text-xl text-center text-green-600 outline-none" value={liqModal.amount} onChange={e=>setLiqModal({...liqModal, amount: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={executeLiquidation} className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 transition-all">Confirmar e Liquidar</button>
+                                    <button onClick={()=>setLiqModal(null)} className="w-full text-slate-400 p-2 text-[9px] font-black uppercase hover:text-red-500">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.5</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.4.6</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -436,12 +425,6 @@
                                             <input type="number" min="1" placeholder="Ex: 1" className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm" value={inst} onChange={e=>setInst(parseInt(e.target.value)||1)} />
                                         </div>
                                     )}
-                                    {type === 'transferencia' && (
-                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={destAcc} onChange={e=>setDestAcc(e.target.value)}>
-                                            <option value="">Para...</option>
-                                            {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
-                                        </select>
-                                    )}
                                     <div className="grid grid-cols-2 gap-3">
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={cat} onChange={e=>setCat(e.target.value)}>
                                             <option value="">Categoria...</option>
@@ -468,25 +451,13 @@
 
                                 <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
                                     <div className="p-4 bg-slate-50 border-b space-y-4">
-                                        <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar por nome, categoria ou conta..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
+                                        <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
                                         <div className="flex flex-wrap gap-2 items-center">
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}>
-                                                <option value="todos">Todos Tipos</option>
-                                                <option value="entrada">Entradas</option>
-                                                <option value="saida">Saídas</option>
-                                                <option value="transferencia">Transf.</option>
-                                            </select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
-                                                <option value="">Contas...</option>
-                                                {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
-                                            </select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
-                                                <option value="">Categorias...</option>
-                                                {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-                                            </select>
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="todos">Todos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}><option value="">Contas...</option>{accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select>
                                             <div className="flex gap-2 ml-auto">
-                                                <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão Oculto':'Mostrar Cartão'}</button>
-                                                <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts?'Apenas Pagos':'Mostrar Tudo'}</button>
+                                                <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
+                                                <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts?'Apenas Pagos':'Tudo'}</button>
                                             </div>
                                         </div>
                                     </div>
@@ -550,24 +521,8 @@
                         {activeTab === 'vendas' && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className="stat-banner !border-black !bg-[#D97757]">
-                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Faturamento Total do Mês ({filterMonth})</p>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Faturamento Total do Mês</p>
                                     <h3 className="text-5xl font-black drop-shadow-xl">{formatMoney(stats.rb)}</h3>
-                                </div>
-                                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <Icon name="calendar-days" className="text-slate-400" />
-                                        <h2 className="text-[10px] font-black uppercase tracking-widest">Controle de Vendas Diárias</h2>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border">
-                                        <div className="flex flex-col">
-                                            <label className="text-[7px] font-black uppercase text-slate-400 ml-1">Data para Abrir</label>
-                                            <input type="date" className="text-xs font-bold bg-transparent outline-none border-0" value={newDayDate} onChange={e=>setNewDayDate(e.target.value)} />
-                                        </div>
-                                        <div className="w-px h-6 bg-slate-200"></div>
-                                        <button onClick={handleOpenNewDay} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all">
-                                            <Icon name="plus-circle" size={14}/> Abrir Novo Dia
-                                        </button>
-                                    </div>
                                 </div>
                                 <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
                                     <table className="w-full text-center text-[11px] min-w-[1700px]">
@@ -576,10 +531,7 @@
                                                 <th className="p-4 sticky left-0 z-20 bg-black">Data</th>
                                                 <th className="p-4 bg-yellow-500 text-black">Total Dia</th>
                                                 <th className="p-4 bg-blue-600 text-white">Pedidos</th>
-                                                <th className="p-4 bg-blue-800 text-white">Ticket Médio</th>
                                                 {['Pix','Pix Online','Fiado','Dinheiro','Ifood','Débito','Crédito','VR','Ticket','Alelo'].map(h=><th key={h} className="p-4">{h}</th>)}
-                                                <th className="p-4 text-orange-400">Taxa Entrega</th>
-                                                <th className="p-4 text-red-400">Motoboy</th>
                                                 <th className="p-4">Ações</th>
                                             </tr>
                                         </thead>
@@ -587,8 +539,6 @@
                                             {Object.keys(dailyRecords).filter(d=>d.startsWith(filterMonth)).sort((a,b)=>new Date(b)-new Date(a)).map(d => {
                                                 const r = dailyRecords[d] || {};
                                                 const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
-                                                const pedidos = p(r.qtdPedidos);
-                                                const ticketMedio = pedidos > 0 ? total / pedidos : 0;
                                                 return (
                                                     <tr key={d} className="hover:bg-slate-50 h-12">
                                                         <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
@@ -596,8 +546,7 @@
                                                         <td className="p-0 border-r bg-blue-50/30">
                                                             <input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" />
                                                         </td>
-                                                        <td className="p-4 bg-blue-50/50 font-black text-blue-900">{formatMoney(ticketMedio)}</td>
-                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','taxaEntrega','motoboy'].map(f => (
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
                                                             <td key={f} className="p-0 border-r">
                                                                 <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
                                                             </td>
@@ -616,96 +565,21 @@
                             </div>
                         )}
 
-                        {activeTab === 'resultados' && (
-                            <div className="space-y-8 animate-in fade-in">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center space-y-4">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta de Vendas</p>
-                                        <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
-                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all" style={{width:`${Math.min(100, (stats.rb/metaVendas)*100)}%`}}></div></div>
-                                        <p className="text-[10px] font-black text-green-600">{((stats.rb/metaVendas)*100).toFixed(1)}% Atingido</p>
-                                    </div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Dias com Venda</p>
-                                        <h3 className="text-5xl font-black">{stats.diasAtivos} <span className="text-sm text-slate-300">DIAS</span></h3>
-                                    </div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Dia Ativo)</p>
-                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticketDiario)}</h3>
-                                    </div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-purple-500 text-center flex flex-col justify-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ticket Médio (Pedidos)</p>
-                                        <h3 className="text-3xl font-black text-purple-600">{formatMoney(stats.ticketPedido)}</h3>
-                                        <p className="text-[8px] font-black text-slate-300 mt-2 uppercase">{stats.totalPedidos} PEDIDOS TOTAIS</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Receita Bruta</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Custos Totais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalCosts)}</h3></div>
-                                     <div className={`glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 ${stats.lucro>=0?'border-blue-600':'border-red-600'}`}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={`text-2xl font-black ${stats.lucro>=0?'text-blue-600':'text-red-600'}`}>{formatMoney(stats.lucro)}</h3></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'fornecedores' && (
-                            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
-                                <div className="glass-card p-8 rounded-[3rem] h-fit space-y-6 shadow-sm border-t-4 border-black">
-                                    <h2 className="text-sm font-black uppercase border-b pb-4">Novo Fornecedor</h2>
-                                    <div className="space-y-4">
-                                        <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs bg-slate-50 outline-none focus:border-[#D97757]" placeholder="Nome do Parceiro/Fornecedor" value={supplierInput} onChange={e => setSupplierInput(e.target.value)} />
-                                        <button type="button" onClick={async() => { if(!supplierInput) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('suppliers').add({ name: supplierInput, timestamp: new Date().toISOString() }); setSupplierInput(''); } finally { setIsActionLoading(false); } }} className="w-full bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">Cadastrar Fornecedor</button>
-                                    </div>
-                                </div>
-                                <div className="glass-card p-8 rounded-[3rem] shadow-sm max-h-[550px] flex flex-col border border-t-4 border-slate-400">
-                                    <div className="flex justify-between items-center border-b pb-4 mb-4">
-                                        <h2 className="text-sm font-black uppercase">Lista de Parceiros</h2>
-                                        <span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black">{suppliers.length}</span>
-                                    </div>
-                                    <div className="space-y-2 overflow-y-auto no-scrollbar flex-1">
-                                        {suppliers.length === 0 ? (
-                                            <p className="text-center py-10 text-[10px] font-black uppercase text-slate-300">Nenhum fornecedor cadastrado</p>
-                                        ) : (
-                                            suppliers.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
-                                                <div key={s.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group hover:border-black transition-all">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-[10px] text-slate-400">
-                                                            {s.name.charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <span className="text-xs font-black uppercase">{s.name}</span>
-                                                    </div>
-                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
-                                                        {deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
-                                                    </button>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         {activeTab === 'a_pagar' && (
                             <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
+                                <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Nada a pagar este mês</p> : consolidatedAPagar.map(t => (
+                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Nada pendente</p> : consolidatedAPagar.map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-5">
                                                 <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}/></div>
-                                                <div>
-                                                    <div className="flex items-center gap-2"><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p></div>
-                                                    <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
-                                                </div>
+                                                <div><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
-                                                {!t.isInvoice && (
-                                                    <div className="flex gap-2 items-center">
-                                                        <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toISOString().split('T')[0]} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
-                                                        <button type="button" onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
-                                                    </div>
-                                                )}
-                                                {t.isInvoice && <button type="button" onClick={()=>setActiveTab('cartoes')} className="bg-orange-500 text-white px-4 py-2 rounded-2xl text-[9px] font-black uppercase">Ver Fatura</button>}
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2">
+                                                    <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span>
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -715,7 +589,7 @@
 
                         {activeTab === 'a_receber' && (
                              <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas em {filterMonth}</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
+                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
                                     {transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).sort((a,b)=>a.clearanceDate.localeCompare(b.clearanceDate)).map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
@@ -725,10 +599,9 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                <div className="flex gap-2 items-center">
-                                                    <input type="date" className="p-2 border rounded-xl text-[10px] font-bold" value={payDates[t.id] || new Date().toISOString().split('T')[0]} onChange={e=>setPayDates({...payDates, [t.id]: e.target.value})} />
-                                                    <button type="button" onClick={()=>markPaid(t, payDates[t.id] || new Date().toISOString().split('T')[0])} className="bg-green-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-all"><Icon name="check" size={20}/></button>
-                                                </div>
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg active:scale-90 transition-all flex items-center gap-2">
+                                                    <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span>
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -747,49 +620,19 @@
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button>
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {accForm.type === 'corrente' ? (
-                                                <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px] outline-none" value={accForm.group} onChange={e=>setAccForm({...accForm, group:e.target.value})}>
-                                                    <option value="operacional">Operacional</option>
-                                                    <option value="reserva">Reserva</option>
-                                                    <option value="outros">Outros</option>
-                                                </select>
-                                            ) : (
-                                                <React.Fragment>
-                                                    <div className="space-y-1">
-                                                        <label className="text-[7px] font-black uppercase text-slate-400 ml-2">Dia Fecho</label>
-                                                        <input type="number" placeholder="25" className="w-full p-4 border rounded-2xl font-black text-xs outline-none" value={accForm.closing} onChange={e=>setAccForm({...accForm, closing:e.target.value})} />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-[7px] font-black uppercase text-slate-400 ml-2">Dia Vencimento</label>
-                                                        <input type="number" placeholder="10" className="w-full p-4 border rounded-2xl font-black text-xs outline-none" value={accForm.due} onChange={e=>setAccForm({...accForm, due:e.target.value})} />
-                                                    </div>
-                                                </React.Fragment>
-                                            )}
-                                        </div>
                                         <div className="flex items-center justify-between p-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-black uppercase text-slate-400">Posição</span>
-                                                <input type="number" className="w-16 p-2 border rounded-xl text-center font-black outline-none" value={accForm.pos} onChange={e=>setAccForm({...accForm, pos:e.target.value})} />
-                                            </div>
-                                            <button type="button" onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>
-                                                {accForm.highlight?'Em Destaque':'Destaque Off'}
-                                            </button>
+                                            <div className="flex items-center gap-2"><span className="text-[9px] font-black uppercase text-slate-400">Posição</span><input type="number" className="w-16 p-2 border rounded-xl text-center font-black outline-none" value={accForm.pos} onChange={e=>setAccForm({...accForm, pos:e.target.value})} /></div>
+                                            <button type="button" onClick={()=>setAccForm({...accForm, highlight:!accForm.highlight})} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase ${accForm.highlight?'bg-orange-500 text-white':'bg-white border'}`}>{accForm.highlight?'Destaque ON':'Destaque OFF'}</button>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">
-                                                {accForm.id?'Gravar Alterações':'Criar Conta'}
-                                            </button>
+                                            <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">{accForm.id?'Gravar':'Criar'}</button>
                                             {accForm.id && <button type="button" onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
                                         </div>
                                     </div>
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
                                         {accounts.sort((a,b)=>parseInt(a.pos)-parseInt(b.pos)).map(a => (
                                             <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl transition-all">
-                                                <div>
-                                                    <p className="font-black text-xs uppercase leading-none">{a.name}</p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} • {a.type === 'cartao' ? `Fecha ${a.closing}/Vence ${a.due}` : a.group}</p>
-                                                </div>
+                                                <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type}</p></div>
                                                 <div className="flex gap-2 items-center">
                                                     <button type="button" onClick={()=>setAccForm(a)} className="flex items-center gap-2 bg-blue-50 text-blue-500 p-2 px-3 rounded-xl hover:bg-blue-100 transition-all"><Icon name="edit-2" size={14}/><span className="text-[10px] font-black uppercase">Editar</span></button>
                                                     <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`flex items-center gap-2 transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
@@ -802,10 +645,7 @@
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] space-y-6 h-fit">
                                      <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
-                                     <div className="flex gap-2">
-                                         <input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." />
-                                         <button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button>
-                                     </div>
+                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
                                         {categories.sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center group hover:border-black">
@@ -824,66 +664,23 @@
                             <div className="max-w-3xl mx-auto glass-card rounded-[3rem] p-10 shadow-2xl border-t-8 border-[#D97757] animate-in fade-in">
                                 <h2 className="text-xl font-black uppercase mb-8 border-b pb-4 text-center">DRE Operacional - {filterMonth}</h2>
                                 <div className="space-y-4">
-                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Operacional (Bruta)</span><span>{formatMoney(stats.rb)}</span></div>
+                                    <div className="flex justify-between p-4 bg-green-50 rounded-2xl font-black text-[10px] uppercase"><span>(+) Receita Bruta</span><span>{formatMoney(stats.rb)}</span></div>
                                     <div className="py-4 border-b">
                                         <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 px-4">Despesas por Categoria</h3>
                                         {Object.entries(stats.catCosts).sort(([a],[b])=>a.localeCompare(b)).map(([c, v]) => (
                                             <div key={c} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-400 font-black">{formatMoney(v)}</span></div>
                                         ))}
-                                        <div className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase border-t mt-2 pt-2"><span>(-) Custos de Entrega (Vendas)</span><span className="text-red-400 font-black">{formatMoney(dailyRecords?.[filterMonth]?.motoboy ? p(dailyRecords[filterMonth].motoboy) + p(dailyRecords[filterMonth].taxaEntrega) : 0)}</span></div>
                                     </div>
                                     <div className={`flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl ${stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white'}`}>
-                                        <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                                        <h3 className="text-xl font-black uppercase">Lucro Líquido</h3>
                                         <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
                                     </div>
                                 </div>
                             </div>
                         )}
-                        
-                        {activeTab === 'cartoes' && (
-                            <div className="space-y-12 animate-in zoom-in duration-300">
-                                {accounts.filter(a => a.type === 'cartao').map(card => {
-                                    const txs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth)))).sort((a,b)=>a.date.localeCompare(b.date));
-                                    const total = txs.reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
-                                    return (
-                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
-                                            <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
-                                                <div>
-                                                    <h3 className="text-2xl font-black uppercase">{card.name}</h3>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closingDay} • Vencimento: {card.dueDay}</p>
-                                                </div>
-                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
-                                                    <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-3">
-                                                <h4 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Lançamentos da Fatura</h4>
-                                                <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
-                                                    {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem dados</p> : txs.map(t => (
-                                                        <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
-                                                                <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
-                                                            </div>
-                                                            <div className="flex items-center gap-4">
-                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
-                                                                    {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
 
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.5 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.4.6 GOLDEN STABLE</footer>
                 </div>
             );
         }
