@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.7 STABLE</title>
+    <title>Tribo Burger | v2.5.8 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -288,6 +288,44 @@
                 };
             }, [dailyRecords, transactions, filterMonth]);
 
+            // NOVO: Cálculo Memoizado das Somas Totais por Coluna na Planilha de Vendas
+            const columnTotals = useMemo(() => {
+                const days = Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth));
+                const totals = {
+                    totalDia: 0,
+                    pedidos: 0,
+                    pix: 0,
+                    pixOnline: 0,
+                    fiado: 0,
+                    dinheiro: 0,
+                    ifood: 0,
+                    debito: 0,
+                    credito: 0,
+                    vr: 0,
+                    ticket: 0,
+                    alelo: 0,
+                    taxaEntrega: 0,
+                    motoboy: 0
+                };
+
+                days.forEach(d => {
+                    const r = dailyRecords[d] || {};
+                    const dayTotal = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
+                    totals.totalDia += dayTotal;
+                    totals.pedidos += p(r.qtdPedidos);
+                    
+                    ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].forEach(f => {
+                        totals[f] += p(r[f]);
+                    });
+
+                    totals.taxaEntrega += p(r.taxaEntrega);
+                    totals.motoboy += p(r.motoboy);
+                });
+
+                totals.ticketMedio = totals.pedidos > 0 ? totals.totalDia / totals.pedidos : 0;
+                return totals;
+            }, [dailyRecords, filterMonth]);
+
             const consolidatedAPagar = useMemo(() => {
                 const pendings = transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
@@ -489,9 +527,8 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
-            // NOVO: Função para Plantar Semente (Usar Lançamento como Modelo no Formulário Principal)
             const seedToForm = (t) => {
-                setEditingId(null); // Garante que não é uma edição, mas um novo registro simulado
+                setEditingId(null); 
                 setDesc(t.description || '');
                 setVal(t.amount ? t.amount.toString() : '');
                 setType(t.type || 'saida');
@@ -500,11 +537,10 @@
                 setCat(t.category || '');
                 setSup(t.supplier || '');
                 
-                // Reinicia as datas para o dia de hoje, facilitando novas baixas de contas repetitivas
                 const todayStr = new Date().toISOString().split('T')[0];
                 setDate(todayStr);
                 setClearance(todayStr);
-                setStatus('pago'); // Padrão inteligente pronto para gravação rápida
+                setStatus('pago'); 
                 
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
@@ -621,7 +657,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.7</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.8</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -809,7 +845,6 @@
                                                     <div className="flex items-center gap-4">
                                                         <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                         <div className="flex gap-1">
-                                                            {/* NOVO: Botão de Semente (Planta) para preenchimento de modelo imediato */}
                                                             <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)">
                                                                 <Icon name="sprout" size={14}/>
                                                             </button>
@@ -924,6 +959,21 @@
                                                 );
                                             })}
                                         </tbody>
+                                        {/* NOVO: TFOOT com as somas totais de todas as colunas no final da Planilha de Vendas */}
+                                        <tfoot>
+                                            <tr className="bg-[#1A202C] text-white font-black uppercase text-[10px] border-t-4 border-[#D97757] h-12">
+                                                <td className="p-0 sticky left-0 bg-[#1A202C] z-10 text-center font-black text-amber-300">SOMA TOTAL</td>
+                                                <td className="p-4 bg-yellow-500 text-black font-black text-xs">{formatMoney(columnTotals.totalDia)}</td>
+                                                <td className="p-4 bg-blue-600 text-white font-black text-xs">{columnTotals.pedidos}</td>
+                                                <td className="p-4 bg-blue-800 text-[#F8CC82] font-black text-xs">{formatMoney(columnTotals.ticketMedio)}</td>
+                                                {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
+                                                    <td key={f} className="p-4 border-r bg-slate-800 text-xs font-black">{formatMoney(columnTotals[f])}</td>
+                                                ))}
+                                                <td className="p-4 border-r text-orange-400 bg-orange-950/25 text-xs font-black">{formatMoney(columnTotals.taxaEntrega)}</td>
+                                                <td className="p-4 border-r text-red-400 bg-red-950/25 text-xs font-black">{formatMoney(columnTotals.motoboy)}</td>
+                                                <td className="p-4 bg-slate-850"></td>
+                                            </tr>
+                                        </tfoot>
                                     </table>
                                 </div>
                             </div>
@@ -1199,7 +1249,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.7 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.8 GOLDEN STABLE</footer>
                 </div>
             );
         }
