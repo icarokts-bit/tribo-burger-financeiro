@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.0 STABLE</title>
+    <title>Tribo Burger | v2.5.1 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -249,20 +249,19 @@
                         let billingM = d.toISOString().slice(0, 7);
                         
                         if (cardInfo) {
-                            // Suporte unificado para 'closing'/'closingDay' e 'due'/'dueDay'
                             const closing = parseInt(cardInfo.closing || cardInfo.closingDay || 25);
                             const due = parseInt(cardInfo.due || cardInfo.dueDay || 10);
                             
                             let billingDate = new Date(d);
-                            // Se a compra foi feita após o dia de fecho, vai para a fatura do mês seguinte
+                            // Prevenção de estouro de data do JS (ex: 31 de Maio + 1 mês gerando Julho em vez de Junho)
+                            billingDate.setDate(1); 
                             if (d.getDate() > closing) {
                                 billingDate.setMonth(billingDate.getMonth() + 1);
                             }
                             billingM = billingDate.toISOString().slice(0, 7);
                             
                             let dueDate = new Date(billingDate);
-                            // CORREÇÃO CRÍTICA v2.5.0: Se o vencimento é antes do fecho (ex: 1 < 26), o pagamento é no mês seguinte (+1).
-                            // Se o vencimento é depois do fecho (ex: 25 >= 18), o pagamento é no mesmo mês.
+                            dueDate.setDate(1); // Proteção contra overflow de mês
                             if (due < closing) {
                                 dueDate.setMonth(dueDate.getMonth() + 1);
                             }
@@ -425,7 +424,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.1</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -488,7 +487,31 @@
                                     <div className="p-4 bg-slate-50 border-b space-y-4">
                                         <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
                                         <div className="flex flex-wrap gap-2 items-center">
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="todos">Todos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option></select>
+                                            {/* FILTRO DE FLUXOS */}
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}>
+                                                <option value="todos">Todos os Fluxos</option>
+                                                <option value="entrada">Entradas</option>
+                                                <option value="saida">Saídas</option>
+                                                <option value="transferencia">Transferências</option>
+                                            </select>
+
+                                            {/* RESTAURADO: FILTRO DE CONTAS */}
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
+                                                <option value="">Todas as Contas</option>
+                                                {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
+                                            </select>
+
+                                            {/* RESTAURADO: FILTRO DE CATEGORIAS */}
+                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
+                                                <option value="">Todas as Categorias</option>
+                                                {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+                                            </select>
+
+                                            {/* RESTAURADO: FILTRO DE PREVISÕES / FORECAST */}
+                                            <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>
+                                                {hideForecasts ? 'Previsões OFF' : 'Previsões ON'}
+                                            </button>
+
                                             <div className="flex gap-2 ml-auto">
                                                 <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
                                             </div>
@@ -807,10 +830,26 @@
                                     <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed">
                                         {accFormError && <div className="p-3 bg-red-100 text-[#EF4444] rounded-xl text-[10px] font-black uppercase">{accFormError}</div>}
                                         <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none focus:border-black" placeholder="Nome da Conta ou Cartão" value={accForm.name} onChange={e=>setAccForm({...accForm, name:e.target.value})} />
+                                        
                                         <div className="flex gap-2">
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button>
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
+
+                                        {/* RESTAURADO & CORRIGIDO: INPUTS DE FECHAMENTO E VENCIMENTO DO CARTÃO */}
+                                        {accForm.type === 'cartao' && (
+                                            <div className="grid grid-cols-2 gap-3 fade-in">
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Fechamento</label>
+                                                    <input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 18" value={accForm.closing || ''} onChange={e=>setAccForm({...accForm, closing: e.target.value})} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Vencimento</label>
+                                                    <input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 25" value={accForm.due || ''} onChange={e=>setAccForm({...accForm, due: e.target.value})} />
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="flex gap-2">
                                             <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar</button>
                                             {accForm.id && <button type="button" onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
@@ -819,9 +858,14 @@
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
                                         {accounts.sort((a,b)=>parseInt(a.pos||0)-parseInt(b.pos||0)).map(a => (
                                             <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl">
-                                                <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type}</p></div>
+                                                <div>
+                                                    <p className="font-black text-xs uppercase leading-none">{a.name}</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                                        {a.type} {a.type === 'cartao' && ` • Fecho: ${a.closing || a.closingDay || '25'} • Venc: ${a.due || a.dueDay || '10'}`}
+                                                    </p>
+                                                </div>
                                                 <div className="flex gap-2 items-center">
-                                                    <button type="button" onClick={()=>setAccForm(a)} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}/></button>
+                                                    <button type="button" onClick={()=>setAccForm({ ...a, closing: a.closing || a.closingDay || '25', due: a.due || a.dueDay || '10' })} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}/></button>
                                                     <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>
                                                         {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
                                                     </button>
@@ -847,7 +891,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.1 GOLDEN STABLE</footer>
                 </div>
             );
         }
