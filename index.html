@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.6 STABLE</title>
+    <title>Tribo Burger | v2.5.7 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -70,7 +70,6 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        // Auxiliar de parsing de datas UTC independente do fuso horário local do dispositivo
         const parseDateUTC = (dateStr) => {
             if (!dateStr) return new Date();
             if (dateStr.includes('-')) {
@@ -89,7 +88,6 @@
             return isNaN(d.getTime()) ? new Date() : d;
         };
 
-        // Lógica Global de Cálculo Dinâmico de Datas para Cartão de Crédito
         const getTransactionDates = (t, cardInfo) => {
             if (!cardInfo || cardInfo.type !== 'cartao') {
                 return {
@@ -321,15 +319,12 @@
                 return [...pendings, ...invoices].sort((a,b) => (a.clearanceDate || "").localeCompare(b.clearanceDate || ""));
             }, [transactions, accounts, filterMonth]);
 
-            // NOVO: Cálculo Dinâmico de Alertas de Vencimento de até 2 dias para Contas a Pagar e Receber
             const alerts = useMemo(() => {
                 const today = new Date();
                 const todayUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
                 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
                 const items = [];
 
-                // 1. Contas a Pagar e Receber Manuais Pendentes (Ignora cartões de crédito aqui)
                 transactions.forEach(t => {
                     if (t.status === 'pendente') {
                         const accInfo = accounts.find(a => a.name === t.account);
@@ -354,7 +349,6 @@
                     }
                 });
 
-                // 2. Faturas de Cartão Consolidado Pendentes
                 accounts.filter(a => a.type === 'cartao').forEach(card => {
                     const txs = transactions.filter(t => {
                         if (t.account !== card.name) return false;
@@ -495,6 +489,26 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
+            // NOVO: Função para Plantar Semente (Usar Lançamento como Modelo no Formulário Principal)
+            const seedToForm = (t) => {
+                setEditingId(null); // Garante que não é uma edição, mas um novo registro simulado
+                setDesc(t.description || '');
+                setVal(t.amount ? t.amount.toString() : '');
+                setType(t.type || 'saida');
+                setAccount(t.account || '');
+                setDestAcc(t.destinationAccount || '');
+                setCat(t.category || '');
+                setSup(t.supplier || '');
+                
+                // Reinicia as datas para o dia de hoje, facilitando novas baixas de contas repetitivas
+                const todayStr = new Date().toISOString().split('T')[0];
+                setDate(todayStr);
+                setClearance(todayStr);
+                setStatus('pago'); // Padrão inteligente pronto para gravação rápida
+                
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
             const handleOpenNewDay = async () => {
                 if (!user) return;
                 setIsActionLoading(true);
@@ -607,7 +621,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.6</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.7</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -627,7 +641,6 @@
                             </div>
                         </div>
 
-                        {/* NOVO: Banner Global de Alertas Inteligentes de Vencimento */}
                         {alerts.length > 0 && (
                             <div className="glass-card p-6 rounded-[2.5rem] border-t-8 border-amber-500 bg-amber-50/10 shadow-lg space-y-4 fade-in">
                                 <div className="flex items-center gap-3">
@@ -709,7 +722,6 @@
                                         </select>
                                     </div>
                                     
-                                    {/* CORRIGIDO NATALMENTE: Seletor de Conta Destino quando o tipo é "Transferência" */}
                                     <div className="grid grid-cols-2 gap-3">
                                         {type === 'transferencia' ? (
                                             <select className="w-full p-4 bg-white border border-blue-400 rounded-2xl font-black text-[10px] animate-pulse" value={destAcc} onChange={e=>setDestAcc(e.target.value)} required>
@@ -744,7 +756,6 @@
                                     <div className="p-4 bg-slate-50 border-b space-y-4">
                                         <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
                                         <div className="flex flex-wrap gap-2 items-center">
-                                            {/* FILTRO DE FLUXOS */}
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}>
                                                 <option value="todos">Todos os Fluxos</option>
                                                 <option value="entrada">Entradas</option>
@@ -752,19 +763,16 @@
                                                 <option value="transferencia">Transferências</option>
                                             </select>
 
-                                            {/* FILTRO DE CONTAS */}
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
                                                 <option value="">Todas as Contas</option>
                                                 {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
 
-                                            {/* FILTRO DE CATEGORIAS */}
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
                                                 <option value="">Todas as Categorias</option>
                                                 {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                                             </select>
 
-                                            {/* FILTRO DE PREVISÕES */}
                                             <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>
                                                 {hideForecasts ? 'Previsões OFF' : 'Previsões ON'}
                                             </button>
@@ -801,6 +809,10 @@
                                                     <div className="flex items-center gap-4">
                                                         <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                         <div className="flex gap-1">
+                                                            {/* NOVO: Botão de Semente (Planta) para preenchimento de modelo imediato */}
+                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)">
+                                                                <Icon name="sprout" size={14}/>
+                                                            </button>
                                                             <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
                                                             <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>
                                                                 {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
@@ -982,7 +994,6 @@
                         {activeTab === 'cartoes' && (
                             <div className="space-y-12 animate-in zoom-in duration-300">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                                    {/* CORRIGIDO: Agora filtramos as compras pelo mês correspondente à data de vencimento (clearanceDate) */}
                                     const txs = transactions.filter(t => {
                                         if (t.account !== card.name) return false;
                                         const { clearanceDate } = getTransactionDates(t, card);
@@ -1134,7 +1145,6 @@
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
 
-                                        {/* INPUTS DE FECHAMENTO E VENCIMENTO DO CARTÃO */}
                                         {accForm.type === 'cartao' && (
                                             <div className="grid grid-cols-2 gap-3 fade-in">
                                                 <div className="space-y-1">
@@ -1189,7 +1199,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.6 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.7 GOLDEN STABLE</footer>
                 </div>
             );
         }
