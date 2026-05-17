@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.1 STABLE</title>
+    <title>Tribo Burger | v2.5.2 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -68,6 +68,48 @@
                 }
             }, [name, size, className]);
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
+        };
+
+        // Lógica Global de Cálculo Dinâmico de Datas para Cartão de Crédito
+        const getTransactionDates = (t, cardInfo) => {
+            if (!cardInfo || cardInfo.type !== 'cartao') {
+                return {
+                    clearanceDate: t.clearanceDate || t.date || '',
+                    billingMonth: t.billingMonth || (t.date ? t.date.slice(0, 7) : '')
+                };
+            }
+            
+            const closing = parseInt(cardInfo.closing || cardInfo.closingDay || 25);
+            const due = parseInt(cardInfo.due || cardInfo.dueDay || 10);
+            
+            const tDateStr = t.date || t.timestamp?.slice(0, 10) || new Date().toISOString().split('T')[0];
+            let d = new Date(tDateStr + 'T00:00:00');
+            if (isNaN(d.getTime())) d = new Date();
+            
+            let billingDate = new Date(d);
+            billingDate.setDate(1); // Prevenir overflow
+            if (d.getDate() > closing) {
+                billingDate.setMonth(billingDate.getMonth() + 1);
+            }
+            const billingMonth = billingDate.toISOString().slice(0, 7);
+            
+            let dueDate = new Date(billingDate);
+            dueDate.setDate(1); // Prevenir overflow
+            if (due < closing) {
+                dueDate.setMonth(dueDate.getMonth() + 1);
+            }
+            dueDate.setDate(due);
+            const clearanceDate = dueDate.toISOString().split('T')[0];
+            
+            return { clearanceDate, billingMonth };
+        };
+
+        // Verifica se é uma transação de pagamento/baixa de fatura para não afetar o somatório de gastos da fatura
+        const isInvoicePayment = (t) => {
+            if (!t) return false;
+            const desc = (t.description || "").toLowerCase();
+            const cat = (t.category || "").toLowerCase();
+            return desc.includes("baixa fatura") || desc.includes("pagamento fatura") || desc.includes("pagamento de fatura") || cat.includes("pagamento");
         };
 
         function App() {
@@ -146,7 +188,9 @@
                 return transactions.filter(t => {
                     if (!t) return false;
                     const accInfo = accounts.find(a => a.name === t.account);
-                    const isMonth = (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth) || t.billingMonth === filterMonth);
+                    const { clearanceDate, billingMonth } = getTransactionDates(t, accInfo);
+                    
+                    const isMonth = (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth) || billingMonth === filterMonth);
                     const matchSearch = (t.description || "").toLowerCase().includes(searchQuery.toLowerCase()) || (t.category || "").toLowerCase().includes(searchQuery.toLowerCase());
                     const matchType = typeFilter === 'todos' || t.type === typeFilter;
                     const matchAcc = accFilter === '' || t.account === accFilter;
@@ -188,7 +232,9 @@
                     }
                 });
                 transactions.forEach(t => {
-                    if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || t.clearanceDate?.startsWith(filterMonth))) {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    const { clearanceDate } = getTransactionDates(t, accInfo);
+                    if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
                         if (t.type === 'saida') catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
                     }
                 });
@@ -208,11 +254,19 @@
             const consolidatedAPagar = useMemo(() => {
                 const pendings = transactions.filter(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
-                    return t.type === 'saida' && t.status === 'pendente' && t.clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
+                    const { clearanceDate } = getTransactionDates(t, accInfo);
+                    return t.type === 'saida' && t.status === 'pendente' && clearanceDate?.startsWith(filterMonth) && accInfo?.type !== 'cartao';
                 });
+                
                 const invoices = accounts.filter(a => a.type === 'cartao').map(card => {
-                    const txs = transactions.filter(t => t.account === card.name && t.clearanceDate?.startsWith(filterMonth));
-                    const sum = txs.reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    const txs = transactions.filter(t => {
+                        if (t.account !== card.name) return false;
+                        const { clearanceDate } = getTransactionDates(t, card);
+                        return clearanceDate?.startsWith(filterMonth);
+                    });
+                    
+                    // CORREÇÃO CRÍTICA v2.5.2: Excluir baixas de faturas do total de despesas compras acumulado da fatura
+                    const sum = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
                     if (sum <= 0.01) return null;
                     
                     const cardDueDay = card.due || card.dueDay || 10;
@@ -253,7 +307,6 @@
                             const due = parseInt(cardInfo.due || cardInfo.dueDay || 10);
                             
                             let billingDate = new Date(d);
-                            // Prevenção de estouro de data do JS (ex: 31 de Maio + 1 mês gerando Julho em vez de Junho)
                             billingDate.setDate(1); 
                             if (d.getDate() > closing) {
                                 billingDate.setMonth(billingDate.getMonth() + 1);
@@ -261,7 +314,7 @@
                             billingM = billingDate.toISOString().slice(0, 7);
                             
                             let dueDate = new Date(billingDate);
-                            dueDate.setDate(1); // Proteção contra overflow de mês
+                            dueDate.setDate(1); 
                             if (due < closing) {
                                 dueDate.setMonth(dueDate.getMonth() + 1);
                             }
@@ -424,7 +477,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.1</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.2</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -495,19 +548,19 @@
                                                 <option value="transferencia">Transferências</option>
                                             </select>
 
-                                            {/* RESTAURADO: FILTRO DE CONTAS */}
+                                            {/* FILTRO DE CONTAS */}
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
                                                 <option value="">Todas as Contas</option>
                                                 {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
 
-                                            {/* RESTAURADO: FILTRO DE CATEGORIAS */}
+                                            {/* FILTRO DE CATEGORIAS */}
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
                                                 <option value="">Todas as Categorias</option>
                                                 {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                                             </select>
 
-                                            {/* RESTAURADO: FILTRO DE PREVISÕES / FORECAST */}
+                                            {/* FILTRO DE PREVISÕES */}
                                             <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>
                                                 {hideForecasts ? 'Previsões OFF' : 'Previsões ON'}
                                             </button>
@@ -518,31 +571,35 @@
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {filteredDashboard.map(t => (
-                                            <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>{t.type==='entrada'?'IN':'OUT'}</div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                            <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
-                                                                {t.status==='pago' ? `Pago ${t.clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}
-                                                            </span>
+                                        {filteredDashboard.map(t => {
+                                            const accInfo = accounts.find(a => a.name === t.account);
+                                            const { clearanceDate } = getTransactionDates(t, accInfo);
+                                            return (
+                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>{t.type==='entrada'?'IN':'OUT'}</div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-black text-sm uppercase leading-none">{t.description}</p>
+                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
+                                                                    {t.status==='pago' ? `Pago ${clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
                                                         </div>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.account} • {t.category}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                        <div className="flex gap-1">
+                                                            <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
+                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>
+                                                                {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
-                                                    <div className="flex gap-1">
-                                                        <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
-                                                        <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>
-                                                            {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -674,22 +731,40 @@
 
                         {activeTab === 'a_receber' && (
                              <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
+                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>{
+                                    const accInfo = accounts.find(a => a.name === t.account);
+                                    const { clearanceDate } = getTransactionDates(t, accInfo);
+                                    return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth);
+                                }).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {transactions.filter(t=>t.type==='entrada'&&t.status==='pendente'&&t.clearanceDate?.startsWith(filterMonth)).sort((a,b)=>(a.clearanceDate||"").localeCompare(b.clearanceDate||"")).map(t => (
-                                        <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
-                                            <div className="flex items-center gap-5">
-                                                <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
-                                                <div><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
+                                    {transactions.filter(t=>{
+                                        const accInfo = accounts.find(a => a.name === t.account);
+                                        const { clearanceDate } = getTransactionDates(t, accInfo);
+                                        return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth);
+                                    }).sort((a,b)=>{
+                                        const accA = accounts.find(acc => acc.name === a.account);
+                                        const accB = accounts.find(acc => acc.name === b.account);
+                                        const dateA = getTransactionDates(a, accA).clearanceDate;
+                                        const dateB = getTransactionDates(b, accB).clearanceDate;
+                                        return (dateA||"").localeCompare(dateB||"");
+                                    }).map(t => {
+                                        const accInfo = accounts.find(a => a.name === t.account);
+                                        const { clearanceDate } = getTransactionDates(t, accInfo);
+                                        return (
+                                            <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
+                                                    <div><p className="font-black text-base uppercase leading-tight">[{clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
+                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
+                                                        <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span>
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-6">
-                                                <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
-                                                    <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                              </div>
                         )}
@@ -697,8 +772,15 @@
                         {activeTab === 'cartoes' && (
                             <div className="space-y-12 animate-in zoom-in duration-300">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
-                                    const txs = transactions.filter(t => t.account === card.name && (t.billingMonth === filterMonth || (!t.billingMonth && t.date?.startsWith(filterMonth)))).sort((a,b)=>(a.date || "").localeCompare(b.date || ""));
-                                    const total = txs.reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    const txs = transactions.filter(t => {
+                                        if (t.account !== card.name) return false;
+                                        const { billingMonth } = getTransactionDates(t, card);
+                                        return billingMonth === filterMonth || (!billingMonth && t.date?.startsWith(filterMonth));
+                                    }).sort((a,b)=>(a.date || "").localeCompare(b.date || ""));
+                                    
+                                    // CORREÇÃO CRÍTICA v2.5.2: Filtramos lançamentos com "BAIXA FATURA" (ou similares) no cálculo total da fatura
+                                    const total = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    
                                     return (
                                         <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
                                             <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
@@ -707,7 +789,7 @@
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closing || card.closingDay || '25'} • Vencimento: {card.due || card.dueDay || '10'}</p>
                                                 </div>
                                                 <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura</p>
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura (Compras)</p>
                                                     <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
                                                 </div>
                                             </div>
@@ -718,7 +800,13 @@
                                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
                                                             <div className="flex items-center gap-4">
                                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
-                                                                <div><p className="font-black text-xs uppercase leading-none">{t.description}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p></div>
+                                                                <div>
+                                                                    <p className="font-black text-xs uppercase leading-none">
+                                                                        {t.description} 
+                                                                        {isInvoicePayment(t) && <span className="ml-2 status-badge bg-[#D97757] text-white">BAIXA</span>}
+                                                                    </p>
+                                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p>
+                                                                </div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
                                                                 <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
@@ -836,7 +924,7 @@
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
 
-                                        {/* RESTAURADO & CORRIGIDO: INPUTS DE FECHAMENTO E VENCIMENTO DO CARTÃO */}
+                                        {/* INPUTS DE FECHAMENTO E VENCIMENTO DO CARTÃO */}
                                         {accForm.type === 'cartao' && (
                                             <div className="grid grid-cols-2 gap-3 fade-in">
                                                 <div className="space-y-1">
@@ -891,7 +979,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.1 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.2 GOLDEN STABLE</footer>
                 </div>
             );
         }
