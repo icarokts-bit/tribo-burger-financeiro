@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.5 STABLE</title>
+    <title>Tribo Burger | v2.5.6 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -321,6 +321,73 @@
                 return [...pendings, ...invoices].sort((a,b) => (a.clearanceDate || "").localeCompare(b.clearanceDate || ""));
             }, [transactions, accounts, filterMonth]);
 
+            // NOVO: Cálculo Dinâmico de Alertas de Vencimento de até 2 dias para Contas a Pagar e Receber
+            const alerts = useMemo(() => {
+                const today = new Date();
+                const todayUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+                const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+                const items = [];
+
+                // 1. Contas a Pagar e Receber Manuais Pendentes (Ignora cartões de crédito aqui)
+                transactions.forEach(t => {
+                    if (t.status === 'pendente') {
+                        const accInfo = accounts.find(a => a.name === t.account);
+                        const { clearanceDate } = getTransactionDates(t, accInfo);
+                        if (clearanceDate && (t.type === 'saida' || t.type === 'entrada') && accInfo?.type !== 'cartao') {
+                            const dueD = parseDateUTC(clearanceDate);
+                            const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
+                            const diffDays = Math.round((dueUTC - todayUTC) / MS_PER_DAY);
+
+                            if (diffDays <= 2) {
+                                items.push({
+                                    id: t.id,
+                                    description: t.description,
+                                    amount: p(t.amount),
+                                    type: t.type,
+                                    clearanceDate,
+                                    diffDays,
+                                    account: t.account
+                                });
+                            }
+                        }
+                    }
+                });
+
+                // 2. Faturas de Cartão Consolidado Pendentes
+                accounts.filter(a => a.type === 'cartao').forEach(card => {
+                    const txs = transactions.filter(t => {
+                        if (t.account !== card.name) return false;
+                        const { clearanceDate } = getTransactionDates(t, card);
+                        return clearanceDate?.startsWith(filterMonth);
+                    });
+                    
+                    const sum = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    if (sum > 0.01) {
+                        const cardDueDay = card.due || card.dueDay || card.closing || 10;
+                        const clearanceDate = `${filterMonth}-${String(cardDueDay).padStart(2, '0')}`;
+                        const dueD = parseDateUTC(clearanceDate);
+                        const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
+                        const diffDays = Math.round((dueUTC - todayUTC) / MS_PER_DAY);
+
+                        if (diffDays <= 2) {
+                            items.push({
+                                id: `card-alert-${card.name}`,
+                                description: `Fatura ${card.name}`,
+                                amount: sum,
+                                type: 'saida',
+                                clearanceDate,
+                                diffDays,
+                                account: card.name,
+                                isInvoice: true
+                            });
+                        }
+                    }
+                });
+
+                return items.sort((a, b) => a.diffDays - b.diffDays);
+            }, [transactions, accounts, filterMonth]);
+
             const handleSaveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
@@ -540,7 +607,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.5</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.6</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -559,6 +626,69 @@
                                 <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
                             </div>
                         </div>
+
+                        {/* NOVO: Banner Global de Alertas Inteligentes de Vencimento */}
+                        {alerts.length > 0 && (
+                            <div className="glass-card p-6 rounded-[2.5rem] border-t-8 border-amber-500 bg-amber-50/10 shadow-lg space-y-4 fade-in">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-amber-100 p-2 rounded-2xl text-amber-600 animate-pulse">
+                                        <Icon name="bell" size={18} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xs font-black uppercase text-amber-800 tracking-wider">Compromissos Próximos ou Vencidos ({alerts.length})</h3>
+                                        <p className="text-[9px] font-semibold text-slate-400 uppercase">Alertas de até 2 dias antes do vencimento</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {alerts.map(item => {
+                                        const isOverdue = item.diffDays < 0;
+                                        const isToday = item.diffDays === 0;
+                                        
+                                        let cardBg = "bg-white border hover:border-amber-400 transition-all";
+                                        let badgeColor = "bg-amber-100 text-amber-700";
+                                        let label = `Vence em ${item.diffDays} dias`;
+                                        
+                                        if (isOverdue) {
+                                            cardBg = "bg-red-50/30 border border-red-200 hover:border-red-400 transition-all";
+                                            badgeColor = "bg-red-100 text-red-700";
+                                            label = `Vencido há ${Math.abs(item.diffDays)} dias`;
+                                        } else if (isToday) {
+                                            cardBg = "bg-orange-50/30 border border-orange-200 hover:border-orange-400 transition-all";
+                                            badgeColor = "bg-orange-100 text-orange-700";
+                                            label = "Vence hoje";
+                                        } else if (item.diffDays === 1) {
+                                            label = "Vence amanhã";
+                                        }
+
+                                        return (
+                                            <div key={item.id} className={`p-4 rounded-2xl shadow-sm flex justify-between items-center ${cardBg}`}>
+                                                <div className="space-y-1 pr-2">
+                                                    <p className="font-black text-xs uppercase leading-tight text-slate-800 truncate max-w-[180px]" title={item.description}>
+                                                        {item.description}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                                                            {item.account}
+                                                        </span>
+                                                        <span className={`status-badge ${badgeColor}`}>
+                                                            {label}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <p className={`font-black text-xs ${item.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {item.type === 'entrada' ? '+' : '-'} {formatMoney(item.amount)}
+                                                    </p>
+                                                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">
+                                                        {item.clearanceDate.split('-').reverse().slice(0, 2).join('/')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {activeTab === 'dashboard' && (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1059,7 +1189,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.5 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.6 GOLDEN STABLE</footer>
                 </div>
             );
         }
