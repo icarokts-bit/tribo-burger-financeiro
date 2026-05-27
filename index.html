@@ -342,14 +342,17 @@
                         return clearanceDate?.startsWith(filterMonth);
                     });
                     
-                    const sum = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
-                    if (sum <= 0.01) return null;
+                    const totalPurchases = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    const totalPaid = txs.filter(t => isInvoicePayment(t)).reduce((acc, t) => t.type === 'entrada' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    const remaining = totalPurchases - totalPaid;
+                    
+                    if (remaining <= 0.01) return null; // Fatura totalmente paga desaparece das contas a pagar
                     
                     const cardDueDay = card.due || card.dueDay || 10;
                     return { 
                         id: `card-${card.name}`, 
                         description: `Fatura ${card.name}`, 
-                        amount: sum, 
+                        amount: remaining, 
                         account: card.name, 
                         clearanceDate: `${filterMonth}-${String(cardDueDay).padStart(2, '0')}`, 
                         isInvoice: true 
@@ -386,15 +389,18 @@
                         const { clearanceDate } = getTransactionDates(t, card);
                         return clearanceDate?.startsWith(filterMonth);
                     });
-                    const sum = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
-                    if (sum > 0.01) {
+                    const totalPurchases = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    const totalPaid = txs.filter(t => isInvoicePayment(t)).reduce((acc, t) => t.type === 'entrada' ? acc + p(t.amount) : acc - p(t.amount), 0);
+                    const remaining = totalPurchases - totalPaid;
+                    
+                    if (remaining > 0.01) {
                         const cardDueDay = card.due || card.dueDay || card.closing || 10;
                         const clearanceDate = `${filterMonth}-${String(cardDueDay).padStart(2, '0')}`;
                         const dueD = parseDateUTC(clearanceDate);
                         const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
                         const diffDays = Math.round((dueUTC - todayUTC) / MS_PER_DAY);
                         if (diffDays <= 2) {
-                            items.push({ id: `card-alert-${card.name}`, description: `Fatura ${card.name}`, amount: sum, type: 'saida', clearanceDate, diffDays, account: card.name, isInvoice: true });
+                            items.push({ id: `card-alert-${card.name}`, description: `Fatura ${card.name}`, amount: remaining, type: 'saida', clearanceDate, diffDays, account: card.name, isInvoice: true });
                         }
                     }
                 });
@@ -988,7 +994,9 @@
                                         return getTransactionDates(t, card).clearanceDate?.startsWith(filterMonth);
                                     }).sort((a,b)=>(a.date || "").localeCompare(b.date || ""));
                                     
-                                    const total = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    const totalPurchases = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    const totalPaid = txs.filter(t => isInvoicePayment(t)).reduce((acc, t)=>t.type==='entrada'?acc+p(t.amount):acc-p(t.amount), 0);
+                                    const remaining = totalPurchases - totalPaid;
                                     
                                     return (
                                         <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
@@ -998,15 +1006,29 @@
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closing || card.closingDay || '25'} • Vencimento: {card.due || card.dueDay || '10'}</p>
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                                                    <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura (Compras)</p>
-                                                        <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
+                                                    <div className="bg-slate-50 px-6 py-4 rounded-[2rem] border text-center shadow-inner">
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Compras</p>
+                                                        <h3 className="text-xl font-black text-slate-900">{formatMoney(totalPurchases)}</h3>
+                                                    </div>
+                                                    <div className="bg-slate-50 px-6 py-4 rounded-[2rem] border text-center shadow-inner">
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total Pago</p>
+                                                        <h3 className="text-xl font-black text-green-600">{formatMoney(totalPaid)}</h3>
+                                                    </div>
+                                                    <div className="bg-slate-50 px-6 py-4 rounded-[2rem] border text-center shadow-inner">
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">A Pagar</p>
+                                                        <h3 className={`text-xl font-black ${remaining > 0.01 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(remaining > 0 ? remaining : 0)}</h3>
                                                     </div>
                                                     
-                                                    {total > 0.01 && (
-                                                        <button onClick={()=>setInvoiceModal({ cardName: card.name, total })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs p-5 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
+                                                    {remaining > 0.01 ? (
+                                                        <button onClick={()=>setInvoiceModal({ cardName: card.name, total: remaining })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs p-5 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
                                                             <Icon name="check-square" size={16}></Icon> Pagar Fatura
                                                         </button>
+                                                    ) : (
+                                                        totalPurchases > 0 && (
+                                                            <div className="bg-green-100 text-green-800 font-black uppercase text-xs px-6 py-4 rounded-2xl flex items-center gap-2 border border-green-200">
+                                                                <Icon name="check-circle" size={16} className="text-green-600" /> Fatura Paga
+                                                            </div>
+                                                        )
                                                     )}
                                                 </div>
                                             </div>
@@ -1023,7 +1045,7 @@
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
-                                                                <p className="font-black text-sm text-red-600">{formatMoney(t.amount)}</p>
+                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                                 <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}></Icon>}</button>
                                                             </div>
                                                         </div>
