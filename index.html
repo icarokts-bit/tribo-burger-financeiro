@@ -70,18 +70,35 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
+        // Fallbacks inteligentes para prevenir o crash de "ReferenceError" se houver ícones lucide mal configurados
+        const safeIcons = ['Utensils', 'Sprout', 'Edit', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 'CalendarDays', 'ShoppingCart', 'CheckCircle'];
+        safeIcons.forEach(iconName => {
+            const normalized = iconName.toLowerCase().replace('2', '-2').replace('square', '-square').replace('circle', '-circle').replace('days', '-days').replace('card', '-card').replace('up', '-up');
+            window[iconName] = (props) => <Icon name={normalized} size={props.size || 20} className={props.className || ""} />;
+        });
+
         const parseDateUTC = (dateStr) => {
-            if (!dateStr) return new Date();
+            if (!dateStr || dateStr.includes('NaN')) return new Date();
             if (dateStr.includes('-')) {
                 const parts = dateStr.split('-');
                 if (parts[0].length === 4) {
-                    return new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+                    const y = parseInt(parts[0]);
+                    const m = parseInt(parts[1]) - 1;
+                    const d = parseInt(parts[2]);
+                    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                        return new Date(Date.UTC(y, m, d));
+                    }
                 }
             }
             if (dateStr.includes('/')) {
                 const parts = dateStr.split('/');
                 if (parts[2].length === 4) {
-                    return new Date(Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])));
+                    const d = parseInt(parts[0]);
+                    const m = parseInt(parts[1]) - 1;
+                    const y = parseInt(parts[2]);
+                    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                        return new Date(Date.UTC(y, m, d));
+                    }
                 }
             }
             const d = new Date(dateStr);
@@ -89,6 +106,7 @@
         };
 
         const getTransactionDates = (t, cardInfo) => {
+            if (!t) return { clearanceDate: '', billingMonth: '' };
             if (!cardInfo || cardInfo.type !== 'cartao') {
                 return {
                     clearanceDate: t.clearanceDate || t.date || '',
@@ -101,6 +119,9 @@
             
             const tDateStr = t.date || t.timestamp?.slice(0, 10) || new Date().toISOString().split('T')[0];
             const d = parseDateUTC(tDateStr);
+            if (isNaN(d.getTime())) {
+                return { clearanceDate: t.date || '', billingMonth: (t.date ? t.date.slice(0, 7) : '') };
+            }
             
             let billingDate = new Date(d.getTime());
             billingDate.setUTCDate(1); 
@@ -191,9 +212,8 @@
             const [liqModal, setLiqModal] = useState(null);
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-            // Estados de controle para a Janela Modal de Pagamento de Faturas
             const [invoiceModal, setInvoiceModal] = useState(null);
-            const [invoicePayType, setInvoicePayType] = useState('integral'); // 'integral' ou 'parcial'
+            const [invoicePayType, setInvoicePayType] = useState('integral'); 
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
 
@@ -207,7 +227,7 @@
                 const path = `artifacts/${appId}/users/${user.uid}`;
                 
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
-                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => r[d.id] = d.data()); setDailyRecords(r); }, e => console.error(e));
+                const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => { if (d.exists) r[d.id] = d.data(); }); setDailyRecords(r); }, e => console.error(e));
                 const unsubAcc = db.collection(`${path}/accounts`).onSnapshot(s => setAccounts(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
                 const unsubCat = db.collection(`${path}/categories`).onSnapshot(s => setCategories(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
                 const unsubSup = db.collection(`${path}/suppliers`).onSnapshot(s => setSuppliers(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
@@ -389,12 +409,16 @@
                     const path = `artifacts/${appId}/users/${user.uid}/transactions`;
                     const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
                     const batch = db.batch();
-                    const numInst = (type === 'transferencia') ? 1 : inst;
+                    const numInst = (type === 'transferencia') ? 1 : (parseInt(inst) || 1);
                     const baseDateString = date || new Date().toISOString().split('T')[0];
 
+                    const parts = baseDateString.split('-');
+                    const year = parseInt(parts[0]) || new Date().getFullYear();
+                    const month = parseInt(parts[1]) || (new Date().getMonth() + 1);
+                    const day = parseInt(parts[2]) || new Date().getDate();
+
                     for (let i = 0; i < numInst; i++) {
-                        const parts = baseDateString.split('-');
-                        let d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1 + i, parseInt(parts[2])));
+                        let d = new Date(Date.UTC(year, month - 1 + i, day));
                         const finalTxDate = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
                         let finalClearance = clearance || baseDateString;
                         let billingM = finalTxDate.slice(0, 7);
@@ -412,7 +436,10 @@
                         } else {
                             if (clearance) {
                                 const clParts = clearance.split('-');
-                                let clDate = new Date(Date.UTC(parseInt(clParts[0]), parseInt(clParts[1]) - 1 + i, parseInt(clParts[2])));
+                                const clY = parseInt(clParts[0]) || year;
+                                const clM = parseInt(clParts[1]) || month;
+                                const clD = parseInt(clParts[2]) || day;
+                                let clDate = new Date(Date.UTC(clY, clM - 1 + i, clD));
                                 finalClearance = `${clDate.getUTCFullYear()}-${String(clDate.getUTCMonth() + 1).padStart(2, '0')}-${String(clDate.getUTCDate()).padStart(2, '0')}`;
                             } else finalClearance = finalTxDate;
                         }
@@ -424,7 +451,7 @@
                             date: finalTxDate, clearanceDate: finalClearance, billingMonth: billingM,
                             account, destinationAccount: destAcc, category: type === 'transferencia' ? 'Transferência' : (cat || 'Geral'), supplier: sup, timestamp: new Date().toISOString()
                         };
-                        if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
+                        if (editingId && i === 0) batch.update(db.collection(path).doc(editingId), payload);
                         else batch.set(db.collection(path).doc(), payload);
                     }
                     await batch.commit(); 
@@ -432,7 +459,6 @@
                 } catch (err) { console.error(err); } finally { setIsActionLoading(false); }
             };
 
-            // Execução Inteligente de Baixa Parcial ou Integral de Faturas de Cartão
             const handleExecuteInvoicePayment = async () => {
                 if (!user || !invoiceModal || !invoiceSourceAcc) return;
                 setIsActionLoading(true);
@@ -446,7 +472,6 @@
                     const todayStr = new Date().toISOString().split('T')[0];
                     const batch = db.batch();
 
-                    // 1. Cria transação de débito/saída na conta bancária operacional selecionada (baixa efetiva)
                     const paymentPayload = {
                         description: `Baixa Fatura ${invoiceModal.cardName} (${invoicePayType.toUpperCase()})`,
                         amount: paidAmount,
@@ -462,14 +487,13 @@
                     };
                     batch.set(db.collection(path).doc(), paymentPayload);
 
-                    // 2. Registra o contra-lançamento de compensação interno na aba do próprio cartão de crédito
                     const cardCreditPayload = {
                         description: `Pagamento de Fatura Mês ${filterMonth}`,
                         amount: paidAmount,
-                        type: 'entrada', // Entrada no cartão reduz a dívida total dele
+                        type: 'entrada', 
                         status: 'pago',
                         date: todayStr,
-                        clearanceDate: `${filterMonth}-28`, // Alinhado ao ciclo de liquidação do mês atual
+                        clearanceDate: `${filterMonth}-28`, 
                         billingMonth: filterMonth,
                         account: invoiceModal.cardName,
                         category: 'Baixa Fatura',
@@ -478,11 +502,9 @@
                     };
                     batch.set(db.collection(path).doc(), cardCreditPayload);
 
-                    // 3. Se for PARCIAL: Empurra automaticamente o saldo devedor restante para o próximo mês
                     if (invoicePayType === 'parcial' && (totalInvoiceAmount - paidAmount) > 0.01) {
                         const remainingAmount = totalInvoiceAmount - paidAmount;
                         
-                        // Descobre o próximo mês no formato YYYY-MM
                         const parts = filterMonth.split('-');
                         let nextM = parseInt(parts[1]) + 1;
                         let nextY = parseInt(parts[0]);
@@ -492,10 +514,10 @@
                         const rolloverPayload = {
                             description: `Saldo Restante Fatura Anterior ${filterMonth}`,
                             amount: remainingAmount,
-                            type: 'saida', // Geração de nova despesa/saldo devedor
+                            type: 'saida', 
                             status: 'pendente',
                             date: `${nextMonthStr}-01`,
-                            clearanceDate: `${nextMonthStr}-10`, // Vencimento padrão estipulado
+                            clearanceDate: `${nextMonthStr}-10`, 
                             billingMonth: nextMonthStr,
                             account: invoiceModal.cardName,
                             category: 'Saldo Fatura Anterior',
@@ -540,7 +562,7 @@
                 } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
-            const saveMeta = async (v) => { await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ meta: p(v) }, { merge: true }); };
+            const saveMeta = async (v) => { if (!user) return; await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('settings').doc('config').set({ meta: p(v) }, { merge: true }); };
 
             const handleSaveAccount = async () => {
                 if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
@@ -553,12 +575,22 @@
                 } finally { setIsActionLoading(false); }
             };
 
-            const executeDelete = async (collection, id) => {
-                if (!user || !id) return;
+            const executeDelete = async (collectionName, id) => {
+                if (!user || !user.uid || !collectionName || !id || typeof id !== 'string' || id.trim() === '') return;
                 if (deleteConfirmId === id) {
                     setIsActionLoading(true);
-                    try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection).doc(id).delete(); setDeleteConfirmId(null); } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
-                } else { setDeleteConfirmId(id); setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); }
+                    try { 
+                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collectionName).doc(id).delete(); 
+                        setDeleteConfirmId(null); 
+                    } catch (e) { 
+                        console.error("Erro na exclusão:", e); 
+                    } finally { 
+                        setIsActionLoading(false); 
+                    }
+                } else { 
+                    setDeleteConfirmId(id); 
+                    setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); 
+                }
             };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase tracking-widest">A carregar Tribo...</div>;
@@ -793,7 +825,7 @@
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago' ? `Pago ${clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}</span>
+                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago' ? 'Pago ' + (clearanceDate ? clearanceDate.split('-').reverse().slice(0,2).join('/') : '') : 'Pendente'}</span>
                                                             </div>
                                                             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.type === 'transferencia' ? `${t.account} ➔ ${t.destinationAccount}` : `${t.account} • ${t.category}`}</p>
                                                         </div>
@@ -801,9 +833,9 @@
                                                     <div className="flex items-center gap-4">
                                                         <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                         <div className="flex gap-1">
-                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)"><Icon name="sprout" size={14}/></button>
-                                                            <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
-                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/></button>
+                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)"><Icon name="sprout" size={14}></Icon></button>
+                                                            <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}></Icon></button>
+                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -875,15 +907,15 @@
                                                     <tr key={d} className="hover:bg-slate-50 h-12">
                                                         <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
                                                         <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                        <td className="p-0 border-r bg-blue-50/30"><input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" /></td>
+                                                        <td className="p-0 border-r bg-blue-50/30"><input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(d).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" /></td>
                                                         <td className="p-4 bg-blue-50/50 font-black text-blue-900">{formatMoney(ticketMedio)}</td>
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                            <td key={f} className="p-0 border-r"><input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
+                                                            <td key={f} className="p-0 border-r"><input className="table-input" value={r[f]||''} onChange={async(e)=>await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(d).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
                                                         ))}
                                                         {['taxaEntrega','motoboy'].map(f => (
-                                                            <td key={f} className="p-0 border-r bg-slate-50/50"><input className="table-input !text-red-500" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
+                                                            <td key={f} className="p-0 border-r bg-slate-50/50"><input className="table-input !text-red-500" value={r[f]||''} onChange={async(e)=>await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(d).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
                                                         ))}
-                                                        <td className="p-4"><button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>{deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}</button></td>
+                                                        <td className="p-4"><button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>{deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button></td>
                                                     </tr>
                                                 );
                                             })}
@@ -912,12 +944,12 @@
                                     {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Sem pendências</p> : consolidatedAPagar.map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-5">
-                                                <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}/></div>
+                                                <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}></Icon></div>
                                                 <div><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span></button>
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}></Icon><span className="text-[9px] font-black uppercase pr-1">Pagar</span></button>
                                             </div>
                                         </div>
                                     ))}
@@ -934,12 +966,12 @@
                                         return (
                                             <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                                 <div className="flex items-center gap-5">
-                                                    <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
+                                                    <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}></Icon></div>
                                                     <div><p className="font-black text-base uppercase leading-tight">[{clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
                                                 </div>
                                                 <div className="flex items-center gap-6">
                                                     <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span></button>
+                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}></Icon><span className="text-[9px] font-black uppercase pr-1">Receber</span></button>
                                                 </div>
                                             </div>
                                         );
@@ -971,10 +1003,9 @@
                                                         <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
                                                     </div>
                                                     
-                                                    {/* Botão interativo para chamar o assistente de baixa parcial/integral */}
                                                     {total > 0.01 && (
                                                         <button onClick={()=>setInvoiceModal({ cardName: card.name, total })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs p-5 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
-                                                            <Icon name="check-square" size={16} /> Pagar Fatura
+                                                            <Icon name="check-square" size={16}></Icon> Pagar Fatura
                                                         </button>
                                                     )}
                                                 </div>
@@ -985,7 +1016,7 @@
                                                     {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem lançamentos</p> : txs.map(t => (
                                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
                                                             <div className="flex items-center gap-4">
-                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}></Icon></div>
                                                                 <div>
                                                                     <p className="font-black text-xs uppercase leading-none">{t.description} {isInvoicePayment(t) && <span className="ml-2 status-badge bg-[#D97757] text-white">BAIXA</span>}</p>
                                                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p>
@@ -993,7 +1024,7 @@
                                                             </div>
                                                             <div className="flex items-center gap-4">
                                                                 <p className="font-black text-sm text-red-600">{formatMoney(t.amount)}</p>
-                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}</button>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}></Icon>}</button>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1077,7 +1108,7 @@
                                                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-[10px] text-slate-400">{(s.name || "F").charAt(0).toUpperCase()}</div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}</button>
+                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <span className="flex items-center gap-2"><Icon name="trash-2" size={16}></Icon><span className="text-[10px] font-black uppercase">Excluir</span></span>}</button>
                                                 </div>
                                             ))
                                         )}
@@ -1113,8 +1144,8 @@
                                             <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl">
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} {a.type === 'cartao' && ` • Fecho: ${a.closing || a.closingDay || '25'} • Venc: ${a.due || a.dueDay || '10'}`}</p></div>
                                                 <div className="flex gap-2 items-center">
-                                                    <button type="button" onClick={()=>setAccForm({ ...a, closing: a.closing || a.closingDay || '25', due: a.due || a.dueDay || '10' })} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}/></button>
-                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/></button>
+                                                    <button type="button" onClick={()=>setAccForm({ ...a, closing: a.closing || a.closingDay || '25', due: a.due || a.dueDay || '10' })} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}></Icon></button>
+                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1122,12 +1153,12 @@
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] space-y-6 h-fit">
                                      <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
-                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}/></button></div>
+                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}></Icon></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
                                         {categories.sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center hover:border-black">
                                                 <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
-                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}</button>
+                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}></Icon>}</button>
                                             </div>
                                         ))}
                                      </div>
