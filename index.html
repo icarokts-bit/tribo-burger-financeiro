@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.5.8 STABLE</title>
+    <title>Tribo Burger | v2.6.0 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -191,6 +191,12 @@
             const [liqModal, setLiqModal] = useState(null);
             const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
+            // Estados de controle para a Janela Modal de Pagamento de Faturas
+            const [invoiceModal, setInvoiceModal] = useState(null);
+            const [invoicePayType, setInvoicePayType] = useState('integral'); // 'integral' ou 'parcial'
+            const [invoicePartialVal, setInvoicePartialVal] = useState('');
+            const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
+
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
                 return () => unsub();
@@ -288,40 +294,16 @@
                 };
             }, [dailyRecords, transactions, filterMonth]);
 
-            // NOVO: Cálculo Memoizado das Somas Totais por Coluna na Planilha de Vendas
             const columnTotals = useMemo(() => {
                 const days = Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth));
-                const totals = {
-                    totalDia: 0,
-                    pedidos: 0,
-                    pix: 0,
-                    pixOnline: 0,
-                    fiado: 0,
-                    dinheiro: 0,
-                    ifood: 0,
-                    debito: 0,
-                    credito: 0,
-                    vr: 0,
-                    ticket: 0,
-                    alelo: 0,
-                    taxaEntrega: 0,
-                    motoboy: 0
-                };
-
+                const totals = { totalDia: 0, pedidos: 0, pix: 0, pixOnline: 0, fiado: 0, dinero: 0, dinheiro: 0, ifood: 0, debito: 0, credito: 0, vr: 0, ticket: 0, alelo: 0, taxaEntrega: 0, motoboy: 0 };
                 days.forEach(d => {
                     const r = dailyRecords[d] || {};
-                    const dayTotal = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
-                    totals.totalDia += dayTotal;
+                    totals.totalDia += ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
                     totals.pedidos += p(r.qtdPedidos);
-                    
-                    ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].forEach(f => {
-                        totals[f] += p(r[f]);
-                    });
-
-                    totals.taxaEntrega += p(r.taxaEntrega);
-                    totals.motoboy += p(r.motoboy);
+                    ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].forEach(f => { totals[f] += p(r[f]); });
+                    totals.taxaEntrega += p(r.taxaEntrega); totals.motoboy += p(r.motoboy);
                 });
-
                 totals.ticketMedio = totals.pedidos > 0 ? totals.totalDia / totals.pedidos : 0;
                 return totals;
             }, [dailyRecords, filterMonth]);
@@ -371,17 +353,8 @@
                             const dueD = parseDateUTC(clearanceDate);
                             const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
                             const diffDays = Math.round((dueUTC - todayUTC) / MS_PER_DAY);
-
                             if (diffDays <= 2) {
-                                items.push({
-                                    id: t.id,
-                                    description: t.description,
-                                    amount: p(t.amount),
-                                    type: t.type,
-                                    clearanceDate,
-                                    diffDays,
-                                    account: t.account
-                                });
+                                items.push({ id: t.id, description: t.description, amount: p(t.amount), type: t.type, clearanceDate, diffDays, account: t.account });
                             }
                         }
                     }
@@ -393,7 +366,6 @@
                         const { clearanceDate } = getTransactionDates(t, card);
                         return clearanceDate?.startsWith(filterMonth);
                     });
-                    
                     const sum = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
                     if (sum > 0.01) {
                         const cardDueDay = card.due || card.dueDay || card.closing || 10;
@@ -401,22 +373,11 @@
                         const dueD = parseDateUTC(clearanceDate);
                         const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
                         const diffDays = Math.round((dueUTC - todayUTC) / MS_PER_DAY);
-
                         if (diffDays <= 2) {
-                            items.push({
-                                id: `card-alert-${card.name}`,
-                                description: `Fatura ${card.name}`,
-                                amount: sum,
-                                type: 'saida',
-                                clearanceDate,
-                                diffDays,
-                                account: card.name,
-                                isInvoice: true
-                            });
+                            items.push({ id: `card-alert-${card.name}`, description: `Fatura ${card.name}`, amount: sum, type: 'saida', clearanceDate, diffDays, account: card.name, isInvoice: true });
                         }
                     }
                 });
-
                 return items.sort((a, b) => a.diffDays - b.diffDays);
             }, [transactions, accounts, filterMonth]);
 
@@ -433,77 +394,36 @@
 
                     for (let i = 0; i < numInst; i++) {
                         const parts = baseDateString.split('-');
-                        let year = parseInt(parts[0]);
-                        let month = parseInt(parts[1]) - 1 + i;
-                        let day = parseInt(parts[2]);
-
-                        let d = new Date(Date.UTC(year, month, day));
-                        
-                        const tYear = d.getUTCFullYear();
-                        const tMonth = String(d.getUTCMonth() + 1).padStart(2, '0');
-                        const tDay = String(d.getUTCDate()).padStart(2, '0');
-                        const finalTxDate = `${tYear}-${tMonth}-${tDay}`;
-
+                        let d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1 + i, parseInt(parts[2])));
+                        const finalTxDate = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
                         let finalClearance = clearance || baseDateString;
                         let billingM = finalTxDate.slice(0, 7);
                         
                         if (cardInfo) {
                             const closing = parseInt(cardInfo.closing || cardInfo.closingDay || 25);
                             const due = parseInt(cardInfo.due || cardInfo.dueDay || 10);
-                            
-                            let billingDate = new Date(d.getTime());
-                            billingDate.setUTCDate(1); 
-                            if (d.getUTCDate() > closing) {
-                                billingDate.setUTCMonth(billingDate.getUTCMonth() + 1);
-                            }
-                            
-                            const bYear = billingDate.getUTCFullYear();
-                            const bMonth = String(billingDate.getUTCMonth() + 1).padStart(2, '0');
-                            billingM = `${bYear}-${bMonth}`;
-                            
-                            let dueDate = new Date(billingDate.getTime());
-                            dueDate.setUTCDate(1); 
-                            if (due < closing) {
-                                dueDate.setUTCMonth(dueDate.getUTCMonth() + 1);
-                            }
+                            let billingDate = new Date(d.getTime()); billingDate.setUTCDate(1); 
+                            if (d.getUTCDate() > closing) billingDate.setUTCMonth(billingDate.getUTCMonth() + 1);
+                            billingM = `${billingDate.getUTCFullYear()}-${String(billingDate.getUTCMonth() + 1).padStart(2, '0')}`;
+                            let dueDate = new Date(billingDate.getTime()); dueDate.setUTCDate(1);
+                            if (due < closing) dueDate.setUTCMonth(dueDate.getUTCMonth() + 1);
                             dueDate.setUTCDate(due);
-                            
-                            const clYear = dueDate.getUTCFullYear();
-                            const clMonth = String(dueDate.getUTCMonth() + 1).padStart(2, '0');
-                            const clDay = String(dueDate.getUTCDate()).padStart(2, '0');
-                            finalClearance = `${clYear}-${clMonth}-${clDay}`;
+                            finalClearance = `${dueDate.getUTCFullYear()}-${String(dueDate.getUTCMonth() + 1).padStart(2, '0')}-${String(dueDate.getUTCDate()).padStart(2, '0')}`;
                         } else {
                             if (clearance) {
                                 const clParts = clearance.split('-');
-                                let clYear = parseInt(clParts[0]);
-                                let clMonth = parseInt(clParts[1]) - 1 + i;
-                                let clDay = parseInt(clParts[2]);
-                                let clDate = new Date(Date.UTC(clYear, clMonth, clDay));
-                                
-                                const finalClYear = clDate.getUTCFullYear();
-                                const finalClMonth = String(clDate.getUTCMonth() + 1).padStart(2, '0');
-                                const finalClDay = String(clDate.getUTCDate()).padStart(2, '0');
-                                finalClearance = `${finalClYear}-${finalClMonth}-${finalClDay}`;
-                            } else {
-                                finalClearance = finalTxDate;
-                            }
+                                let clDate = new Date(Date.UTC(parseInt(clParts[0]), parseInt(clParts[1]) - 1 + i, parseInt(clParts[2])));
+                                finalClearance = `${clDate.getUTCFullYear()}-${String(clDate.getUTCMonth() + 1).padStart(2, '0')}-${String(clDate.getUTCDate()).padStart(2, '0')}`;
+                            } else finalClearance = finalTxDate;
                         }
 
                         const payload = {
                             description: numInst > 1 ? `${desc} (${i+1}/${numInst})` : desc,
-                            amount: p(val) / numInst, 
-                            type, 
+                            amount: p(val) / numInst, type, 
                             status: (cardInfo || type === 'entrada' || status === 'pendente') ? 'pendente' : status,
-                            date: finalTxDate, 
-                            clearanceDate: finalClearance, 
-                            billingMonth: billingM,
-                            account, 
-                            destinationAccount: destAcc, 
-                            category: type === 'transferencia' ? 'Transferência' : (cat || 'Geral'), 
-                            supplier: sup, 
-                            timestamp: new Date().toISOString()
+                            date: finalTxDate, clearanceDate: finalClearance, billingMonth: billingM,
+                            account, destinationAccount: destAcc, category: type === 'transferencia' ? 'Transferência' : (cat || 'Geral'), supplier: sup, timestamp: new Date().toISOString()
                         };
-
                         if (editingId && i === 0) batch.update(db.doc(`${path}/${editingId}`), payload);
                         else batch.set(db.collection(path).doc(), payload);
                     }
@@ -512,85 +432,123 @@
                 } catch (err) { console.error(err); } finally { setIsActionLoading(false); }
             };
 
+            // Execução Inteligente de Baixa Parcial ou Integral de Faturas de Cartão
+            const handleExecuteInvoicePayment = async () => {
+                if (!user || !invoiceModal || !invoiceSourceAcc) return;
+                setIsActionLoading(true);
+                try {
+                    const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                    const totalInvoiceAmount = invoiceModal.total;
+                    const paidAmount = invoicePayType === 'integral' ? totalInvoiceAmount : p(invoicePartialVal);
+
+                    if (paidAmount <= 0) { alert("Indique um valor válido de pagamento."); return; }
+
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const batch = db.batch();
+
+                    // 1. Cria transação de débito/saída na conta bancária operacional selecionada (baixa efetiva)
+                    const paymentPayload = {
+                        description: `Baixa Fatura ${invoiceModal.cardName} (${invoicePayType.toUpperCase()})`,
+                        amount: paidAmount,
+                        type: 'saida',
+                        status: 'pago',
+                        date: todayStr,
+                        clearanceDate: todayStr,
+                        billingMonth: filterMonth,
+                        account: invoiceSourceAcc,
+                        category: 'Baixa Fatura',
+                        supplier: '',
+                        timestamp: new Date().toISOString()
+                    };
+                    batch.set(db.collection(path).doc(), paymentPayload);
+
+                    // 2. Registra o contra-lançamento de compensação interno na aba do próprio cartão de crédito
+                    const cardCreditPayload = {
+                        description: `Pagamento de Fatura Mês ${filterMonth}`,
+                        amount: paidAmount,
+                        type: 'entrada', // Entrada no cartão reduz a dívida total dele
+                        status: 'pago',
+                        date: todayStr,
+                        clearanceDate: `${filterMonth}-28`, // Alinhado ao ciclo de liquidação do mês atual
+                        billingMonth: filterMonth,
+                        account: invoiceModal.cardName,
+                        category: 'Baixa Fatura',
+                        supplier: '',
+                        timestamp: new Date().toISOString()
+                    };
+                    batch.set(db.collection(path).doc(), cardCreditPayload);
+
+                    // 3. Se for PARCIAL: Empurra automaticamente o saldo devedor restante para o próximo mês
+                    if (invoicePayType === 'parcial' && (totalInvoiceAmount - paidAmount) > 0.01) {
+                        const remainingAmount = totalInvoiceAmount - paidAmount;
+                        
+                        // Descobre o próximo mês no formato YYYY-MM
+                        const parts = filterMonth.split('-');
+                        let nextM = parseInt(parts[1]) + 1;
+                        let nextY = parseInt(parts[0]);
+                        if (nextM > 12) { nextM = 1; nextY += 1; }
+                        const nextMonthStr = `${nextY}-${String(nextM).padStart(2, '0')}`;
+
+                        const rolloverPayload = {
+                            description: `Saldo Restante Fatura Anterior ${filterMonth}`,
+                            amount: remainingAmount,
+                            type: 'saida', // Geração de nova despesa/saldo devedor
+                            status: 'pendente',
+                            date: `${nextMonthStr}-01`,
+                            clearanceDate: `${nextMonthStr}-10`, // Vencimento padrão estipulado
+                            billingMonth: nextMonthStr,
+                            account: invoiceModal.cardName,
+                            category: 'Saldo Fatura Anterior',
+                            supplier: '',
+                            timestamp: new Date().toISOString()
+                        };
+                        batch.set(db.collection(path).doc(), rolloverPayload);
+                    }
+
+                    await batch.commit();
+                    setInvoiceModal(null); setInvoicePartialVal(''); setInvoiceSourceAcc('');
+                } catch(e) { console.error(e); } finally { setIsActionLoading(false); }
+            };
+
             const startEdit = (t) => {
-                setEditingId(t.id);
-                setDesc(t.description || '');
-                setVal(t.amount ? t.amount.toString() : '');
-                setType(t.type || 'saida');
-                setAccount(t.account || '');
-                setDestAcc(t.destinationAccount || '');
-                setCat(t.category || '');
-                setSup(t.supplier || '');
-                setDate(t.date || new Date().toISOString().split('T')[0]);
-                setClearance(t.clearanceDate || new Date().toISOString().split('T')[0]);
-                setStatus(t.status || 'pago');
+                setEditingId(t.id); setDesc(t.description || ''); setVal(t.amount ? t.amount.toString() : ''); setType(t.type || 'saida'); setAccount(t.account || ''); setDestAcc(t.destinationAccount || ''); setCat(t.category || ''); setSup(t.supplier || ''); setDate(t.date || new Date().toISOString().split('T')[0]); setClearance(t.clearanceDate || new Date().toISOString().split('T')[0]); setStatus(t.status || 'pago');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const seedToForm = (t) => {
-                setEditingId(null); 
-                setDesc(t.description || '');
-                setVal(t.amount ? t.amount.toString() : '');
-                setType(t.type || 'saida');
-                setAccount(t.account || '');
-                setDestAcc(t.destinationAccount || '');
-                setCat(t.category || '');
-                setSup(t.supplier || '');
-                
-                const todayStr = new Date().toISOString().split('T')[0];
-                setDate(todayStr);
-                setClearance(todayStr);
-                setStatus('pago'); 
-                
+                setEditingId(null); setDesc(t.description || ''); setVal(t.amount ? t.amount.toString() : ''); setType(t.type || 'saida'); setAccount(t.account || ''); setDestAcc(t.destinationAccount || ''); setCat(t.category || ''); setSup(t.supplier || '');
+                const todayStr = new Date().toISOString().split('T')[0]; setDate(todayStr); setClearance(todayStr); setStatus('pago');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const handleOpenNewDay = async () => {
-                if (!user) return;
-                setIsActionLoading(true);
-                try {
-                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true });
-                } finally { setIsActionLoading(false); }
+                if (!user) return; setIsActionLoading(true);
+                try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); } finally { setIsActionLoading(false); }
             };
 
             const openLiquidation = (t) => {
                 if (t.isInvoice) { setActiveTab('cartoes'); return; }
-                setLiqModal({
-                    id: t.id,
-                    description: t.description || 'Sem Descrição',
-                    amount: String(t.amount || 0).replace('.', ','),
-                    date: new Date().toISOString().split('T')[0]
-                });
+                setLiqModal({ id: t.id, description: t.description || 'Sem Descrição', amount: String(t.amount || 0).replace('.', ','), date: new Date().toISOString().split('T')[0] });
             };
 
             const executeLiquidation = async () => {
                 if (!user || !liqModal) return;
                 setIsActionLoading(true);
                 try {
-                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(liqModal.id).update({ 
-                        status: 'pago', 
-                        clearanceDate: liqModal.date,
-                        amount: p(liqModal.amount)
-                    });
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(liqModal.id).update({ status: 'pago', clearanceDate: liqModal.date, amount: p(liqModal.amount) });
                     setLiqModal(null);
                 } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
-            const saveMeta = async (v) => {
-                const path = `artifacts/${appId}/users/${user.uid}/settings/config`;
-                await db.doc(path).set({ meta: p(v) }, { merge: true });
-            };
+            const saveMeta = async (v) => { await db.doc(`artifacts/${appId}/users/${user.uid}/settings/config`).set({ meta: p(v) }, { merge: true }); };
 
             const handleSaveAccount = async () => {
                 if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
-                const exists = accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id);
-                if (exists) { setAccFormError('Já existe este nome.'); return; }
-                setAccFormError('');
-                setIsActionLoading(true);
+                if (accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id)) { setAccFormError('Já existe este nome.'); return; }
+                setAccFormError(''); setIsActionLoading(true);
                 try {
                     const pth = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('accounts');
-                    if (accForm.id) await pth.doc(accForm.id).update(accForm);
-                    else await pth.add(accForm);
+                    if (accForm.id) await pth.doc(accForm.id).update(accForm); else await pth.add(accForm);
                     setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
                 } finally { setIsActionLoading(false); }
             };
@@ -599,14 +557,8 @@
                 if (!user || !id) return;
                 if (deleteConfirmId === id) {
                     setIsActionLoading(true);
-                    try {
-                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection).doc(id).delete();
-                        setDeleteConfirmId(null);
-                    } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
-                } else {
-                    setDeleteConfirmId(id);
-                    setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000);
-                }
+                    try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collection).doc(id).delete(); setDeleteConfirmId(null); } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
+                } else { setDeleteConfirmId(id); setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); }
             };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase tracking-widest">A carregar Tribo...</div>;
@@ -653,11 +605,62 @@
                         </div>
                     )}
 
+                    {/* Janela Modal Interativa do Assistente de Baixa do Cartão de Crédito */}
+                    {invoiceModal && (
+                        <div className="modal-overlay">
+                            <div className="glass-card w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl border-t-8 border-orange-500 flex flex-col gap-5 scale-up-center">
+                                <div className="text-center">
+                                    <h3 className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">PAGAMENTO DE FATURA</h3>
+                                    <p className="font-black text-xl text-slate-800 uppercase">{invoiceModal.cardName}</p>
+                                    <p className="text-[10px] font-bold text-[#D97757] uppercase bg-orange-50 rounded-full px-3 py-1 inline-block mt-1">Mês Base: {filterMonth}</p>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-2xl border flex justify-between items-center">
+                                    <span className="text-xs font-black uppercase text-slate-500">Valor Total Fechado:</span>
+                                    <span className="text-xl font-black text-slate-900">{formatMoney(invoiceModal.total)}</span>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Modalidade de Pagamento</label>
+                                    <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                                        <button onClick={()=>setInvoicePayType('integral')} className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase transition-all ${invoicePayType==='integral'?'bg-black text-[#F8CC82] shadow':'text-slate-400'}`}>INTEGRAL (TOTAL)</button>
+                                        <button onClick={()=>setInvoicePayType('parcial')} className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase transition-all ${invoicePayType==='parcial'?'bg-orange-500 text-white shadow':'text-slate-400'}`}>PARCIAL</button>
+                                    </div>
+                                </div>
+
+                                {invoicePayType === 'parcial' && (
+                                    <div className="space-y-1 fade-in">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Quanto deseja pagar agora? (R$)</label>
+                                        <input type="text" className="w-full p-4 bg-white border-2 border-orange-100 rounded-2xl font-black text-lg text-center text-orange-600 outline-none" placeholder="0,00" value={invoicePartialVal} onChange={e=>setInvoicePartialVal(e.target.value)} />
+                                        {p(invoicePartialVal) > 0 && (
+                                            <p className="text-[9px] font-bold text-red-500 text-center uppercase mt-1">
+                                                * Restante de {formatMoney(invoiceModal.total - p(invoicePartialVal))} rolará para o próximo mês!
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Origem do Dinheiro (Conta Débito)</label>
+                                    <select className="w-full p-4 bg-white border rounded-2xl font-black text-xs outline-none" value={invoiceSourceAcc} onChange={e=>setInvoiceSourceAcc(e.target.value)} required>
+                                        <option value="">Selecione a conta bancária...</option>
+                                        {accounts.filter(a => a.type === 'corrente').map(a=><option key={a.id} value={a.name}>{a.name} (Saldo: {formatMoney(accountBalances[a.name]||0)})</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="flex flex-col gap-2 pt-2">
+                                    <button onClick={handleExecuteInvoicePayment} className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">Confirmar e Dar Baixa</button>
+                                    <button onClick={()=>{setInvoiceModal(null); setInvoicePartialVal('');}} className="w-full text-slate-400 p-1 text-[9px] font-black uppercase hover:text-red-500">Voltar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <header className="bg-[#1A202C] text-white p-4 sticky top-0 z-50 border-b-4 border-[#D97757] shadow-xl">
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.5.8</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.6.0</h1>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -680,9 +683,7 @@
                         {alerts.length > 0 && (
                             <div className="glass-card p-6 rounded-[2.5rem] border-t-8 border-amber-500 bg-amber-50/10 shadow-lg space-y-4 fade-in">
                                 <div className="flex items-center gap-3">
-                                    <div className="bg-amber-100 p-2 rounded-2xl text-amber-600 animate-pulse">
-                                        <Icon name="bell" size={18} />
-                                    </div>
+                                    <div className="bg-amber-100 p-2 rounded-2xl text-amber-600 animate-pulse"><Icon name="bell" size={18} /></div>
                                     <div>
                                         <h3 className="text-xs font-black uppercase text-amber-800 tracking-wider">Compromissos Próximos ou Vencidos ({alerts.length})</h3>
                                         <p className="text-[9px] font-semibold text-slate-400 uppercase">Alertas de até 2 dias antes do vencimento</p>
@@ -690,47 +691,20 @@
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {alerts.map(item => {
-                                        const isOverdue = item.diffDays < 0;
-                                        const isToday = item.diffDays === 0;
-                                        
-                                        let cardBg = "bg-white border hover:border-amber-400 transition-all";
-                                        let badgeColor = "bg-amber-100 text-amber-700";
-                                        let label = `Vence em ${item.diffDays} dias`;
-                                        
-                                        if (isOverdue) {
-                                            cardBg = "bg-red-50/30 border border-red-200 hover:border-red-400 transition-all";
-                                            badgeColor = "bg-red-100 text-red-700";
-                                            label = `Vencido há ${Math.abs(item.diffDays)} dias`;
-                                        } else if (isToday) {
-                                            cardBg = "bg-orange-50/30 border border-orange-200 hover:border-orange-400 transition-all";
-                                            badgeColor = "bg-orange-100 text-orange-700";
-                                            label = "Vence hoje";
-                                        } else if (item.diffDays === 1) {
-                                            label = "Vence amanhã";
-                                        }
-
+                                        const isOverdue = item.diffDays < 0; const isToday = item.diffDays === 0;
+                                        let cardBg = "bg-white border hover:border-amber-400 transition-all"; let badgeColor = "bg-amber-100 text-amber-700"; let label = `Vence em ${item.diffDays} dias`;
+                                        if (isOverdue) { cardBg = "bg-red-50/30 border border-red-200 hover:border-red-400 transition-all"; badgeColor = "bg-red-100 text-red-700"; label = `Vencido há ${Math.abs(item.diffDays)} dias`; }
+                                        else if (isToday) { cardBg = "bg-orange-50/30 border border-orange-200 hover:border-orange-400 transition-all"; badgeColor = "bg-orange-100 text-orange-700"; label = "Vence hoje"; }
+                                        else if (item.diffDays === 1) { label = "Vence amanhã"; }
                                         return (
                                             <div key={item.id} className={`p-4 rounded-2xl shadow-sm flex justify-between items-center ${cardBg}`}>
                                                 <div className="space-y-1 pr-2">
-                                                    <p className="font-black text-xs uppercase leading-tight text-slate-800 truncate max-w-[180px]" title={item.description}>
-                                                        {item.description}
-                                                    </p>
-                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                        <span className="text-[8px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
-                                                            {item.account}
-                                                        </span>
-                                                        <span className={`status-badge ${badgeColor}`}>
-                                                            {label}
-                                                        </span>
-                                                    </div>
+                                                    <p className="font-black text-xs uppercase leading-tight text-slate-800 truncate max-w-[180px]" title={item.description}>{item.description}</p>
+                                                    <div className="flex flex-wrap items-center gap-1.5"><span className="text-[8px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">{item.account}</span><span className={`status-badge ${badgeColor}`}>{label}</span></div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
-                                                    <p className={`font-black text-xs ${item.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                                                        {item.type === 'entrada' ? '+' : '-'} {formatMoney(item.amount)}
-                                                    </p>
-                                                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">
-                                                        {item.clearanceDate.split('-').reverse().slice(0, 2).join('/')}
-                                                    </p>
+                                                    <p className={`font-black text-xs ${item.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{item.type === 'entrada' ? '+' : '-'} {formatMoney(item.amount)}</p>
+                                                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">{item.clearanceDate.split('-').reverse().slice(0, 2).join('/')}</p>
                                                 </div>
                                             </div>
                                         );
@@ -746,9 +720,7 @@
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada','saida','transferencia'].map(t=>(<button key={t} type="button" onClick={()=>setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type===t?'bg-white shadow-sm text-black':'text-slate-400'}`}>{t}</button>))}</div>
                                     <div className="relative">
                                         <input list="history-descriptions" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none focus:border-black" value={desc} onChange={e=>setDesc(e.target.value)} />
-                                        <datalist id="history-descriptions">
-                                            {uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}
-                                        </datalist>
+                                        <datalist id="history-descriptions">{uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}</datalist>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" placeholder="Valor" required className="w-full p-4 bg-slate-50 border rounded-2xl font-black" value={val} onChange={e=>setVal(e.target.value)} />
@@ -770,7 +742,6 @@
                                                 {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                                             </select>
                                         )}
-                                        
                                         <select className="w-full p-4 bg-white border rounded-2xl font-black text-[10px]" value={sup} onChange={e=>setSup(e.target.value)} disabled={type === 'transferencia'}>
                                             <option value="">{type === 'transferencia' ? 'Transferência' : 'Fornecedor...'}</option>
                                             {type !== 'transferencia' && suppliers.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
@@ -798,21 +769,15 @@
                                                 <option value="saida">Saídas</option>
                                                 <option value="transferencia">Transferências</option>
                                             </select>
-
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
                                                 <option value="">Todas as Contas</option>
                                                 {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
                                             </select>
-
                                             <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
                                                 <option value="">Todas as Categorias</option>
                                                 {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                                             </select>
-
-                                            <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>
-                                                {hideForecasts ? 'Previsões OFF' : 'Previsões ON'}
-                                            </button>
-
+                                            <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts ? 'Previsões OFF' : 'Previsões ON'}</button>
                                             <div className="flex gap-2 ml-auto">
                                                 <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
                                             </div>
@@ -820,38 +785,25 @@
                                     </div>
                                     <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
                                         {filteredDashboard.map(t => {
-                                            const accInfo = accounts.find(a => a.name === t.account);
-                                            const { clearanceDate } = getTransactionDates(t, accInfo);
+                                            const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
                                             return (
                                                 <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
                                                     <div className="flex items-center gap-4">
-                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${
-                                                            t.type === 'transferencia' ? 'bg-blue-100 text-blue-700' : (t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600')
-                                                        }`}>
-                                                            {t.type === 'transferencia' ? 'TR' : (t.type === 'entrada' ? 'IN' : 'OUT')}
-                                                        </div>
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type === 'transferencia' ? 'bg-blue-100 text-blue-700' : (t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600')}`}>{t.type === 'transferencia' ? 'TR' : (t.type === 'entrada' ? 'IN' : 'OUT')}</div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
-                                                                    {t.status==='pago' ? `Pago ${clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}
-                                                                </span>
+                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago' ? `Pago ${clearanceDate?.split('-').reverse().slice(0,2).join('/')}` : 'Pendente'}</span>
                                                             </div>
-                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                                {t.type === 'transferencia' ? `${t.account} ➔ ${t.destinationAccount}` : `${t.account} • ${t.category}`}
-                                                            </p>
+                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.type === 'transferencia' ? `${t.account} ➔ ${t.destinationAccount}` : `${t.account} • ${t.category}`}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-4">
                                                         <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
                                                         <div className="flex gap-1">
-                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)">
-                                                                <Icon name="sprout" size={14}/>
-                                                            </button>
+                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)"><Icon name="sprout" size={14}/></button>
                                                             <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}/></button>
-                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>
-                                                                {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
-                                                            </button>
+                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}</button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -894,24 +846,14 @@
                                     <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">Faturamento Total do Mês</p>
                                     <h3 className="text-5xl font-black drop-shadow-xl">{formatMoney(stats.rb)}</h3>
                                 </div>
-
                                 <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[2rem] border shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <Icon name="calendar-days" className="text-slate-400" />
-                                        <h2 className="text-[10px] font-black uppercase tracking-widest">Controle de Vendas Diárias</h2>
-                                    </div>
+                                    <div className="flex items-center gap-3"><Icon name="calendar-days" className="text-slate-400" /><h2 className="text-[10px] font-black uppercase tracking-widest">Controle de Vendas Diárias</h2></div>
                                     <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border">
-                                        <div className="flex flex-col">
-                                            <label className="text-[7px] font-black uppercase text-slate-400 ml-1">Data para Abrir</label>
-                                            <input type="date" className="text-xs font-bold bg-transparent outline-none border-0" value={newDayDate} onChange={e=>setNewDayDate(e.target.value)} />
-                                        </div>
+                                        <div className="flex flex-col"><label className="text-[7px] font-black uppercase text-slate-400 ml-1">Data para Abrir</label><input type="date" className="text-xs font-bold bg-transparent outline-none border-0" value={newDayDate} onChange={e=>setNewDayDate(e.target.value)} /></div>
                                         <div className="w-px h-6 bg-slate-200"></div>
-                                        <button type="button" onClick={handleOpenNewDay} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all">
-                                            <Icon name="plus-circle" size={14}/> Abrir Novo Dia
-                                        </button>
+                                        <button type="button" onClick={handleOpenNewDay} className="bg-black text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-all"><Icon name="plus-circle" size={14}/> Abrir Novo Dia</button>
                                     </div>
                                 </div>
-
                                 <div className="glass-card rounded-[2.5rem] overflow-hidden border shadow-sm overflow-x-auto no-scrollbar">
                                     <table className="w-full text-center text-[11px] min-w-[1700px]">
                                         <thead>
@@ -928,47 +870,31 @@
                                         </thead>
                                         <tbody className="divide-y font-bold">
                                             {Object.keys(dailyRecords).filter(d=>d.startsWith(filterMonth)).sort((a,b)=>new Date(b)-new Date(a)).map(d => {
-                                                const r = dailyRecords[d] || {};
-                                                const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0);
-                                                const pedidos = p(r.qtdPedidos);
-                                                const ticketMedio = pedidos > 0 ? total / pedidos : 0;
+                                                const r = dailyRecords[d] || {}; const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f)=>acc+p(r[f]), 0); const pedidos = p(r.qtdPedidos); const ticketMedio = pedidos > 0 ? total / pedidos : 0;
                                                 return (
                                                     <tr key={d} className="hover:bg-slate-50 h-12">
                                                         <td className="p-0 sticky left-0 bg-white border-r min-w-[120px] font-black">{d.split('-').reverse().join('/')}</td>
                                                         <td className="p-4 bg-yellow-50 font-black">{formatMoney(total)}</td>
-                                                        <td className="p-0 border-r bg-blue-50/30">
-                                                            <input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" />
-                                                        </td>
+                                                        <td className="p-0 border-r bg-blue-50/30"><input className="table-input !text-blue-700" value={r.qtdPedidos||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({qtdPedidos: e.target.value}, {merge:true})} placeholder="0" /></td>
                                                         <td className="p-4 bg-blue-50/50 font-black text-blue-900">{formatMoney(ticketMedio)}</td>
                                                         {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                            <td key={f} className="p-0 border-r">
-                                                                <input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
-                                                            </td>
+                                                            <td key={f} className="p-0 border-r"><input className="table-input" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
                                                         ))}
                                                         {['taxaEntrega','motoboy'].map(f => (
-                                                            <td key={f} className="p-0 border-r bg-slate-50/50">
-                                                                <input className="table-input !text-red-500" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" />
-                                                            </td>
+                                                            <td key={f} className="p-0 border-r bg-slate-50/50"><input className="table-input !text-red-500" value={r[f]||''} onChange={async(e)=>await db.doc(`artifacts/${appId}/users/${user.uid}/dailyRecords/${d}`).set({[f]: e.target.value.replace(',','.')}, {merge:true})} placeholder="0,00" /></td>
                                                         ))}
-                                                        <td className="p-4">
-                                                            <button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>
-                                                                {deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
-                                                            </button>
-                                                        </td>
+                                                        <td className="p-4"><button type="button" onClick={() => executeDelete('dailyRecords', d)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === d ? 'delete-confirm' : 'text-red-200 hover:text-red-600'}`}>{deleteConfirmId === d ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}</button></td>
                                                     </tr>
                                                 );
                                             })}
                                         </tbody>
-                                        {/* NOVO: TFOOT com as somas totais de todas as colunas no final da Planilha de Vendas */}
                                         <tfoot>
                                             <tr className="bg-[#1A202C] text-white font-black uppercase text-[10px] border-t-4 border-[#D97757] h-12">
                                                 <td className="p-0 sticky left-0 bg-[#1A202C] z-10 text-center font-black text-amber-300">SOMA TOTAL</td>
                                                 <td className="p-4 bg-yellow-500 text-black font-black text-xs">{formatMoney(columnTotals.totalDia)}</td>
                                                 <td className="p-4 bg-blue-600 text-white font-black text-xs">{columnTotals.pedidos}</td>
                                                 <td className="p-4 bg-blue-800 text-[#F8CC82] font-black text-xs">{formatMoney(columnTotals.ticketMedio)}</td>
-                                                {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => (
-                                                    <td key={f} className="p-4 border-r bg-slate-800 text-xs font-black">{formatMoney(columnTotals[f])}</td>
-                                                ))}
+                                                {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].map(f => ( <td key={f} className="p-4 border-r bg-slate-800 text-xs font-black">{formatMoney(columnTotals[f])}</td> ))}
                                                 <td className="p-4 border-r text-orange-400 bg-orange-950/25 text-xs font-black">{formatMoney(columnTotals.taxaEntrega)}</td>
                                                 <td className="p-4 border-r text-red-400 bg-red-950/25 text-xs font-black">{formatMoney(columnTotals.motoboy)}</td>
                                                 <td className="p-4 bg-slate-850"></td>
@@ -991,9 +917,7 @@
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
-                                                    <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span>
-                                                </button>
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span></button>
                                             </div>
                                         </div>
                                     ))}
@@ -1003,25 +927,10 @@
 
                         {activeTab === 'a_receber' && (
                              <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>{
-                                    const accInfo = accounts.find(a => a.name === t.account);
-                                    const { clearanceDate } = getTransactionDates(t, accInfo);
-                                    return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth);
-                                }).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
+                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>{ const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo); return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth); }).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {transactions.filter(t=>{
-                                        const accInfo = accounts.find(a => a.name === t.account);
-                                        const { clearanceDate } = getTransactionDates(t, accInfo);
-                                        return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth);
-                                    }).sort((a,b)=>{
-                                        const accA = accounts.find(acc => acc.name === a.account);
-                                        const accB = accounts.find(acc => acc.name === b.account);
-                                        const dateA = getTransactionDates(a, accA).clearanceDate;
-                                        const dateB = getTransactionDates(b, accB).clearanceDate;
-                                        return (dateA||"").localeCompare(dateB||"");
-                                    }).map(t => {
-                                        const accInfo = accounts.find(a => a.name === t.account);
-                                        const { clearanceDate } = getTransactionDates(t, accInfo);
+                                    {transactions.filter(t=>{ const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo); return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth); }).sort((a,b)=>{ const accA = accounts.find(acc => acc.name === a.account); const accB = accounts.find(acc => acc.name === b.account); return (getTransactionDates(a, accA).clearanceDate||"").localeCompare(getTransactionDates(b, accB).clearanceDate||""); }).map(t => {
+                                        const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
                                         return (
                                             <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                                 <div className="flex items-center gap-5">
@@ -1030,9 +939,7 @@
                                                 </div>
                                                 <div className="flex items-center gap-6">
                                                     <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2">
-                                                        <Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span>
-                                                    </button>
+                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span></button>
                                                 </div>
                                             </div>
                                         );
@@ -1046,8 +953,7 @@
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
                                     const txs = transactions.filter(t => {
                                         if (t.account !== card.name) return false;
-                                        const { clearanceDate } = getTransactionDates(t, card);
-                                        return clearanceDate?.startsWith(filterMonth);
+                                        return getTransactionDates(t, card).clearanceDate?.startsWith(filterMonth);
                                     }).sort((a,b)=>(a.date || "").localeCompare(b.date || ""));
                                     
                                     const total = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t)=>t.type==='saida'?acc+p(t.amount):acc-p(t.amount), 0);
@@ -1059,9 +965,18 @@
                                                     <h3 className="text-2xl font-black uppercase">{card.name}</h3>
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closing || card.closingDay || '25'} • Vencimento: {card.due || card.dueDay || '10'}</p>
                                                 </div>
-                                                <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura (Compras)</p>
-                                                    <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
+                                                <div className="flex flex-col sm:flex-row items-center gap-4">
+                                                    <div className="bg-slate-50 px-10 py-6 rounded-[2.5rem] border text-center shadow-inner">
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total na Fatura (Compras)</p>
+                                                        <h3 className={`text-4xl font-black ${total>=0?'text-orange-500':'text-green-600'}`}>{formatMoney(total)}</h3>
+                                                    </div>
+                                                    
+                                                    {/* Botão interativo para chamar o assistente de baixa parcial/integral */}
+                                                    {total > 0.01 && (
+                                                        <button onClick={()=>setInvoiceModal({ cardName: card.name, total })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs p-5 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
+                                                            <Icon name="check-square" size={16} /> Pagar Fatura
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="space-y-3">
@@ -1072,18 +987,13 @@
                                                             <div className="flex items-center gap-4">
                                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
                                                                 <div>
-                                                                    <p className="font-black text-xs uppercase leading-none">
-                                                                        {t.description} 
-                                                                        {isInvoicePayment(t) && <span className="ml-2 status-badge bg-[#D97757] text-white">BAIXA</span>}
-                                                                    </p>
+                                                                    <p className="font-black text-xs uppercase leading-none">{t.description} {isInvoicePayment(t) && <span className="ml-2 status-badge bg-[#D97757] text-white">BAIXA</span>}</p>
                                                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p>
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
-                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-red-600'}`}>{formatMoney(t.amount)}</p>
-                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
-                                                                    {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}
-                                                                </button>
+                                                                <p className="font-black text-sm text-red-600">{formatMoney(t.amount)}</p>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}</button>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1160,20 +1070,14 @@
                                         <span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black">{(suppliers || []).length}</span>
                                     </div>
                                     <div className="space-y-2 overflow-y-auto no-scrollbar flex-1">
-                                        {(!suppliers || suppliers.length === 0) ? (
-                                            <p className="text-center py-10 text-[10px] font-black uppercase text-slate-300">Nenhum fornecedor cadastrado</p>
-                                        ) : (
+                                        {(!suppliers || suppliers.length === 0) ? ( <p className="text-center py-10 text-[10px] font-black uppercase text-slate-300">Nenhum fornecedor cadastrado</p> ) : (
                                             suppliers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(s => (
                                                 <div key={s.id} className="flex justify-between items-center p-4 bg-white border rounded-2xl group hover:border-black transition-all">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-[10px] text-slate-400">
-                                                            {(s.name || "F").charAt(0).toUpperCase()}
-                                                        </div>
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-[10px] text-slate-400">{(s.name || "F").charAt(0).toUpperCase()}</div>
                                                         <span className="text-xs font-black uppercase">{s.name}</span>
                                                     </div>
-                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>
-                                                        {deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}
-                                                    </button>
+                                                    <button type="button" onClick={() => executeDelete('suppliers', s.id)} className={`flex items-center gap-2 transition-all p-2 rounded-xl px-4 ${deleteConfirmId === s.id ? 'delete-confirm' : 'text-red-400 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === s.id ? <span className="text-[10px] font-black uppercase">Confirmar?</span> : <><Icon name="trash-2" size={16}/><span className="text-[10px] font-black uppercase">Excluir</span></>}</button>
                                                 </div>
                                             ))
                                         )}
@@ -1189,25 +1093,16 @@
                                     <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed">
                                         {accFormError && <div className="p-3 bg-red-100 text-[#EF4444] rounded-xl text-[10px] font-black uppercase">{accFormError}</div>}
                                         <input type="text" className="w-full p-4 border rounded-2xl font-bold text-xs outline-none focus:border-black" placeholder="Nome da Conta ou Cartão" value={accForm.name} onChange={e=>setAccForm({...accForm, name:e.target.value})} />
-                                        
                                         <div className="flex gap-2">
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'corrente'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='corrente'?'bg-black text-white':'bg-white border'}`}>CORRENTE</button>
                                             <button type="button" onClick={()=>setAccForm({...accForm, type:'cartao'})} className={`flex-1 p-3 rounded-xl text-[9px] font-black ${accForm.type==='cartao'?'bg-orange-500 text-white':'bg-white border'}`}>CARTÃO</button>
                                         </div>
-
                                         {accForm.type === 'cartao' && (
                                             <div className="grid grid-cols-2 gap-3 fade-in">
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Fechamento</label>
-                                                    <input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 18" value={accForm.closing || ''} onChange={e=>setAccForm({...accForm, closing: e.target.value})} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Vencimento</label>
-                                                    <input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 25" value={accForm.due || ''} onChange={e=>setAccForm({...accForm, due: e.target.value})} />
-                                                </div>
+                                                <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Fechamento</label><input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 18" value={accForm.closing || ''} onChange={e=>setAccForm({...accForm, closing: e.target.value})} /></div>
+                                                <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 ml-2">Dia de Vencimento</label><input type="number" min="1" max="31" className="w-full p-4 border rounded-2xl font-bold text-xs bg-white outline-none focus:border-black" placeholder="Ex: 25" value={accForm.due || ''} onChange={e=>setAccForm({...accForm, due: e.target.value})} /></div>
                                             </div>
                                         )}
-
                                         <div className="flex gap-2">
                                             <button type="button" onClick={handleSaveAccount} className="flex-1 bg-black text-[#F8CC82] p-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Salvar</button>
                                             {accForm.id && <button type="button" onClick={()=>setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false})} className="bg-slate-200 text-slate-600 px-4 rounded-2xl font-black uppercase text-[10px]">Cancelar</button>}
@@ -1216,17 +1111,10 @@
                                     <div className="space-y-2 overflow-y-auto max-h-[400px] divide-y border rounded-[2rem] p-4">
                                         {accounts.sort((a,b)=>parseInt(a.pos||0)-parseInt(b.pos||0)).map(a => (
                                             <div key={a.id} className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/50 hover:bg-white rounded-2xl">
-                                                <div>
-                                                    <p className="font-black text-xs uppercase leading-none">{a.name}</p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                        {a.type} {a.type === 'cartao' && ` • Fecho: ${a.closing || a.closingDay || '25'} • Venc: ${a.due || a.dueDay || '10'}`}
-                                                    </p>
-                                                </div>
+                                                <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} {a.type === 'cartao' && ` • Fecho: ${a.closing || a.closingDay || '25'} • Venc: ${a.due || a.dueDay || '10'}`}</p></div>
                                                 <div className="flex gap-2 items-center">
                                                     <button type="button" onClick={()=>setAccForm({ ...a, closing: a.closing || a.closingDay || '25', due: a.due || a.dueDay || '10' })} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}/></button>
-                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>
-                                                        {deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}
-                                                    </button>
+                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}/>}</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1239,9 +1127,7 @@
                                         {categories.sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center hover:border-black">
                                                 <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
-                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>
-                                                    {deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}
-                                                </button>
+                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}/>}</button>
                                             </div>
                                         ))}
                                      </div>
@@ -1249,7 +1135,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.5.8 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.6.0 GOLDEN STABLE</footer>
                 </div>
             );
         }
