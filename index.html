@@ -107,6 +107,17 @@
 
         const getTransactionDates = (t, cardInfo) => {
             if (!t) return { clearanceDate: '', billingMonth: '' };
+            
+            // CORREÇÃO CRÍTICA: Se a transação for uma baixa/pagamento de fatura,
+            // usamos a data de compensação e o mês de faturamento explicitamente gravados.
+            // Isso impede que o pagamento seja empurrado para o mês seguinte se pago após o fecho.
+            if (isInvoicePayment(t)) {
+                return {
+                    clearanceDate: t.clearanceDate || t.date || '',
+                    billingMonth: t.billingMonth || (t.date ? t.date.slice(0, 7) : '')
+                };
+            }
+
             if (!cardInfo || cardInfo.type !== 'cartao') {
                 return {
                     clearanceDate: t.clearanceDate || t.date || '',
