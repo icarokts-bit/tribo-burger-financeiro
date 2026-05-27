@@ -1,24 +1,256 @@
-<!-- ... existing code ... -->
-            const handleOpenNewDay = async () => {
-                if (!user) return; setIsActionLoading(true);
-                try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); } finally { setIsActionLoading(false); }
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tribo Burger - Sistema de Gestão Financeira</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for robust UI Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFCF9;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .stat-banner {
+            border-left: 6px solid #D97757;
+            background: #ffffff;
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Tab transitions */
+        .tab-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-[#FDFCF9] text-slate-800">
+    <div id="root"></div>
+
+    <!-- Firebase Compatibility Libraries from CDN -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- React, ReactDOM, Babel for client-side transpilation -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Firebase Configuration Matching Tribo Burger App
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
+            authDomain: "tribo-burger-app.firebaseapp.com",
+            projectId: "tribo-burger-app",
+            storageBucket: "tribo-burger-app.firebasestorage.app",
+            messagingSenderId: "490245681469",
+            appId: "1:490245681469:web:189b1d2e35bd142cc31554",
+            measurementId: "G-SQ87BWHZ1L"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = 'tribo-burger-financeiro';
+
+        // Icon Mapping Helper to avoid loading issues
+        const Icon = ({ name, size = 18, className = "" }) => {
+            const iconMap = {
+                'wallet': 'fa-solid fa-wallet',
+                'trending-up': 'fa-solid fa-arrow-trend-up',
+                'trending-down': 'fa-solid fa-arrow-trend-down',
+                'plus': 'fa-solid fa-plus',
+                'trash-2': 'fa-solid fa-trash-can',
+                'utensils': 'fa-solid fa-utensils',
+                'credit-card': 'fa-solid fa-credit-card',
+                'truck': 'fa-solid fa-truck',
+                'bar-chart-3': 'fa-solid fa-chart-line',
+                'shopping-bag': 'fa-solid fa-bag-shopping',
+                'store': 'fa-solid fa-store',
+                'table': 'fa-solid fa-table',
+                'log-out': 'fa-solid fa-right-from-bracket',
+                'mail': 'fa-solid fa-envelope',
+                'lock': 'fa-solid fa-lock',
+                'user-plus': 'fa-solid fa-user-plus',
+                'log-in': 'fa-solid fa-sign-in-alt',
+                'shield-check': 'fa-solid fa-shield-halved',
+                'chevron-right': 'fa-solid fa-chevron-right',
+                'download': 'fa-solid fa-download',
+                'calendar': 'fa-solid fa-calendar-days',
+                'plus-circle': 'fa-solid fa-circle-plus',
+                'check': 'fa-solid fa-check',
+                'check-square': 'fa-solid fa-square-check',
+                'alert-circle': 'fa-solid fa-circle-exclamation',
+                'clock': 'fa-solid fa-clock',
+                'shopping-cart': 'fa-solid fa-cart-shopping',
+                'check-circle': 'fa-solid fa-circle-check',
+                'chevron-down': 'fa-solid fa-chevron-down',
+                'settings': 'fa-solid fa-sliders'
+            };
+            const faClass = iconMap[name] || 'fa-solid fa-circle-question';
+            return <i className={`${faClass} ${className}`} style={{ fontSize: size }}></i>;
+        };
+
+        const BANK_ACCOUNTS = [
+            { id: '1', name: 'Mercado Pago', type: 'corrente' },
+            { id: '2', name: 'C6', type: 'corrente' },
+            { id: '3', name: 'Aplicação', type: 'investimento' },
+            { id: '4', name: 'Fundo Aluguel', type: 'investimento' },
+            { id: '5', name: 'Fundo C6', type: 'investimento' },
+            { id: '6', name: 'Fundo Mercado Pago', type: 'investimento' },
+            { id: '7', name: 'Fundo Rico', type: 'investimento' },
+            { id: '8', name: 'Fiado', type: 'corrente' },
+            { id: '9', name: 'iFood', type: 'corrente' },
+            { id: '10', name: 'C6 Black', type: 'cartao', closing: '25', due: '10' },
+            { id: '11', name: 'Nubank Premium', type: 'cartao', closing: '25', due: '10' }
+        ];
+
+        const CATEGORIES = ['CMV (Insumos)', 'Pessoal (Salários)', 'Operacional (Aluguer/Luz)', 'Marketing', 'Impostos', 'Manutenção', 'Investimentos', 'Outros', 'Pagamento de Fatura'];
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            
+            // Authentication
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isRegistering, setIsRegistering] = useState(false);
+            const [authError, setAuthError] = useState('');
+
+            // Transactions & Accounts Data
+            const [transactions, setTransactions] = useState([]);
+            const [accounts, setAccounts] = useState(BANK_ACCOUNTS);
+            const [dailyRecords, setDailyRecords] = useState({});
+            
+            // Filters and UI states
+            const [filterMonth, setFilterMonth] = useState(() => {
+                const today = new Date();
+                return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            });
+            const [isActionLoading, setIsActionLoading] = useState(false);
+            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+            // Modals
+            const [liqModal, setLiqModal] = useState(null);
+            const [invoiceModal, setInvoiceModal] = useState(null);
+
+            // New transaction form
+            const [txDescription, setTxDescription] = useState('');
+            const [txAmount, setTxAmount] = useState('');
+            const [txAccount, setTxAccount] = useState(BANK_ACCOUNTS[0].name);
+            const [txCategory, setTxCategory] = useState(CATEGORIES[0]);
+            const [txType, setTxType] = useState('saida');
+            const [txStatus, setTxStatus] = useState('pendente');
+            const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
+            const [txClearanceDate, setTxClearanceDate] = useState(new Date().toISOString().split('T')[0]);
+            const [newDayDate, setNewDayDate] = useState(new Date().toISOString().split('T')[0]);
+
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                
+                const userPath = ['artifacts', appId, 'users', user.uid];
+                
+                // Real-time synchronization
+                const unsubTx = db.collection(userPath[0]).doc(userPath[1]).collection(userPath[2]).doc(userPath[3]).collection('transactions')
+                    .onSnapshot((snap) => {
+                        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        setTransactions(list.sort((a, b) => new Date(b.date) - new Date(a.date)));
+                    }, (err) => console.error("Erro Tx:", err));
+
+                const unsubDaily = db.collection(userPath[0]).doc(userPath[1]).collection(userPath[2]).doc(userPath[3]).collection('dailyRecords')
+                    .onSnapshot((snap) => {
+                        const recs = {}; 
+                        snap.docs.forEach(d => recs[d.id] = d.data());
+                        setDailyRecords(recs);
+                    }, (err) => console.error("Erro Daily:", err));
+
+                const unsubAccounts = db.collection(userPath[0]).doc(userPath[1]).collection(userPath[2]).doc(userPath[3]).collection('accounts')
+                    .onSnapshot((snap) => {
+                        if (snap.empty) {
+                            // Seed default accounts
+                            BANK_ACCOUNTS.forEach(async (acc) => {
+                                await db.collection(userPath[0]).doc(userPath[1]).collection(userPath[2]).doc(userPath[3]).collection('accounts').doc(acc.id).set(acc);
+                            });
+                        } else {
+                            setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        }
+                    }, (err) => console.error("Erro Accounts:", err));
+
+                return () => { unsubTx(); unsubDaily(); unsubAccounts(); };
+            }, [user]);
+
+            const p = (v) => parseFloat(v) || 0;
+            const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+            const parseDateUTC = (dateStr) => {
+                if (!dateStr) return new Date();
+                const [y, m, d] = dateStr.split('-');
+                return new Date(Date.UTC(parseInt(y), parseInt(m) - 1, parseInt(d)));
             };
 
-            const openLiquidation = (t) => {
-                if (t.isInvoice) { 
-                    // Em vez de apenas redirecionar, abrimos o assistente interativo de pagamento diretamente
-                    setInvoiceModal({ cardName: t.account, total: t.amount }); 
-                    return; 
+            const isInvoicePayment = (t) => {
+                return t.isInvoicePayment || t.category === 'Pagamento de Fatura' || t.description?.toLowerCase().includes('pagamento fatura');
+            };
+
+            const getTransactionDates = (t, cardInfo) => {
+                if (t.clearanceDate) return { clearanceDate: t.clearanceDate };
+                if (!cardInfo || cardInfo.type !== 'cartao') {
+                    return { clearanceDate: t.clearanceDate || t.date };
                 }
-                setLiqModal({ id: t.id, description: t.description || 'Sem Descrição', amount: String(t.amount || 0).replace('.', ','), date: new Date().toISOString().split('T')[0] });
+                
+                // Card processing logic for billing month placement
+                const closingDay = parseInt(cardInfo.closing || '25', 10);
+                const dueDay = parseInt(cardInfo.due || '10', 10);
+                const txDateObj = new Date(t.date + 'T00:00:00');
+                
+                let year = txDateObj.getFullYear();
+                let month = txDateObj.getMonth(); // 0-11
+                const day = txDateObj.getDate();
+                
+                if (day > closingDay) {
+                    month += 1;
+                }
+                month += 1; // Due is next month
+                if (month > 11) {
+                    month -= 12;
+                    year += 1;
+                }
+                const dueMonthStr = String(month + 1).padStart(2, '0');
+                const dueYearStr = String(year);
+                const dueDayStr = String(dueDay).padStart(2, '0');
+                return { clearanceDate: `${dueYearStr}-${dueMonthStr}-${dueDayStr}` };
             };
-
-            const executeLiquidation = async () => {
-<!-- ... existing code ... -->
-            const uniqueDescriptions = useMemo(() => {
-                const descs = transactions.map(t => t.description).filter(Boolean);
-                return [...new Set(descs)].sort();
-            }, [transactions]);
 
             const consolidatedAPagar = useMemo(() => {
                 const pendings = transactions.filter(t => {
@@ -34,14 +266,13 @@
                         return clearanceDate?.startsWith(filterMonth);
                     });
                     
-                    // Separa compras vs pagamentos para encontrar o saldo em aberto real
                     const compras = txs.filter(t => !isInvoicePayment(t)).reduce((acc, t) => t.type === 'saida' ? acc + p(t.amount) : acc - p(t.amount), 0);
                     const pagamentos = txs.filter(t => isInvoicePayment(t)).reduce((acc, t) => t.type === 'entrada' ? acc + p(t.amount) : acc - p(t.amount), 0);
                     
                     const pendingSum = compras - pagamentos;
                     if (pendingSum <= 0.01) return null;
                     
-                    const cardDueDay = card.due || card.dueDay || 10;
+                    const cardDueDay = card.due || 10;
                     return { 
                         id: `card-${card.name}`, 
                         description: `Fatura ${card.name}`, 
@@ -88,7 +319,7 @@
                     const sum = compras - pagamentos;
                     
                     if (sum > 0.01) {
-                        const cardDueDay = card.due || card.dueDay || card.closing || 10;
+                        const cardDueDay = card.due || 10;
                         const clearanceDate = `${filterMonth}-${String(cardDueDay).padStart(2, '0')}`;
                         const dueD = parseDateUTC(clearanceDate);
                         const dueUTC = Date.UTC(dueD.getUTCFullYear(), dueD.getUTCMonth(), dueD.getUTCDate());
@@ -101,21 +332,468 @@
                 return items.sort((a, b) => a.diffDays - b.diffDays);
             }, [transactions, accounts, filterMonth]);
 
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setAuthError('');
+                try {
+                    if (isRegistering) {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } else {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    }
+                } catch (err) {
+                    setAuthError(err.message);
+                }
+            };
+
+            const handleLogout = () => auth.signOut();
+
             const handleSaveTx = async (e) => {
-<!-- ... existing code ... -->
+                e.preventDefault();
+                if (!user || !txDescription || !txAmount) return;
+                setIsActionLoading(true);
+                const id = Date.now().toString();
+                try {
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(id).set({
+                        id,
+                        description: txDescription,
+                        amount: parseFloat(txAmount),
+                        type: txType,
+                        status: txStatus,
+                        date: txDate,
+                        clearanceDate: txClearanceDate,
+                        account: txAccount,
+                        category: txCategory,
+                        timestamp: new Date().toISOString()
+                    });
+                    setTxDescription('');
+                    setTxAmount('');
+                } catch (error) {
+                    console.error("Erro ao gravar movimento:", error);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const handleOpenNewDay = async () => {
+                if (!user) return; 
+                setIsActionLoading(true);
+                try { 
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); 
+                } finally { 
+                    setIsActionLoading(false); 
+                }
+            };
+
+            const executeDelete = async (col, id) => {
+                if (!user) return;
+                if (deleteConfirmId === id) {
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(col).doc(id).delete();
+                    setDeleteConfirmId(null);
+                } else {
+                    setDeleteConfirmId(id);
+                }
+            };
+
+            const openLiquidation = (t) => {
+                if (t.isInvoice) { 
+                    setInvoiceModal({ 
+                        cardName: t.account, 
+                        total: t.amount,
+                        paymentDate: new Date().toISOString().split('T')[0],
+                        sourceAccount: accounts.filter(a => a.type !== 'cartao')[0]?.name || 'Mercado Pago'
+                    }); 
+                    return; 
+                }
+                setLiqModal({ 
+                    id: t.id, 
+                    description: t.description || 'Sem Descrição', 
+                    amount: String(t.amount || 0).replace('.', ','), 
+                    date: new Date().toISOString().split('T')[0] 
+                });
+            };
+
+            const executeLiquidation = async () => {
+                if (!user || !liqModal) return;
+                setIsActionLoading(true);
+                try {
+                    const { id, date, amount } = liqModal;
+                    const cleanAmount = parseFloat(String(amount).replace(',', '.'));
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(id).set({
+                        status: 'pago',
+                        clearanceDate: date,
+                        amount: cleanAmount
+                    }, { merge: true });
+                    setLiqModal(null);
+                } catch (err) {
+                    console.error("Erro ao liquidar:", err);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            // Fully accounts for credit card payments by registering both card credit (entrada) and bank account debit (saída)
+            const executeInvoicePayment = async () => {
+                if (!user || !invoiceModal) return;
+                setIsActionLoading(true);
+                try {
+                    const { cardName, total, paymentDate, sourceAccount } = invoiceModal;
+                    const amt = parseFloat(total);
+                    if (isNaN(amt) || amt <= 0) return;
+
+                    const idOut = `pay-out-${Date.now()}`;
+                    const idIn = `pay-in-${Date.now()}`;
+
+                    // 1. Debit the bank account
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(idOut).set({
+                        id: idOut,
+                        description: `Pgto Fatura ${cardName}`,
+                        amount: amt,
+                        type: 'saida',
+                        status: 'pago',
+                        date: paymentDate,
+                        clearanceDate: paymentDate,
+                        account: sourceAccount,
+                        category: 'Pagamento de Fatura',
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // 2. Credit the Credit Card account under the correct billing month
+                    const cardObj = accounts.find(a => a.name === cardName);
+                    const cardDueDay = cardObj?.due || 10;
+                    const targetClearanceDate = `${filterMonth}-${String(cardDueDay).padStart(2, '0')}`;
+
+                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(idIn).set({
+                        id: idIn,
+                        description: `Pgto Fatura ${cardName}`,
+                        amount: amt,
+                        type: 'entrada',
+                        status: 'pago',
+                        date: paymentDate,
+                        clearanceDate: targetClearanceDate,
+                        account: cardName,
+                        category: 'Pagamento de Fatura',
+                        isInvoicePayment: true,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    setInvoiceModal(null);
+                } catch (err) {
+                    console.error("Erro ao registrar pagamento de fatura:", err);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const stats = useMemo(() => {
+                let receitas = 0;
+                let despesas = 0;
+
+                // Sum active spreadsheet daily sales for current filter month
+                Object.keys(dailyRecords).forEach(day => {
+                    if (day.startsWith(filterMonth)) {
+                        const r = dailyRecords[day];
+                        receitas += p(r.pix) + p(r.pixOnline) + p(r.fiado) + p(r.dinheiro) + p(r.ifood) + p(r.debito) + p(r.credito) + p(r.vr) + p(r.ticket) + p(r.alelo);
+                        despesas += p(r.motoboy) + p(r.taxaEntrega);
+                    }
+                });
+
+                // Add manual transactions
+                transactions.forEach(t => {
+                    const accInfo = accounts.find(a => a.name === t.account);
+                    const { clearanceDate } = getTransactionDates(t, accInfo);
+                    if (clearanceDate?.startsWith(filterMonth) && t.status === 'pago') {
+                        if (t.type === 'entrada') {
+                            receitas += p(t.amount);
+                        } else {
+                            despesas += p(t.amount);
+                        }
+                    }
+                });
+
+                return { receitas, despesas, lucro: receitas - despesas };
+            }, [transactions, dailyRecords, filterMonth, accounts]);
+
+            // CSV Export Handler
+            const exportToCSV = () => {
+                if (transactions.length === 0) return;
+                const headers = ["ID", "Data", "Descricao", "Valor", "Tipo", "Conta", "Categoria", "Status"];
+                const rows = transactions.map(t => [
+                    t.id, t.date, t.description, t.amount, t.type, t.account, t.category || '', t.status
+                ]);
+                const csvContent = "data:text/csv;charset=utf-8," 
+                    + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `financeiro_tribo_${filterMonth}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-[#1A202C]">
+                        <div className="text-center">
+                            <Utensils size={48} className="text-[#F8CC82] animate-spin mx-auto mb-4" />
+                            <p className="text-[#F8CC82] font-black uppercase tracking-[0.3em] text-[10px]">Tribo Burger</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (!user) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-[#1A202C] px-4">
+                        <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] animate-in fade-in zoom-in duration-500">
+                            <div className="text-center mb-10">
+                                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-[#F8CC82] shadow-inner">
+                                    <Icon name="utensils" size={32} className="text-[#D97757]" />
+                                </div>
+                                <h2 className="text-3xl font-black text-[#1A202C] uppercase tracking-tighter">Tribo Finanças</h2>
+                                <div className="flex items-center justify-center gap-2 mt-2">
+                                    <Icon name="shield-check" size={14} className="text-green-500" />
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Acesso Privado</p>
+                                </div>
+                            </div>
+
+                            <form onSubmit={handleAuth} className="space-y-5">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-3">Email</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-4 text-slate-300"><Icon name="mail" size={16} /></div>
+                                        <input type="email" required placeholder="admin@triboburger.com" className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={email} onChange={e => setEmail(e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase ml-3">Senha</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-4 text-slate-300"><Icon name="lock" size={16} /></div>
+                                        <input type="password" required placeholder="••••••••" className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-semibold outline-none focus:border-[#D97757]" value={password} onChange={e => setPassword(e.target.value)} />
+                                    </div>
+                                </div>
+
+                                {authError && <p className="text-red-500 text-[10px] font-bold uppercase text-center bg-red-50 p-3 rounded-xl border border-red-100">{authError}</p>}
+
+                                <button className="w-full bg-[#1A202C] text-[#F8CC82] py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                                    {isRegistering ? 'Criar Conta' : 'Entrar no Sistema'}
+                                    <Icon name="chevron-right" size={14} />
+                                </button>
+                            </form>
+
+                            <button onClick={() => setIsRegistering(!isRegistering)} className="w-full mt-8 text-[10px] font-black text-[#D97757] uppercase tracking-widest hover:underline decoration-2 underline-offset-4">
+                                {isRegistering ? 'Já tem conta? Faça Login' : 'Novo por aqui? Registre-se'}
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-[#FDFCF9] font-sans pb-24">
+                    <header className="bg-[#1A202C] p-4 sticky top-0 z-50 flex justify-between items-center border-b-4 border-[#D97757] shadow-xl">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white p-2 rounded-full border-2 border-[#F8CC82] flex items-center justify-center w-10 h-10">
+                                <Icon name="utensils" size={18} className="text-[#D97757]" />
+                            </div>
+                            <div className="flex flex-col">
+                                <h1 className="text-[#F8CC82] font-black uppercase tracking-tighter text-sm leading-none">Tribo Burger</h1>
+                                <span className="text-[8px] text-slate-400 font-bold uppercase mt-0.5 tracking-widest">{user.email}</span>
+                            </div>
+                        </div>
+                        <nav className="flex items-center gap-1 sm:gap-2">
+                            {['dashboard', 'a_pagar', 'a_receber', 'cartoes', 'planilha'].map((tab) => {
+                                const tabIcons = {
+                                    dashboard: 'wallet',
+                                    a_pagar: 'trending-down',
+                                    a_receber: 'trending-up',
+                                    cartoes: 'credit-card',
+                                    planilha: 'table'
+                                };
+                                return (
+                                    <button 
+                                        key={tab} 
+                                        onClick={() => setActiveTab(tab)} 
+                                        className={`px-3 py-2 rounded-xl text-xs font-black uppercase transition-all tracking-wider flex items-center gap-1.5 ${activeTab === tab ? 'bg-[#31392A] text-[#F8CC82] shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        <Icon name={tabIcons[tab]} size={14} />
+                                        <span className="hidden md:inline">{tab.replace('_', ' ')}</span>
+                                    </button>
+                                );
+                            })}
+                            <div className="w-px h-6 bg-slate-700 mx-2"></div>
+                            <button onClick={handleLogout} className="p-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all"><Icon name="log-out" size={18}/></button>
+                        </nav>
+                    </header>
+
+                    {/* Alerts panel */}
+                    {alerts.length > 0 && (
+                        <div className="max-w-5xl mx-auto px-4 mt-6">
+                            <div className="bg-red-50 border-2 border-red-200 rounded-[2rem] p-5 flex flex-col gap-3">
+                                <div className="flex items-center gap-2 text-red-800">
+                                    <Icon name="alert-circle" size={18} />
+                                    <span className="text-xs font-black uppercase tracking-wider">Atenção: Contas Próximas do Vencimento</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {alerts.map(a => (
+                                        <div key={a.id} className="bg-white/60 p-3 rounded-xl border flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold text-xs uppercase text-slate-800">{a.description}</p>
+                                                <p className="text-[9px] text-red-500 font-bold uppercase">{a.diffDays === 0 ? 'Vence Hoje!' : `Vence em ${a.diffDays} dias`}</p>
+                                            </div>
+                                            <span className="font-black text-xs text-red-700">{formatMoney(a.amount)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="p-4 max-w-5xl mx-auto">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h2 className="text-2xl font-black text-[#1A202C] uppercase tracking-tight">Painel de Lançamentos</h2>
+                                <p className="text-xs text-slate-400 font-medium">Controle financeiro integrado Tribo Burger</p>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-2xl border shadow-sm">
+                                <span className="text-[9px] font-black text-slate-400 uppercase">Mês de Referência:</span>
+                                <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-xs font-black text-[#D97757] border-none outline-none focus:ring-0 cursor-pointer" />
+                            </div>
+                        </div>
+
+                        {}
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-8 animate-in fade-in duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-8 border-b-green-500 shadow-sm space-y-2">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Receitas</p>
+                                        <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.receitas)}</h3>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border-b-8 border-b-red-500 shadow-sm space-y-2">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Despesas</p>
+                                        <h3 className="text-3xl font-black text-red-500">{formatMoney(stats.despesas)}</h3>
+                                    </div>
+                                    <div className="bg-[#1A202C] p-6 rounded-[2rem] border-b-8 border-b-[#F8CC82] shadow-xl space-y-2 text-white">
+                                        <p className="text-[9px] font-black text-[#F8CC82] uppercase tracking-widest">Lucro Líquido</p>
+                                        <h3 className="text-3xl font-black">{formatMoney(stats.lucro)}</h3>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    {/* Launch Form */}
+                                    <form onSubmit={handleSaveTx} className="lg:col-span-1 bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                                        <div className="flex items-center justify-between border-b pb-3">
+                                            <h2 className="text-xs font-black text-[#1A202C] uppercase tracking-widest">Novo Lançamento</h2>
+                                            <button type="button" onClick={exportToCSV} className="text-slate-300 hover:text-green-600 transition-colors"><Icon name="download" size={16} /></button>
+                                        </div>
+                                        <input type="text" required placeholder="Descrição" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border-2 border-transparent focus:border-[#D97757] font-semibold text-sm transition-all" value={txDescription} onChange={e=>setTxDescription(e.target.value)} />
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input type="number" step="0.01" required placeholder="Valor" className="w-full p-4 bg-slate-50 rounded-2xl border font-black text-sm outline-none focus:border-[#D97757]" value={txAmount} onChange={e=>setTxAmount(e.target.value)} />
+                                            <select className="w-full p-4 bg-white border rounded-2xl font-black text-xs outline-none" value={txAccount} onChange={e=>setTxAccount(e.target.value)}>
+                                                {accounts.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Lançamento</label>
+                                                <input type="date" className="w-full p-3 bg-slate-50 rounded-xl border text-xs font-bold outline-none" value={txDate} onChange={e=>setTxDate(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Compensação</label>
+                                                <input type="date" className="w-full p-3 bg-slate-50 rounded-xl border text-xs font-bold outline-none" value={txClearanceDate} onChange={e=>setTxClearanceDate(e.target.value)} />
+                                            </div>
+                                        </div>
+
+                                        <select className="w-full p-4 bg-white border rounded-2xl font-black text-xs outline-none" value={txCategory} onChange={e=>setTxCategory(e.target.value)}>
+                                            {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                        </select>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button type="button" onClick={()=>setTxType('entrada')} className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all ${txType==='entrada'?'bg-green-100 text-green-700 shadow-inner':'bg-slate-100 text-slate-400'}`}>Entrada</button>
+                                            <button type="button" onClick={()=>setTxType('saida')} className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all ${txType==='saida'?'bg-red-100 text-red-700 shadow-inner':'bg-slate-100 text-slate-400'}`}>Saída</button>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button type="button" onClick={()=>setTxStatus('pago')} className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all ${txStatus==='pago'?'bg-slate-800 text-white shadow-inner':'bg-slate-100 text-slate-400'}`}>Confirmado</button>
+                                            <button type="button" onClick={()=>setTxStatus('pendente')} className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all ${txStatus==='pendente'?'bg-yellow-100 text-yellow-800 shadow-inner':'bg-slate-100 text-slate-400'}`}>Pendente</button>
+                                        </div>
+
+                                        <button className="w-full bg-[#1A202C] text-[#F8CC82] p-4 rounded-2xl font-black uppercase shadow-lg active:scale-95 transition-all text-xs tracking-widest mt-2">
+                                            Gravar Movimento
+                                        </button>
+                                    </form>
+
+                                    {/* History list */}
+                                    <div className="lg:col-span-2 bg-white rounded-[2.5rem] border shadow-sm overflow-hidden flex flex-col h-[520px]">
+                                        <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
+                                            <span className="font-black text-[10px] text-slate-500 uppercase tracking-widest">Histórico do Mês Selecionado</span>
+                                            <span className="bg-[#D97757] text-white text-[9px] font-black px-3 py-1 rounded-full uppercase">
+                                                {transactions.filter(t => t.date?.startsWith(filterMonth)).length} Transações
+                                            </span>
+                                        </div>
+                                        <div className="divide-y overflow-y-auto no-scrollbar flex-1">
+                                            {transactions.filter(t => t.date?.startsWith(filterMonth)).map(t => (
+                                                <div key={t.id} className="p-5 flex justify-between items-center hover:bg-slate-50/50 group transition-all">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-50 text-red-600'}`}>
+                                                            {t.type==='entrada'?'IN':'OUT'}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-black text-sm text-[#1A202C] uppercase leading-tight">{t.description}</p>
+                                                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${t.status === 'pago' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                                    {t.status}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
+                                                                {t.date.split('-').reverse().join('/')} <span className="mx-1">•</span> {t.account} <span className="mx-1">•</span> {t.category || 'Sem Cat.'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                        <button onClick={() => executeDelete('transactions', t.id)} className="text-slate-200 hover:text-red-500 transition-all p-2">
+                                                            {deleteConfirmId === t.id ? <span className="text-[9px] font-black uppercase text-red-500 bg-red-50 px-2 py-1 rounded-lg">Confirmar?</span> : <Icon name="trash-2" size={16}/>}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {}
                         {activeTab === 'a_pagar' && (
-                            <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-red-500"><p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes</p><h3 className="text-5xl font-black">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3></div>
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="stat-banner !border-red-500">
+                                    <p className="text-[10px] font-black uppercase text-red-400 mb-2">Saídas Pendentes e Faturas de Cartão</p>
+                                    <h3 className="text-5xl font-black text-red-700">{formatMoney(consolidatedAPagar.reduce((acc, t)=>acc+t.amount,0))}</h3>
+                                </div>
                                 <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {consolidatedAPagar.length === 0 ? <p className="p-10 text-center font-black uppercase text-slate-300 text-xs">Sem pendências</p> : consolidatedAPagar.map(t => (
+                                    {consolidatedAPagar.length === 0 ? (
+                                        <p className="p-12 text-center font-black uppercase text-slate-300 text-xs">Sem pendências para o mês selecionado</p>
+                                    ) : consolidatedAPagar.map(t => (
                                         <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
                                             <div className="flex items-center gap-5">
-                                                <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}><Icon name={t.isInvoice?'credit-card':'calendar'} size={28}/></div>
-                                                <div><p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
+                                                <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${t.isInvoice?'bg-orange-100 text-orange-700':'bg-red-100 text-red-700'}`}>
+                                                    <Icon name={t.isInvoice?'credit-card':'calendar'} size={24}/>
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-base uppercase leading-tight">[{t.clearanceDate?.split('-').reverse().join('/')}] {t.description}</p>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <p className="font-black text-xl text-red-700">{formatMoney(t.amount)}</p>
-                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Pagar</span></button>
+                                                <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 font-black uppercase text-[10px]">
+                                                    <Icon name="check" size={14}/>
+                                                    Pagar
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -123,31 +801,61 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === 'a_receber' && (
-<!-- ... existing code ... -->
-                        {activeTab === 'a_receber' && (
-                             <div className="space-y-6 animate-in fade-in">
-                                <div className="stat-banner !border-green-500"><p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas</p><h3 className="text-5xl font-black">{formatMoney(transactions.filter(t=>{ const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo); return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth); }).reduce((acc,t)=>acc+p(t.amount),0))}</h3></div>
-                                <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
-                                    {transactions.filter(t=>{ const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo); return t.type==='entrada'&&t.status==='pendente'&&clearanceDate?.startsWith(filterMonth); }).sort((a,b)=>{ const accA = accounts.find(acc => acc.name === a.account); const accB = accounts.find(acc => acc.name === b.account); return (getTransactionDates(a, accA).clearanceDate||"").localeCompare(getTransactionDates(b, accB).clearanceDate||""); }).map(t => {
-                                        const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
-                                        return (
-                                            <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center"><Icon name="trending-up" size={28}/></div>
-                                                    <div><p className="font-black text-base uppercase leading-tight">[{clearanceDate?.split('-').reverse().join('/')}] {t.description}</p><p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p></div>
-                                                </div>
-                                                <div className="flex items-center gap-6">
-                                                    <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
-                                                    <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white p-4 rounded-2xl shadow-lg flex items-center gap-2"><Icon name="check" size={20}/><span className="text-[9px] font-black uppercase pr-1">Receber</span></button>
-                                                </div>
-                                            </div>
-                                        );
-                                    }).filter(Boolean)}
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="stat-banner !border-green-500">
+                                    <p className="text-[10px] font-black uppercase text-green-400 mb-2">Entradas Previstas / Pendentes</p>
+                                    <h3 className="text-5xl font-black text-green-700">
+                                        {formatMoney(transactions.filter(t => { 
+                                            const accInfo = accounts.find(a => a.name === t.account); 
+                                            const { clearanceDate } = getTransactionDates(t, accInfo); 
+                                            return t.type === 'entrada' && t.status === 'pendente' && clearanceDate?.startsWith(filterMonth); 
+                                        }).reduce((acc, t) => acc + p(t.amount), 0))}
+                                    </h3>
                                 </div>
-                             </div>
+                                <div className="glass-card rounded-[3rem] divide-y overflow-hidden border shadow-sm">
+                                    {transactions.filter(t => { 
+                                        const accInfo = accounts.find(a => a.name === t.account); 
+                                        const { clearanceDate } = getTransactionDates(t, accInfo); 
+                                        return t.type === 'entrada' && t.status === 'pendente' && clearanceDate?.startsWith(filterMonth); 
+                                    }).length === 0 ? (
+                                        <p className="p-12 text-center font-black uppercase text-slate-300 text-xs">Sem recebimentos pendentes</p>
+                                    ) : (
+                                        transactions.filter(t => { 
+                                            const accInfo = accounts.find(a => a.name === t.account); 
+                                            const { clearanceDate } = getTransactionDates(t, accInfo); 
+                                            return t.type === 'entrada' && t.status === 'pendente' && clearanceDate?.startsWith(filterMonth); 
+                                        }).map(t => {
+                                            const accInfo = accounts.find(a => a.name === t.account); 
+                                            const { clearanceDate } = getTransactionDates(t, accInfo);
+                                            return (
+                                                <div key={t.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:bg-slate-50 transition-all">
+                                                    <div className="flex items-center gap-5">
+                                                        <div className="w-14 h-14 rounded-3xl bg-green-100 text-green-700 flex items-center justify-center">
+                                                            <Icon name="trending-up" size={24}/>
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-base uppercase leading-tight">[{clearanceDate?.split('-').reverse().join('/')}] {t.description}</p>
+                                                            <p className="text-[11px] font-bold text-slate-400 uppercase mt-1">{t.account}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-6">
+                                                        <p className="font-black text-xl text-green-600">{formatMoney(t.amount)}</p>
+                                                        <button type="button" onClick={()=>openLiquidation(t)} className="bg-green-500 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 font-black uppercase text-[10px]">
+                                                            <Icon name="check" size={14}/>
+                                                            Receber
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
                         )}
 
+                        {}
                         {activeTab === 'cartoes' && (
                             <div className="space-y-12 animate-in zoom-in duration-300">
                                 {accounts.filter(a => a.type === 'cartao').map(card => {
@@ -163,15 +871,15 @@
                                     const isPartiallyPaid = totalPago > 0 && totalPago < (totalCompras - 0.01);
                                     
                                     return (
-                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-black space-y-8">
+                                        <div key={card.id} className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-[#1A202C] space-y-8">
                                             <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b pb-8">
                                                 <div>
-                                                    <h3 className="text-2xl font-black uppercase">{card.name}</h3>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fecho: {card.closing || card.closingDay || '25'} • Vencimento: {card.due || card.dueDay || '10'}</p>
+                                                    <h3 className="text-2xl font-black uppercase text-slate-800">{card.name}</h3>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Fechamento: Dia {card.closing || '25'} • Vencimento: Dia {card.due || '10'}</p>
                                                     
                                                     <div className="mt-3 flex gap-2">
                                                         {isFullyPaid && (
-                                                            <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                                                            <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm animate-pulse">
                                                                 <Icon name="check" size={12} className="text-green-700" /> FATURA TOTALMENTE PAGA
                                                             </span>
                                                         )}
@@ -206,7 +914,7 @@
                                                     </div>
                                                     
                                                     {saldoDevedor > 0.01 && (
-                                                        <button onClick={()=>setInvoiceModal({ cardName: card.name, total: saldoDevedor })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs p-5 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
+                                                        <button onClick={()=>setInvoiceModal({ cardName: card.name, total: saldoDevedor, paymentDate: new Date().toISOString().split('T')[0], sourceAccount: accounts.filter(a => a.type !== 'cartao')[0]?.name || 'Mercado Pago' })} className="bg-black hover:bg-slate-800 text-[#F8CC82] font-black uppercase text-xs px-6 py-4 rounded-2xl shadow-lg flex items-center gap-2 transition-all active:scale-95">
                                                             <Icon name="check-square" size={16} /> Pagar Fatura
                                                         </button>
                                                     )}
@@ -215,18 +923,22 @@
                                             <div className="space-y-3">
                                                 <h4 className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Lançamentos da Fatura</h4>
                                                 <div className="bg-white/50 rounded-[2rem] border overflow-hidden divide-y">
-                                                    {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem lançamentos</p> : txs.map(t => (
+                                                    {txs.length === 0 ? <p className="p-8 text-center text-[10px] text-slate-300 font-black uppercase">Sem lançamentos para este período</p> : txs.map(t => (
                                                         <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 group transition-all">
                                                             <div className="flex items-center gap-4">
-                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}><Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/></div>
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type==='entrada'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                                                                    <Icon name={t.type==='entrada'?'check-circle':'shopping-cart'} size={14}/>
+                                                                </div>
                                                                 <div>
-                                                                    <p className="font-black text-xs uppercase leading-none">{t.description} {isInvoicePayment(t) && <span className="ml-2 status-badge bg-[#D97757] text-white">BAIXA</span>}</p>
+                                                                    <p className="font-black text-xs uppercase leading-none">{t.description} {isInvoicePayment(t) && <span className="ml-2 px-1.5 py-0.5 bg-[#D97757] text-white text-[8px] font-bold rounded">AMORTECIMENTO</span>}</p>
                                                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.date?.split('-').reverse().join('/')}</p>
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
-                                                                <p className="font-black text-sm text-red-600">{formatMoney(t.amount)}</p>
-                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}/>}</button>
+                                                                <p className={`font-black text-sm ${t.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(t.amount)}</p>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className="text-slate-200 hover:text-red-500 transition-all p-2">
+                                                                    {deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase text-red-500 bg-red-50 px-2 py-0.5 rounded">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -238,5 +950,146 @@
                             </div>
                         )}
 
-                        {activeTab === 'resultados' && (
-<!-- ... existing code ... -->
+                        {}
+                        {activeTab === 'planilha' && (
+                            <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden animate-in slide-in-from-bottom duration-500">
+                                <div className="p-6 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div className="flex items-center gap-2 text-[#31392A]">
+                                        <Icon name="table" size={20} className="text-[#D97757]" />
+                                        <h2 className="font-black uppercase text-xs tracking-widest">Planilha Diária de Vendas</h2>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-inner">
+                                        <input type="date" className="text-xs font-bold border-none outline-none focus:ring-0" value={newDayDate} onChange={e=>setNewDayDate(e.target.value)} />
+                                        <button onClick={handleOpenNewDay} className="bg-[#1A202C] text-[#F8CC82] px-4 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-1.5 active:scale-95 transition-all">
+                                            <Icon name="plus-circle" size={12}/> Abrir Caixa Dia
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto no-scrollbar">
+                                    <table className="w-full text-[10px] text-center border-collapse min-w-[1300px]">
+                                        <thead>
+                                            <tr className="bg-[#1A202C] text-white uppercase font-black">
+                                                <th className="p-4 text-left sticky left-0 bg-[#1A202C] z-10 w-40">Dia Venda</th>
+                                                <th className="p-4 bg-[#D97757]">Total Dia</th>
+                                                {['Pix', 'Pix Online', 'Fiado', 'Dinheiro', 'iFood', 'Débito', 'Crédito', 'VR', 'Ticket', 'Alelo'].map(h => <th key={h} className="p-4">{h}</th>)}
+                                                <th className="p-4 text-red-400">Motoboy</th>
+                                                <th className="p-4">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y font-bold">
+                                            {Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth)).sort((a,b)=>b.localeCompare(a)).map(d => {
+                                                const r = dailyRecords[d] || {};
+                                                const total = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((acc,f) => acc + p(r[f]), 0);
+                                                return (
+                                                    <tr key={d} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-4 text-left border-r sticky left-0 bg-white font-black text-slate-500 border-l-4 border-l-orange-200 uppercase">
+                                                            {d.split('-').reverse().join('/')}
+                                                        </td>
+                                                        <td className="p-4 text-[#1A202C] bg-orange-50/20 font-black border-r text-xs">{formatMoney(total)}</td>
+                                                        {['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo','motoboy'].map(field => (
+                                                            <td key={field} className="p-0 border-r min-w-[100px]">
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={r[field] || ''} 
+                                                                    onChange={async(e) => {
+                                                                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(d).set({ [field]: val }, { merge: true });
+                                                                    }} 
+                                                                    className={`w-full h-12 text-center bg-transparent border-0 outline-none focus:bg-orange-50 font-bold ${field === 'motoboy' ? 'text-red-500' : ''}`} 
+                                                                    placeholder="0,00" 
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                        <td className="p-2 border-r">
+                                                            <button onClick={() => executeDelete('dailyRecords', d)} className="text-slate-300 hover:text-red-500 transition-colors p-2">
+                                                                {deleteConfirmId === d ? <span className="text-[8px] font-black text-red-500">Excluir?</span> : <Icon name="trash-2" size={14}/>}
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {}
+                    {/* Interactive Liquidation Modal */}
+                    {liqModal && (
+                        <div className="fixed inset-0 bg-[#1A202C]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl space-y-6">
+                                <h3 className="text-lg font-black uppercase text-slate-800 border-b pb-3 flex items-center gap-2">
+                                    <Icon name="check-circle" size={20} className="text-green-600" />
+                                    Baixar Lançamento
+                                </h3>
+                                <div className="space-y-4">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Descrição: <span className="text-slate-800">{liqModal.description}</span></p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Data de Liquidação</label>
+                                            <input type="date" value={liqModal.date} onChange={e => setLiqModal({ ...liqModal, date: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-xs" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Valor Real Pago</label>
+                                            <input type="text" value={liqModal.amount} onChange={e => setLiqModal({ ...liqModal, amount: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl font-black text-xs" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                    <button onClick={() => setLiqModal(null)} className="px-5 py-3 bg-slate-100 text-slate-500 rounded-xl font-black text-[10px] uppercase">Cancelar</button>
+                                    <button onClick={executeLiquidation} className="px-5 py-3 bg-green-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95">Confirmar Baixa</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Integrated Invoice Payment Modal */}
+                    {invoiceModal && (
+                        <div className="fixed inset-0 bg-[#1A202C]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in duration-200">
+                                <h3 className="text-lg font-black uppercase text-slate-800 border-b pb-3 flex items-center gap-2">
+                                    <Icon name="credit-card" size={20} className="text-[#D97757]" />
+                                    Liquidar Fatura - {invoiceModal.cardName}
+                                </h3>
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Origem do Dinheiro (Conta Débito)</label>
+                                        <select value={invoiceModal.sourceAccount} onChange={e => setInvoiceModal({ ...invoiceModal, sourceAccount: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-xs">
+                                            {accounts.filter(a => a.type !== 'cartao').map(a => (
+                                                <option key={a.id} value={a.name}>{a.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Data de Pagamento</label>
+                                            <input type="date" value={invoiceModal.paymentDate} onChange={e => setInvoiceModal({ ...invoiceModal, paymentDate: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-xs" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Valor Pago</label>
+                                            <input type="number" step="0.01" value={invoiceModal.total} onChange={e => setInvoiceModal({ ...invoiceModal, total: e.target.value })} className="w-full p-3 bg-slate-50 border rounded-xl font-black text-xs" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                    <button onClick={() => setInvoiceModal(null)} className="px-5 py-3 bg-slate-100 text-slate-500 rounded-xl font-black text-[10px] uppercase">Cancelar</button>
+                                    <button onClick={executeInvoicePayment} className="px-5 py-3 bg-green-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95">Confirmar Pagamento</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <footer className="fixed bottom-0 left-0 right-0 p-4 text-center bg-[#FDFCF9]/90 backdrop-blur-sm border-t border-slate-100 flex items-center justify-center gap-4">
+                        <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.4em]">Tribo Burger • Business Intelligence v13.5</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
