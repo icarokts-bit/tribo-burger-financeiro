@@ -565,34 +565,46 @@
             }, [transactions, accounts, filterMonth]);
 
             const handleManualLogin = (e) => {
-                e.preventDefault();
-                setAuthError('');
-                setIsActionLoading(true);
-                
-                if (isRegistering) {
-                    auth.createUserWithEmailAndPassword(email, password)
-                        .then(() => {
-                            setIsActionLoading(false);
-                            setAuthMode('auto');
-                        })
-                        .catch(err => {
-                            setAuthError(err.message);
-                            setIsActionLoading(false);
-                        });
-                } else {
-                    auth.signInWithEmailAndPassword(email, password)
-                        .then(() => {
-                            setIsActionLoading(false);
-                            setAuthMode('auto');
-                        })
-                        .catch(err => {
-                            setAuthError(err.message);
-                            setIsActionLoading(false);
-                        });
-                }
-            };
+            e.preventDefault();
+            setAuthError('');
+            setIsActionLoading(true);
+            
+            if (isRegistering) {
+                auth.createUserWithEmailAndPassword(email, password)
+                    .then(() => {
+                        setIsActionLoading(false);
+                        setAuthMode('auto');
+                    })
+                    .catch(err => {
+                        setAuthError(err.message);
+                        setIsActionLoading(false);
+                    });
+            } else {
+                auth.signInWithEmailAndPassword(email, password)
+                    .then(() => {
+                        setIsActionLoading(false);
+                        setAuthMode('auto');
+                    })
+                    .catch(err => {
+                        setAuthError(err.message);
+                        setIsActionLoading(false);
+                    });
+            }
+        };
 
-            const handleSaveTx = async (e) => {
+        const handleGoogleLogin = async () => {
+            setAuthError('');
+            setIsActionLoading(true);
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                await auth.signInWithPopup(provider);
+            } catch (err) {
+                setAuthError(err.message);
+                setIsActionLoading(false);
+            }
+        };
+
+        const handleSaveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
                 setIsActionLoading(true);
@@ -1191,13 +1203,23 @@
                                     <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Inicie sessão com o seu e-mail original para reaver o ID kwOLw2kxNKTHLHnbK2Lx74oefTu2</p>
                                 </div>
                                 {authError && <div className="p-3 bg-red-100 text-red-600 text-[9px] font-black uppercase rounded-xl">{authError}</div>}
-                                <form onSubmit={handleManualLogin} className="space-y-3">
-                                    <input type="email" placeholder="Seu E-mail" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={email} onChange={e=>setEmail(e.target.value)} />
-                                    <input type="password" placeholder="Sua Senha" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={password} onChange={e=>setPassword(e.target.value)} />
-                                    <button className="w-full bg-black text-[#F8CC82] p-4 rounded-xl font-black text-[10px] uppercase">{isRegistering ? 'Criar Nova Conta' : 'Entrar na Conta Mestre'}</button>
-                                </form>
-                                <div className="text-center">
-                                    <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-[8px] font-black uppercase text-amber-600 tracking-wider">
+                    <form onSubmit={handleManualLogin} className="space-y-3">
+                        <input type="email" placeholder="Seu E-mail" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={email} onChange={e=>setEmail(e.target.value)} />
+                        <input type="password" placeholder="Sua Senha" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={password} onChange={e=>setPassword(e.target.value)} />
+                        <button className="w-full bg-black text-[#F8CC82] p-4 rounded-xl font-black text-[10px] uppercase">{isRegistering ? 'Criar Nova Conta' : 'Entrar na Conta Mestre'}</button>
+                    </form>
+                    
+                    <div className="relative my-4">
+                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                        <div className="relative flex justify-center text-[9px] uppercase font-black text-slate-400"><span className="bg-white px-2">ou</span></div>
+                    </div>
+
+                    <button onClick={handleGoogleLogin} className="w-full bg-white border border-slate-300 text-slate-700 p-4 rounded-xl font-black uppercase text-[10px] hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" /> Entrar com Google
+                    </button>
+
+                    <div className="text-center">
+                        <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-[8px] font-black uppercase text-amber-600 tracking-wider">
                                         {isRegistering ? 'Já tenho conta? Fazer Login' : 'Criar um registo de e-mail novo'}
                                     </button>
                                 </div>
