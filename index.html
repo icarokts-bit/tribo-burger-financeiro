@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.7.0 RECOVERY</title>
+    <title>Tribo Burger | v2.7.1 RECOVERY</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -183,6 +183,80 @@
                 desc.includes("baixa") ||
                 cat.includes("baixa fatura")
             );
+        };
+
+        // ==========================================================
+        // MOTOR DE PESQUISA RECURSIVA & NORMALIZAÇÃO BULLETPROOF
+        // ==========================================================
+        const findCollectionsInJSON = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+
+            let found = {
+                transactions: null,
+                dailyRecords: null,
+                accounts: null,
+                categories: null,
+                suppliers: null
+            };
+
+            function search(current) {
+                if (!current || typeof current !== 'object') return;
+
+                // Captura se existir chave direta válida
+                if (current.transactions !== undefined && current.transactions !== null) found.transactions = current.transactions;
+                if (current.dailyRecords !== undefined && current.dailyRecords !== null) found.dailyRecords = current.dailyRecords;
+                if (current.accounts !== undefined && current.accounts !== null) found.accounts = current.accounts;
+                if (current.categories !== undefined && current.categories !== null) found.categories = current.categories;
+                if (current.suppliers !== undefined && current.suppliers !== null) found.suppliers = current.suppliers;
+
+                const keys = Object.keys(current);
+                for (let k of keys) {
+                    if (current[k] && typeof current[k] === 'object') {
+                        // Evita loops infinitos e não desce se for uma coleção já encontrada
+                        if (k !== 'transactions' && k !== 'dailyRecords' && k !== 'accounts' && k !== 'categories' && k !== 'suppliers') {
+                            search(current[k]);
+                        }
+                    }
+                }
+            }
+
+            search(obj);
+            return found;
+        };
+
+        const normalizeCollection = (data, type) => {
+            if (!data) return type === 'dailyRecords' ? {} : [];
+
+            // Se já for um Array estruturado (formato exportador antigo)
+            if (Array.isArray(data)) {
+                return data.filter(item => item !== null && typeof item === 'object');
+            }
+
+            // Se for um Objeto (formato nativo Firebase Realtime Database chave-valor)
+            if (typeof data === 'object') {
+                if (type === 'dailyRecords') {
+                    const clean = {};
+                    for (let [dateKey, val] of Object.entries(data)) {
+                        if (val && typeof val === 'object') {
+                            clean[dateKey] = val;
+                        }
+                    }
+                    return clean;
+                } else {
+                    const arr = [];
+                    for (let [key, val] of Object.entries(data)) {
+                        if (val && typeof val === 'object') {
+                            arr.push({
+                                id: key,
+                                ...val
+                            });
+                        }
+                    }
+                    return arr;
+                }
+            }
+
+            return type === 'dailyRecords' ? {} : [];
         };
 
         function App() {
@@ -696,27 +770,43 @@
                 }
             };
 
-            // ANALISAR TEXTO DE BACKUP COLADO DIRETAMENTE (MOTOR DE TEXTO BULLETPROOF)
+            // ANALISAR TEXTO DE BACKUP COLADO DIRETAMENTE (MOTOR RECURSIVO INTEGRADO)
             const handleParseTextBackup = () => {
                 if (!backupText.trim()) return;
                 try {
                     const parsed = JSON.parse(backupText);
-                    if (parsed.transactions || parsed.accounts || parsed.dailyRecords) {
-                        setParsedBackup(parsed);
-                        setBackupLog(`Sucesso ao ler texto de Cópia de Segurança!\n` +
-                            `- Transações detetadas: ${parsed.transactions?.length || 0}\n` +
-                            `- Contas detetadas: ${parsed.accounts?.length || 0}\n` +
-                            `- Registos de vendas: ${Object.keys(parsed.dailyRecords || {}).length || 0}\n`
+                    if (!parsed) {
+                        throw new Error("O texto JSON está vazio ou é inválido (retornou null).");
+                    }
+
+                    const collections = findCollectionsInJSON(parsed);
+                    const hasData = collections && (collections.transactions || collections.accounts || collections.dailyRecords);
+
+                    if (hasData) {
+                        const normalized = {
+                            transactions: normalizeCollection(collections.transactions, 'transactions'),
+                            accounts: normalizeCollection(collections.accounts, 'accounts'),
+                            dailyRecords: normalizeCollection(collections.dailyRecords, 'dailyRecords'),
+                            categories: normalizeCollection(collections.categories, 'categories'),
+                            suppliers: normalizeCollection(collections.suppliers, 'suppliers')
+                        };
+
+                        setParsedBackup(normalized);
+                        setBackupLog(`✨ Sucesso ao ler texto de Cópia de Segurança!\n` +
+                            `- Estrutura auto-detetada e normalizada.\n` +
+                            `- Transações detetadas: ${normalized.transactions?.length || 0}\n` +
+                            `- Contas detetadas: ${normalized.accounts?.length || 0}\n` +
+                            `- Registos de vendas: ${Object.keys(normalized.dailyRecords || {}).length || 0}\n`
                         );
                     } else {
-                        setBackupLog("JSON válido, mas não contém chaves de dados do Tribo Burger.");
+                        setBackupLog("JSON válido, mas não contém coleções do Tribo Burger em nenhum nível.");
                     }
                 } catch(e) {
-                    setBackupLog(`Erro de formatação JSON: ${e.message}`);
+                    setBackupLog(`❌ Erro de formatação JSON: ${e.message}`);
                 }
             };
 
-            // NOVA FUNÇÃO: SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA
+            // SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA (FIREBASE RTDB / CLOUD FIRESTORE)
             const handleFileSelect = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -727,18 +817,40 @@
                 reader.onload = (event) => {
                     try {
                         const parsed = JSON.parse(event.target.result);
-                        if (parsed.transactions || parsed.accounts || parsed.dailyRecords) {
-                            setParsedBackup(parsed);
-                            setBackupLog(prev => prev + `Ficheiro lido com sucesso!\n` +
-                                `- Transações detetadas: ${parsed.transactions?.length || 0}\n` +
-                                `- Contas detetadas: ${parsed.accounts?.length || 0}\n` +
-                                `- Registos de vendas: ${Object.keys(parsed.dailyRecords || {}).length || 0}\n`
+                        
+                        if (!parsed) {
+                            throw new Error("O ficheiro JSON está vazio ou é inválido (retornou null). Verifique se exportou a pasta de dados correta.");
+                        }
+
+                        // Procurar coleções em qualquer nível da árvore JSON (suporta exportações completas do Firebase RTDB)
+                        const collections = findCollectionsInJSON(parsed);
+                        
+                        const hasData = collections && (collections.transactions || collections.accounts || collections.dailyRecords);
+                        
+                        if (hasData) {
+                            // Normalizar coleções (converter objetos RTDB em arrays se necessário)
+                            const normalized = {
+                                transactions: normalizeCollection(collections.transactions, 'transactions'),
+                                accounts: normalizeCollection(collections.accounts, 'accounts'),
+                                dailyRecords: normalizeCollection(collections.dailyRecords, 'dailyRecords'),
+                                categories: normalizeCollection(collections.categories, 'categories'),
+                                suppliers: normalizeCollection(collections.suppliers, 'suppliers')
+                            };
+
+                            setParsedBackup(normalized);
+                            setBackupLog(prev => prev + `✨ Ficheiro de Cópia de Segurança detetado e processado com sucesso!\n` +
+                                `- Estrutura auto-detetada e normalizada.\n` +
+                                `- Transações: ${normalized.transactions?.length || 0}\n` +
+                                `- Contas Bancárias: ${normalized.accounts?.length || 0}\n` +
+                                `- Registos de Vendas Diárias: ${Object.keys(normalized.dailyRecords || {}).length || 0}\n` +
+                                `- Categorias: ${normalized.categories?.length || 0}\n` +
+                                `- Fornecedores: ${normalized.suppliers?.length || 0}\n`
                             );
                         } else {
-                            setBackupLog(prev => prev + "Ficheiro JSON válido, mas não contém chaves de dados compatíveis com o Tribo Burger.\n");
+                            setBackupLog(prev => prev + "⚠️ Ficheiro JSON lido, mas não foram encontradas coleções de dados compatíveis (transactions, dailyRecords, accounts, etc.) em nenhum nível do documento.\n");
                         }
                     } catch(err) {
-                        setBackupLog(prev => prev + `Erro ao processar ficheiro JSON: ${err.message}\n`);
+                        setBackupLog(prev => prev + `❌ Erro ao processar ficheiro JSON: ${err.message}\n`);
                     }
                 };
                 reader.readAsText(file);
@@ -756,6 +868,8 @@
 
                     if (backupMode === 'overwrite') {
                         setBackupLog(prev => prev + `[Aviso] Limpando registos anteriores para substituição...\n`);
+                        
+                        // Limpeza segura no Firestore
                         const txSnap = await db.collection(`${path}/transactions`).get();
                         const txBatch = db.batch();
                         txSnap.docs.forEach(doc => txBatch.delete(doc.ref));
@@ -969,7 +1083,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.0</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.1</h1>
                                 <span className={`text-[7px] font-black px-2 py-1 rounded-md ${user?.isAnonymous ? 'bg-amber-500 text-black animate-pulse' : 'bg-emerald-500 text-black'}`}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -1545,7 +1659,7 @@
                                                 <div><p className="font-black text-xs uppercase leading-none">{a.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{a.type} {a.type === 'cartao' && ` • Fecho: ${a.closing || a.closingDay || '25'} • Venc: ${a.due || a.dueDay || '10'}`}</p></div>
                                                 <div className="flex gap-2 items-center">
                                                     <button type="button" onClick={()=>setAccForm({ ...a, closing: a.closing || a.closingDay || '25', due: a.due || a.dueDay || '10' })} className="bg-blue-50 text-blue-500 p-2 px-3 rounded-xl"><Icon name="edit-2" size={14}></Icon></button>
-                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button>
+                                                    <button type="button" onClick={() => executeDelete('accounts', a.id)} className={`transition-all p-2 px-3 rounded-xl ${deleteConfirmId === a.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === a.id ? <span className="text-[10px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1558,7 +1672,7 @@
                                         {categories.sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center hover:border-black">
                                                 <span className="text-[10px] font-black uppercase text-slate-500">{c.name}</span>
-                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}></Icon>}</button>
+                                                <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}></Icon></button>
                                             </div>
                                         ))}
                                      </div>
@@ -1616,7 +1730,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.1 GOLDEN STABLE</footer>
                 </div>
             );
         }
