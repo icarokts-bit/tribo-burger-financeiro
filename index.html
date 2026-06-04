@@ -686,6 +686,78 @@
                 setVisibleCount(30);
             };
 
+            // CLONAGEM DIRETA DE DADOS ENTRE CONTAS (Novo Motor de Restauro)
+            const handleCloneMasterData = async () => {
+                if (!user) return;
+                setIsActionLoading(true);
+                setBackupLog("A iniciar clonagem completa de dados históricos...\n");
+                
+                try {
+                    const masterUid = "kwOLw2kxNKTHLHnbK2Lx74oefTu2";
+                    const masterPath = `artifacts/${appId}/users/${masterUid}`;
+                    const targetPath = `artifacts/${appId}/users/${user.uid}`;
+
+                    // 1. Contas Bancárias
+                    const accs = await db.collection(`${masterPath}/accounts`).get();
+                    setBackupLog(prev => prev + `A transferir ${accs.size} contas...\n`);
+                    for (const doc of accs.docs) {
+                        await db.collection(`${targetPath}/accounts`).doc(doc.id).set(doc.data());
+                    }
+
+                    // 2. Categorias
+                    const cats = await db.collection(`${masterPath}/categories`).get();
+                    setBackupLog(prev => prev + `A transferir ${cats.size} categorias...\n`);
+                    for (const doc of cats.docs) {
+                        await db.collection(`${targetPath}/categories`).doc(doc.id).set(doc.data());
+                    }
+
+                    // 3. Fornecedores
+                    const sups = await db.collection(`${masterPath}/suppliers`).get();
+                    setBackupLog(prev => prev + `A transferir ${sups.size} fornecedores...\n`);
+                    for (const doc of sups.docs) {
+                        await db.collection(`${targetPath}/suppliers`).doc(doc.id).set(doc.data());
+                    }
+
+                    // 4. Registos Diários de Vendas
+                    const daily = await db.collection(`${masterPath}/dailyRecords`).get();
+                    setBackupLog(prev => prev + `A transferir ${daily.size} registos diários...\n`);
+                    let dailyBatch = db.batch();
+                    let dCount = 0;
+                    for (const doc of daily.docs) {
+                        dailyBatch.set(db.collection(`${targetPath}/dailyRecords`).doc(doc.id), doc.data());
+                        dCount++;
+                        if (dCount % 400 === 0) {
+                            await dailyBatch.commit();
+                            dailyBatch = db.batch();
+                        }
+                    }
+                    await dailyBatch.commit();
+
+                    // 5. Transações
+                    const txs = await db.collection(`${masterPath}/transactions`).get();
+                    setBackupLog(prev => prev + `A transferir ${txs.size} transações...\n`);
+                    let txBatch = db.batch();
+                    let tCount = 0;
+                    for (const doc of txs.docs) {
+                        txBatch.set(db.collection(`${targetPath}/transactions`).doc(doc.id), doc.data());
+                        tCount++;
+                        if (tCount % 400 === 0) {
+                            await txBatch.commit();
+                            txBatch = db.batch();
+                        }
+                    }
+                    await txBatch.commit();
+
+                    setBackupLog(prev => prev + "\n✨ CLONAGEM CONCLUÍDA! Todos os seus dados históricos agora pertencem a este utilizador atual. Atualizando a página...");
+                    setTimeout(() => window.location.reload(), 1500);
+                } catch (err) {
+                    console.error(err);
+                    setBackupLog(prev => prev + `\n❌ Erro durante a cópia: ${err.message}`);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
             // MOTOR DE PARSING DE CÓPIAS DE SEGURANÇA (XML / JSON)
             const handleFileSelect = (e) => {
                 const file = e.target.files[0];
@@ -1134,141 +1206,181 @@
                         )}
 
                         {activeTab === 'dashboard' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit relative">
-                                    {editingId && <div className="absolute -top-4 right-8 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase">Editando Lançamento</div>}
-                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada','saida','transferencia'].map(t=>(<button key={t} type="button" onClick={()=>setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type===t?'bg-white shadow-sm text-black':'text-slate-400'}`}>{t}</button>))}</div>
-                                    <div className="relative">
-                                        <input list="history-descriptions" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none focus:border-black" value={desc} onChange={e=>setDesc(e.target.value)} />
-                                        <datalist id="history-descriptions">{uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}</datalist>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Valor Total</label>
-                                            <input type="text" placeholder="0,00" required className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={val} onChange={e=>setVal(e.target.value)} />
+                            <div className="space-y-6">
+                                {/* ASSISTENTE DE SISTEMA ZERADO (DETECTA SE NÃO HÁ DADOS E AJUDA A IMPORTAR) */}
+                                {transactions.length === 0 && accounts.length === 0 && !isActionLoading && (
+                                    <div className="glass-card p-10 rounded-[3rem] border-2 border-dashed border-amber-500 bg-amber-50/10 text-center space-y-6 fade-in max-w-2xl mx-auto my-8">
+                                        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600 animate-bounce">
+                                            <Icon name="bell" size={32} />
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Parcelas</label>
-                                            <input type="number" min="1" max="120" className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={inst} onChange={e=>setInst(e.target.value)} disabled={type === 'transferencia'} />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Conta</label>
-                                            <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={account} onChange={e=>setAccount(e.target.value)}>
-                                                <option value="">{type === 'transferencia' ? 'Origem...' : 'Conta...'}</option>
-                                                {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    {p(val) > 0 && parseInt(inst) > 1 && type !== 'transferencia' && (
-                                        <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100 text-center animate-pulse">
-                                            <p className="text-[9px] font-black text-orange-600 uppercase">
-                                                Serão gerados {parseInt(inst)} lançamentos mensais de {formatMoney(p(val) / parseInt(inst))} cada
+                                        <div className="space-y-2">
+                                            <h3 className="text-xl font-black uppercase text-slate-800">Sistema Vazio Detectado</h3>
+                                            <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">
+                                                Identificámos que a sua conta atual não possui dados. Deseja herdar os dados históricos do utilizador principal (kwOLw2kxNKTHLHnbK2Lx74oefTu2)?
                                             </p>
                                         </div>
-                                    )}
+                                        
+                                        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleSwitchUid('kwOLw2kxNKTHLHnbK2Lx74oefTu2')} 
+                                                className="bg-[#1A202C] hover:bg-black text-[#F8CC82] font-black text-xs uppercase px-6 py-4 rounded-2xl shadow-lg transition-all active:scale-95"
+                                            >
+                                                Vincular Usuário Master (Instantâneo)
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={handleCloneMasterData} 
+                                                className="bg-teal-600 hover:bg-teal-700 text-white font-black text-xs uppercase px-6 py-4 rounded-2xl shadow-lg transition-all active:scale-95"
+                                            >
+                                                Clonar Dados para Minha Conta (Permanente)
+                                            </button>
+                                        </div>
+                                        
+                                        {backupLog && (
+                                            <div className="mt-4 text-left bg-slate-900 text-slate-200 p-4 rounded-2xl font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap lowercase border border-slate-800">
+                                                {backupLog}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {type === 'transferencia' ? (
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit relative">
+                                        {editingId && <div className="absolute -top-4 right-8 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase">Editando Lançamento</div>}
+                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">{['entrada','saida','transferencia'].map(t=>(<button key={t} type="button" onClick={()=>setType(t)} className={`flex-1 py-3 rounded-xl font-black text-[9px] uppercase transition-all ${type===t?'bg-white shadow-sm text-black':'text-slate-400'}`}>{t}</button>))}</div>
+                                        <div className="relative">
+                                            <input list="history-descriptions" type="text" placeholder="Descrição" required className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none focus:border-black" value={desc} onChange={e=>setDesc(e.target.value)} />
+                                            <datalist id="history-descriptions">{uniqueDescriptions.map((d, i) => <option key={i} value={d} />)}</datalist>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-3 gap-3">
                                             <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase text-[#D97757] ml-1">Conta Destino</label>
-                                                <select className="w-full p-3.5 bg-white border border-[#D97757] rounded-2xl font-black text-[10px] outline-none focus:border-black" value={destAcc} onChange={e=>setDestAcc(e.target.value)} required>
-                                                    <option value="">Destino...</option>
-                                                    {accounts.filter(a => a.name !== account).map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Valor Total</label>
+                                                <input type="text" placeholder="0,00" required className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={val} onChange={e=>setVal(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Parcelas</label>
+                                                <input type="number" min="1" max="120" className="w-full p-3.5 bg-slate-50 border rounded-2xl font-black text-sm outline-none" value={inst} onChange={e=>setInst(e.target.value)} disabled={type === 'transferencia'} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Conta</label>
+                                                <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={account} onChange={e=>setAccount(e.target.value)}>
+                                                    <option value="">{type === 'transferencia' ? 'Origem...' : 'Conta...'}</option>
+                                                    {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
                                                 </select>
                                             </div>
-                                        ) : (
+                                        </div>
+                                        
+                                        {p(val) > 0 && parseInt(inst) > 1 && type !== 'transferencia' && (
+                                            <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100 text-center animate-pulse">
+                                                <p className="text-[9px] font-black text-orange-600 uppercase">
+                                                    Serão gerados {parseInt(inst)} lançamentos mensais de {formatMoney(p(val) / parseInt(inst))} cada
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {type === 'transferencia' ? (
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-[#D97757] ml-1">Conta Destino</label>
+                                                    <select className="w-full p-3.5 bg-white border border-[#D97757] rounded-2xl font-black text-[10px] outline-none focus:border-black" value={destAcc} onChange={e=>setDestAcc(e.target.value)} required>
+                                                        <option value="">Destino...</option>
+                                                        {accounts.filter(a => a.name !== account).map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Categoria</label>
+                                                    <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={cat} onChange={e=>setCat(e.target.value)}>
+                                                        <option value="">Categoria...</option>
+                                                        {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            )}
                                             <div className="space-y-1">
-                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Categoria</label>
-                                                <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={cat} onChange={e=>setCat(e.target.value)}>
-                                                    <option value="">Categoria...</option>
+                                                <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Fornecedor</label>
+                                                <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={sup} onChange={e=>setSup(e.target.value)} disabled={type === 'transferencia'}>
+                                                    <option value="">{type === 'transferencia' ? 'Transferência' : 'Fornecedor...'}</option>
+                                                    {type !== 'transferencia' && suppliers.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Lanç.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={date} onChange={e=>setDate(e.target.value)} /></div>
+                                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Venc./Comp.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={clearance} onChange={e=>setClearance(e.target.value)} /></div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button type="button" onClick={()=>setStatus('pago')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pago'?'bg-green-500 text-white':'bg-white text-slate-400'}`}>PAGO</button>
+                                            <button type="button" onClick={()=>setStatus('pendente')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pendente'?'bg-orange-500 text-white':'bg-white text-slate-400'}`}>PENDENTE</button>
+                                        </div>
+                                        <button className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{editingId ? 'Atualizar' : 'Gravar'}</button>
+                                    </form>
+
+                                    <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
+                                        <div className="p-4 bg-slate-50 border-b space-y-4">
+                                            <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
+                                            <div className="flex flex-wrap gap-2 items-center">
+                                                <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}>
+                                                    <option value="todos">Todos os Fluxos</option>
+                                                    <option value="entrada">Entradas</option>
+                                                    <option value="saida">Saídas</option>
+                                                    <option value="transferencia">Transferências</option>
+                                                </select>
+                                                <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
+                                                    <option value="">Todas as Contas</option>
+                                                    {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
+                                                </select>
+                                                <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
+                                                    <option value="">Todas as Categorias</option>
                                                     {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                                                 </select>
-                                            </div>
-                                        )}
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Fornecedor</label>
-                                            <select className="w-full p-3.5 bg-white border rounded-2xl font-black text-[10px] outline-none" value={sup} onChange={e=>setSup(e.target.value)} disabled={type === 'transferencia'}>
-                                                <option value="">{type === 'transferencia' ? 'Transferência' : 'Fornecedor...'}</option>
-                                                {type !== 'transferencia' && suppliers.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data Lanç.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={date} onChange={e=>setDate(e.target.value)} /></div>
-                                        <div className="space-y-1"><label className="text-[8px] font-black uppercase text-slate-400 ml-2">Venc./Comp.</label><input type="date" className="w-full p-3 border rounded-xl text-[10px] font-bold" value={clearance} onChange={e=>setClearance(e.target.value)} /></div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={()=>setStatus('pago')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pago'?'bg-green-500 text-white':'bg-white text-slate-400'}`}>PAGO</button>
-                                        <button type="button" onClick={()=>setStatus('pendente')} className={`flex-1 p-3 rounded-xl border font-black text-[10px] ${status==='pendente'?'bg-orange-500 text-white':'bg-white text-slate-400'}`}>PENDENTE</button>
-                                    </div>
-                                    <button className="w-full bg-black text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{editingId ? 'Atualizar' : 'Gravar'}</button>
-                                </form>
-
-                                <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
-                                    <div className="p-4 bg-slate-50 border-b space-y-4">
-                                        <div className="relative"><Icon name="search" size={16} className="absolute left-4 top-3.5 text-slate-300" /><input type="text" placeholder="Pesquisar histórico..." className="w-full pl-12 pr-4 py-3 bg-white border rounded-2xl text-xs font-bold outline-none focus:border-black shadow-inner" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div>
-                                        <div className="flex flex-wrap gap-2 items-center">
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}>
-                                                <option value="todos">Todos os Fluxos</option>
-                                                <option value="entrada">Entradas</option>
-                                                <option value="saida">Saídas</option>
-                                                <option value="transferencia">Transferências</option>
-                                            </select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={accFilter} onChange={e=>setAccFilter(e.target.value)}>
-                                                <option value="">Todas as Contas</option>
-                                                {accounts.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}
-                                            </select>
-                                            <select className="p-2 border rounded-xl text-[9px] font-black uppercase" value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
-                                                <option value="">Todas as Categorias</option>
-                                                {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-                                            </select>
-                                            <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts ? 'Previsões OFF' : 'Previsões ON'}</button>
-                                            <div className="flex gap-2 ml-auto">
-                                                <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                        {displayedTransactions.map(t => {
-                                            const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
-                                            return (
-                                                <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type === 'transferencia' ? 'bg-blue-100 text-blue-700' : (t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600')}`}>{t.type === 'transferencia' ? 'TR' : (t.type === 'entrada' ? 'IN' : 'OUT')}</div>
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="font-black text-sm uppercase leading-none">{t.description}</p>
-                                                                <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago' ? 'Pago ' + (clearanceDate ? clearanceDate.split('-').reverse().slice(0,2).join('/') : '') : 'Pendente'}</span>
-                                                            </div>
-                                                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.type === 'transferencia' ? `${t.account} ➔ ${t.destinationAccount}` : `${t.account} • ${t.category}`}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
-                                                        <div className="flex gap-1">
-                                                            <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)"><Icon name="sprout" size={14}></Icon></button>
-                                                            <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}></Icon></button>
-                                                            <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button>
-                                                        </div>
-                                                    </div>
+                                                <button onClick={()=>setHideForecasts(!hideForecasts)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideForecasts?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideForecasts ? 'Previsões OFF' : 'Previsões ON'}</button>
+                                                <div className="flex gap-2 ml-auto">
+                                                    <button onClick={()=>setHideCards(!hideCards)} className={`p-2 rounded-xl text-[9px] font-black uppercase border transition-all ${hideCards?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>{hideCards?'Cartão OFF':'Cartão ON'}</button>
                                                 </div>
-                                            );
-                                        })}
-
-                                        {filteredDashboard.length > visibleCount && (
-                                            <div className="p-6 text-center bg-slate-50/50">
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setVisibleCount(prev => prev + 50)} 
-                                                    className="bg-black text-[#F8CC82] hover:bg-slate-800 font-black text-[10px] uppercase px-8 py-3 rounded-2xl shadow-md transition-all active:scale-95"
-                                                >
-                                                    Ver mais lançamentos ({filteredDashboard.length - visibleCount} restantes)
-                                                </button>
                                             </div>
-                                        )}
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
+                                            {displayedTransactions.map(t => {
+                                                const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
+                                                return (
+                                                    <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${t.type === 'transferencia' ? 'bg-blue-100 text-blue-700' : (t.type === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600')}`}>{t.type === 'transferencia' ? 'TR' : (t.type === 'entrada' ? 'IN' : 'OUT')}</div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="font-black text-sm uppercase leading-none">{t.description}</p>
+                                                                    <span className={`status-badge ${t.status==='pago'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{t.status==='pago' ? 'Pago ' + (clearanceDate ? clearanceDate.split('-').reverse().slice(0,2).join('/') : '') : 'Pendente'}</span>
+                                                                </div>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{t.type === 'transferencia' ? `${t.account} ➔ ${t.destinationAccount}` : `${t.account} • ${t.category}`}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
+                                                            <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                            <div className="flex gap-1">
+                                                                <button type="button" onClick={()=>seedToForm(t)} className="text-emerald-500 hover:text-emerald-700 p-2 transition-all" title="Usar como Semente (Modelo)"><Icon name="sprout" size={14}></Icon></button>
+                                                                <button type="button" onClick={()=>startEdit(t)} className="text-blue-400 p-2"><Icon name="edit-2" size={14}></Icon></button>
+                                                                <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-400'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={14}></Icon>}</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {filteredDashboard.length > visibleCount && (
+                                                <div className="p-6 text-center bg-slate-50/50">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setVisibleCount(prev => prev + 50)} 
+                                                        className="bg-black text-[#F8CC82] hover:bg-slate-800 font-black text-[10px] uppercase px-8 py-3 rounded-2xl shadow-md transition-all active:scale-95"
+                                                    >
+                                                        Ver mais lançamentos ({filteredDashboard.length - visibleCount} restantes)
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1467,7 +1579,7 @@
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-4">
-                                                                <p className={`font-black text-sm ${t.type==='entrada'?'text-green-600':'text-slate-800'}`}>{formatMoney(t.amount)}</p>
+                                                                <p className="font-black text-sm text-slate-800">{formatMoney(t.amount)}</p>
                                                                 <button type="button" onClick={() => executeDelete('transactions', t.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === t.id ? 'delete-confirm' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>{deleteConfirmId === t.id ? <span className="text-[8px] font-black uppercase">Excluir?</span> : <Icon name="trash-2" size={14}></Icon>}</button>
                                                             </div>
                                                         </div>
@@ -1608,7 +1720,7 @@
                                      </div>
                                 </div>
 
-                                {/* ASSOCIAÇÃO DIRETA DE OUTRO UTILIZADOR DO FIREBASE (NOVO) */}
+                                {/* ASSOCIAÇÃO DIRETA DE OUTRO UTILIZADOR DO FIREBASE */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-amber-500 space-y-6 h-fit lg:col-span-2">
                                      <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="plus-circle" size={18} className="text-amber-500"/>Associação Avançada de Utilizador (UID Firebase)</h2>
                                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-dashed border-slate-300 space-y-4">
@@ -1618,7 +1730,7 @@
                                          <div className="flex flex-col md:flex-row gap-2">
                                              <input type="text" className="flex-1 p-4 bg-white border rounded-2xl font-mono text-xs font-bold outline-none text-[#D97757] tracking-wider uppercase" placeholder="Cole o UID do Firebase aqui..." value={customUid} onChange={e=>handleSwitchUid(e.target.value)} />
                                              <button type="button" onClick={() => handleSwitchUid('kwOLw2kxNKTHLHnbK2Lx74oefTu2')} className="bg-[#1A202C] hover:bg-black text-[#F8CC82] font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95 whitespace-nowrap">
-                                                 Vincular kwOLw2kxNKTH...
+                                                 Vincular kwOLw2kxNKT...
                                              </button>
                                              {customUid && (
                                                  <button type="button" onClick={() => handleSwitchUid('')} className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95">
@@ -1658,7 +1770,7 @@
 
                                      {backupLog && (
                                          <div className="space-y-2">
-                                             <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Histórico de Importação</label>
+                                             <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Histórico de Importação / Operações</label>
                                              <div className="bg-[#1A202C] text-slate-300 p-4 rounded-2xl font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap lowercase">{backupLog}</div>
                                              {restoreProgress > 0 && (
                                                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
