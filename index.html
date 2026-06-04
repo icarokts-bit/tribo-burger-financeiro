@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -17,12 +18,10 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;600;800&display=swap');
         
-        /* Força todo o sistema (textos, inputs, selects, botões) a ficar em letra maiúscula */
         body, input:not([type="password"]), select, button, textarea, option, span, p, h1, h2, h3, h4, th, td { 
             text-transform: uppercase !important; 
         }
         
-        /* Garante que os placeholders de campos de texto também fiquem em maiúsculas */
         input::placeholder, textarea::placeholder {
             text-transform: uppercase !important;
         }
@@ -66,52 +65,18 @@
         const db = firebase.firestore();
         const appId = 'tribo-burger-financeiro';
 
-        // Componente de ícone nativo em SVG para velocidade máxima (Blazing Fast)
         const Icon = ({ name, size = 20, className = "" }) => {
-            const getIconPath = (iconName) => {
-                switch(iconName) {
-                    case 'bell':
-                        return <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9m1.73 13a3 3 0 0 0 5.54 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>;
-                    case 'plus':
-                        return <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;
-                    case 'check':
-                        return <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>;
-                    case 'search':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></g>;
-                    case 'edit-2':
-                        return <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>;
-                    case 'trash-2':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></g>;
-                    case 'calendar-days':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></g>;
-                    case 'plus-circle':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></g>;
-                    case 'check-square':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 11 2 2 4-4"/></g>;
-                    case 'check-circle':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></g>;
-                    case 'shopping-cart':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></g>;
-                    case 'trending-up':
-                        return <path d="m22 7-8.5 8.5-5-5L1 18M16 7h6v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>;
-                    case 'sprout':
-                        return <path d="M12 22V10M12 10a7 7 0 0 1 7-7M12 10H8a4 4 0 0 0-4 4M12 14a5 5 0 0 0 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>;
-                    case 'credit-card':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></g>;
-                    case 'calendar':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></g>;
-                    case 'logout':
-                        return <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></g>;
-                    default:
-                        return <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide && containerRef.current) {
+                    containerRef.current.innerHTML = `<i data-lucide="${name}"></i>`;
+                    window.lucide.createIcons({
+                        node: containerRef.current,
+                        attrs: { width: size, height: size, class: className }
+                    });
                 }
-            };
-
-            return (
-                <svg width={size} height={size} viewBox="0 0 24 24" className={className} fill="none">
-                    {getIconPath(name)}
-                </svg>
-            );
+            }, [name, size, className]);
+            return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
         const safeIcons = ['Utensils', 'Sprout', 'Edit', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 'CalendarDays', 'ShoppingCart', 'CheckCircle'];
@@ -150,6 +115,7 @@
 
         const getTransactionDates = (t, cardInfo) => {
             if (!t) return { clearanceDate: '', billingMonth: '' };
+            
             if (isInvoicePayment(t)) {
                 return {
                     clearanceDate: t.clearanceDate || t.date || '',
@@ -223,7 +189,6 @@
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            // Estados de Autenticacao / Login / Cadastro
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [isRegistering, setIsRegistering] = useState(false);
@@ -244,7 +209,6 @@
             const [hideCards, setHideCards] = useState(false);
             const [hideForecasts, setHideForecasts] = useState(false);
 
-            // Paginação da lista para velocidade turbo
             const [visibleCount, setVisibleCount] = useState(30);
 
             const [desc, setDesc] = useState('');
@@ -272,6 +236,12 @@
             const [invoicePayType, setInvoicePayType] = useState('integral'); 
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
+
+            // Estados adicionais para a central de restauro de backups
+            const [parsedBackup, setParsedBackup] = useState(null);
+            const [backupLog, setBackupLog] = useState('');
+            const [backupMode, setBackupMode] = useState('merge'); // 'merge' ou 'overwrite'
+            const [restoreProgress, setRestoreProgress] = useState(0);
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(u => { 
@@ -690,6 +660,252 @@
                     setDeleteConfirmId(id); 
                     setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); 
                 }
+            };
+
+            // MOTOR DE PARSING DE CÓPIAS DE SEGURANÇA (XML / JSON)
+            const handleFileSelect = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const text = evt.target.result;
+                    let parsedData = null;
+
+                    setBackupLog(`A ler ficheiro "${file.name}"...\n`);
+
+                    if (file.name.endsWith('.xml')) {
+                        try {
+                            const parser = new DOMParser();
+                            const xmlDoc = parser.parseFromString(text, "text/xml");
+                            
+                            const getChildrenAsObj = (node) => {
+                                const obj = {};
+                                Array.from(node.children).forEach(c => {
+                                    obj[c.tagName] = c.textContent;
+                                });
+                                return obj;
+                            };
+
+                            const parsed = {
+                                transactions: [],
+                                dailyRecords: {},
+                                accounts: [],
+                                categories: [],
+                                suppliers: []
+                            };
+
+                            // Ler Transações
+                            const txs = xmlDoc.getElementsByTagName("transaction");
+                            Array.from(txs).forEach(node => parsed.transactions.push(getChildrenAsObj(node)));
+
+                            // Ler Contas Bancárias
+                            const accs = xmlDoc.getElementsByTagName("account") || xmlDoc.getElementsByTagName("bankAccount");
+                            Array.from(accs).forEach(node => parsed.accounts.push(getChildrenAsObj(node)));
+
+                            // Ler Categorias
+                            const cats = xmlDoc.getElementsByTagName("category");
+                            Array.from(cats).forEach(node => parsed.categories.push(getChildrenAsObj(node)));
+
+                            // Ler Fornecedores
+                            const sups = xmlDoc.getElementsByTagName("supplier");
+                            Array.from(sups).forEach(node => parsed.suppliers.push(getChildrenAsObj(node)));
+
+                            // Ler Registos Diários de Vendas
+                            const recs = xmlDoc.getElementsByTagName("record") || xmlDoc.getElementsByTagName("dailyRecord");
+                            Array.from(recs).forEach(node => {
+                                const dayId = node.getAttribute("id") || node.getElementsByTagName("date")[0]?.textContent;
+                                if (dayId) {
+                                    parsed.dailyRecords[dayId] = getChildrenAsObj(node);
+                                }
+                            });
+
+                            parsedData = parsed;
+                        } catch (err) {
+                            setBackupLog(prev => prev + `Erro ao processar ficheiro XML: ${err.message}\n`);
+                        }
+                    } else if (file.name.endsWith('.json')) {
+                        try {
+                            parsedData = JSON.parse(text);
+                        } catch (err) {
+                            setBackupLog(prev => prev + `Erro ao ler ficheiro JSON: ${err.message}\n`);
+                        }
+                    } else {
+                        setBackupLog(prev => prev + "Formato inválido. Por favor, carregue um ficheiro .xml ou .json.\n");
+                    }
+
+                    if (parsedData) {
+                        setParsedBackup(parsedData);
+                        setBackupLog(prev => prev + `Ficheiro analisado com sucesso!\n` +
+                            `- Transações identificadas: ${parsedData.transactions?.length || 0}\n` +
+                            `- Contas identificadas: ${parsedData.accounts?.length || 0}\n` +
+                            `- Registos de vendas: ${Object.keys(parsedData.dailyRecords || {}).length || 0}\n` +
+                            `- Categorias: ${parsedData.categories?.length || 0}\n` +
+                            `- Fornecedores: ${parsedData.suppliers?.length || 0}\n`
+                        );
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleExecuteRestore = async () => {
+                if (!user || !parsedBackup) return;
+                setIsActionLoading(true);
+                setRestoreProgress(5);
+                setBackupLog(prev => prev + `A iniciar processo de restauro no Firebase...\n`);
+
+                try {
+                    const path = `artifacts/${appId}/users/${user.uid}`;
+
+                    // Se for modo Overwrite, limpar dados anteriores de forma assíncrona primeiro
+                    if (backupMode === 'overwrite') {
+                        setBackupLog(prev => prev + `[Aviso] Modo Overwrite: A remover registos anteriores...\n`);
+                        // Apagar transações antigas
+                        const txSnap = await db.collection(`${path}/transactions`).get();
+                        const txBatch = db.batch();
+                        txSnap.docs.forEach(doc => txBatch.delete(doc.ref));
+                        await txBatch.commit();
+
+                        // Apagar registos diários antigos
+                        const drSnap = await db.collection(`${path}/dailyRecords`).get();
+                        const drBatch = db.batch();
+                        drSnap.docs.forEach(doc => drBatch.delete(doc.ref));
+                        await drBatch.commit();
+                    }
+
+                    setRestoreProgress(30);
+
+                    // Restaurar Contas
+                    if (parsedBackup.accounts && parsedBackup.accounts.length > 0) {
+                        setBackupLog(prev => prev + `A carregar ${parsedBackup.accounts.length} contas...\n`);
+                        for (const acc of parsedBackup.accounts) {
+                            if (acc.name) {
+                                await db.collection(`${path}/accounts`).add({
+                                    name: acc.name,
+                                    type: acc.type || 'corrente',
+                                    group: acc.group || 'operacional',
+                                    closing: acc.closing || '25',
+                                    due: acc.due || '10',
+                                    pos: acc.pos || '1',
+                                    highlight: acc.highlight === 'true' || acc.highlight === true
+                                });
+                            }
+                        }
+                    }
+
+                    setRestoreProgress(50);
+
+                    // Restaurar Categorias
+                    if (parsedBackup.categories && parsedBackup.categories.length > 0) {
+                        setBackupLog(prev => prev + `A carregar ${parsedBackup.categories.length} categorias...\n`);
+                        for (const cat of parsedBackup.categories) {
+                            if (cat.name) {
+                                await db.collection(`${path}/categories`).add({ name: cat.name });
+                            }
+                        }
+                    }
+
+                    setRestoreProgress(65);
+
+                    // Restaurar Fornecedores
+                    if (parsedBackup.suppliers && parsedBackup.suppliers.length > 0) {
+                        setBackupLog(prev => prev + `A carregar ${parsedBackup.suppliers.length} fornecedores...\n`);
+                        for (const sup of parsedBackup.suppliers) {
+                            if (sup.name) {
+                                await db.collection(`${path}/suppliers`).add({ name: sup.name });
+                            }
+                        }
+                    }
+
+                    setRestoreProgress(80);
+
+                    // Restaurar Registos Diários de Venda (em lotes)
+                    if (parsedBackup.dailyRecords && Object.keys(parsedBackup.dailyRecords).length > 0) {
+                        setBackupLog(prev => prev + `A carregar registos diários de vendas...\n`);
+                        const days = Object.keys(parsedBackup.dailyRecords);
+                        let drBatch = db.batch();
+                        let count = 0;
+
+                        for (const day of days) {
+                            const recRef = db.collection(`${path}/dailyRecords`).doc(day);
+                            drBatch.set(recRef, parsedBackup.dailyRecords[day], { merge: true });
+                            count++;
+
+                            if (count % 400 === 0) {
+                                await drBatch.commit();
+                                drBatch = db.batch();
+                            }
+                        }
+                        await drBatch.commit();
+                    }
+
+                    setRestoreProgress(90);
+
+                    // Restaurar Transações (em lotes/batches de 450 para segurança do Firestore)
+                    if (parsedBackup.transactions && parsedBackup.transactions.length > 0) {
+                        setBackupLog(prev => prev + `A carregar ${parsedBackup.transactions.length} transações de histórico...\n`);
+                        let txBatch = db.batch();
+                        let count = 0;
+
+                        for (const tx of parsedBackup.transactions) {
+                            const newRef = db.collection(`${path}/transactions`).doc();
+                            
+                            // Higienização completa de campos numéricos e datas para evitar crashes futuros
+                            const cleanTx = {
+                                description: tx.description || 'Lançamento Restaurado',
+                                amount: p(tx.amount),
+                                type: tx.type || 'saida',
+                                status: tx.status || 'pago',
+                                date: tx.date || new Date().toISOString().split('T')[0],
+                                clearanceDate: tx.clearanceDate || tx.date || new Date().toISOString().split('T')[0],
+                                billingMonth: tx.billingMonth || (tx.date ? tx.date.slice(0,7) : new Date().toISOString().slice(0,7)),
+                                account: tx.account || '',
+                                destinationAccount: tx.destinationAccount || '',
+                                category: tx.category || 'Geral',
+                                supplier: tx.supplier || '',
+                                timestamp: tx.timestamp || new Date().toISOString()
+                            };
+
+                            txBatch.set(newRef, cleanTx);
+                            count++;
+
+                            if (count % 400 === 0) {
+                                await txBatch.commit();
+                                txBatch = db.batch();
+                            }
+                        }
+                        await txBatch.commit();
+                    }
+
+                    setRestoreProgress(100);
+                    setBackupLog(prev => prev + `\n✨ RESTAURO CONCLUÍDO COM SUCESSO! Todos os dados estão no ar.`);
+                    setParsedBackup(null);
+                } catch (err) {
+                    console.error(err);
+                    setBackupLog(prev => prev + `\n[Erro Crítico] Falha ao gravar dados: ${err.message}`);
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
+            const handleExportBackup = () => {
+                if (!user) return;
+                
+                const dataToExport = {
+                    transactions,
+                    dailyRecords,
+                    accounts,
+                    categories,
+                    suppliers
+                };
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `triboburger_financeiro_backup_${new Date().toISOString().slice(0,10)}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
             };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase tracking-widest">A carregar Tribo...</div>;
@@ -1348,6 +1564,46 @@
                                             </div>
                                         ))}
                                      </div>
+                                </div>
+
+                                {/* CENTRAL AVANÇADA DE CÓPIAS DE SEGURANÇA E RESTAURO DE DADOS */}
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-teal-600 space-y-6 h-fit lg:col-span-2">
+                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="credit-card" size={18} className="text-teal-600"/>Central de Cópia de Segurança e Restauro de Dados</h2>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200">
+                                        <div className="space-y-4">
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção 1: Exportar Cópia de Segurança</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Guarde todas as transações, vendas e configurações num ficheiro JSON de segurança para manter um histórico físico local.</p>
+                                            <button type="button" onClick={handleExportBackup} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black text-[10px] uppercase p-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"><Icon name="check-square" size={16}/>Exportar Backup Completo</button>
+                                        </div>
+                                        <div className="space-y-4 border-t pt-6 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-slate-200">
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção 2: Restaurar Dados (Importar XML / JSON)</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Selecione o seu ficheiro XML de backup ou arquivo JSON para restaurar todos os seus lançamentos instantaneamente.</p>
+                                            <input type="file" accept=".xml,.json" onChange={handleFileSelect} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" />
+                                            
+                                            {parsedBackup && (
+                                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                                                    <p className="text-[9px] font-black text-amber-800 uppercase">Configurações de Importação:</p>
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={()=>setBackupMode('merge')} className={`flex-1 p-2 rounded-lg text-[8px] font-black uppercase border transition-all ${backupMode==='merge'?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>Mesclar Dados</button>
+                                                        <button type="button" onClick={()=>setBackupMode('overwrite')} className={`flex-1 p-2 rounded-lg text-[8px] font-black uppercase border transition-all ${backupMode==='overwrite'?'bg-red-600 text-white':'bg-white text-slate-400'}`}>Substituir Tudo</button>
+                                                    </div>
+                                                    <button type="button" onClick={handleExecuteRestore} className="w-full bg-black text-[#F8CC82] font-black text-[10px] uppercase py-3 rounded-xl hover:bg-slate-800 transition-all">Confirmar e Restaurar</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                     </div>
+
+                                     {backupLog && (
+                                         <div className="space-y-2">
+                                             <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Histórico de Importação</label>
+                                             <div className="bg-[#1A202C] text-slate-300 p-4 rounded-2xl font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap lowercase">{backupLog}</div>
+                                             {restoreProgress > 0 && (
+                                                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                                     <div className="bg-teal-600 h-full transition-all duration-300" style={{width: `${restoreProgress}%`}}></div>
+                                                 </div>
+                                             )}
+                                         </div>
+                                     )}
                                 </div>
                             </div>
                         )}
