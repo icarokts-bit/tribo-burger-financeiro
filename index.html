@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.7.1 RECOVERY</title>
+    <title>Tribo Burger | v2.7.2 SECURE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -81,9 +81,9 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        const safeIcons = ['Utensils', 'Sprout', 'Edit', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 'CalendarDays', 'ShoppingCart', 'CheckCircle'];
+        const safeIcons = ['Utensils', 'Sprout', 'Edit', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 'CalendarDays', 'ShoppingCart', 'CheckCircle', 'Lock', 'ShieldCheck', 'Copy'];
         safeIcons.forEach(iconName => {
-            const normalized = iconName.toLowerCase().replace('2', '-2').replace('square', '-square').replace('circle', '-circle').replace('days', '-days').replace('card', '-card').replace('up', '-up');
+            const normalized = iconName.toLowerCase().replace('2', '-2').replace('square', '-square').replace('circle', '-circle').replace('days', '-days').replace('card', '-card').replace('up', '-up').replace('check', '-check');
             window[iconName] = (props) => <Icon name={normalized} size={props.size || 20} className={props.className || ""} />;
         });
 
@@ -202,7 +202,6 @@
             function search(current) {
                 if (!current || typeof current !== 'object') return;
 
-                // Captura se existir chave direta válida
                 if (current.transactions !== undefined && current.transactions !== null) found.transactions = current.transactions;
                 if (current.dailyRecords !== undefined && current.dailyRecords !== null) found.dailyRecords = current.dailyRecords;
                 if (current.accounts !== undefined && current.accounts !== null) found.accounts = current.accounts;
@@ -212,7 +211,6 @@
                 const keys = Object.keys(current);
                 for (let k of keys) {
                     if (current[k] && typeof current[k] === 'object') {
-                        // Evita loops infinitos e não desce se for uma coleção já encontrada
                         if (k !== 'transactions' && k !== 'dailyRecords' && k !== 'accounts' && k !== 'categories' && k !== 'suppliers') {
                             search(current[k]);
                         }
@@ -227,12 +225,10 @@
         const normalizeCollection = (data, type) => {
             if (!data) return type === 'dailyRecords' ? {} : [];
 
-            // Se já for um Array estruturado (formato exportador antigo)
             if (Array.isArray(data)) {
                 return data.filter(item => item !== null && typeof item === 'object');
             }
 
-            // Se for um Objeto (formato nativo Firebase Realtime Database chave-valor)
             if (typeof data === 'object') {
                 if (type === 'dailyRecords') {
                     const clean = {};
@@ -265,12 +261,12 @@
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            // Credenciais para Login Manual (para reaver o ID kwOLw2kxNKTHLHnbK2Lx74oefTu2)
+            // Credenciais para Login Manual
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [isRegistering, setIsRegistering] = useState(false);
             const [authError, setAuthError] = useState('');
-            const [authMode, setAuthMode] = useState('auto'); // 'auto' ou 'manual'
+            const [authMode, setAuthMode] = useState('auto'); 
 
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
@@ -322,7 +318,9 @@
             const [backupMode, setBackupMode] = useState('merge');
             const [restoreProgress, setRestoreProgress] = useState(0);
 
-            // CUMPRIMENTO RIGOROSO DA REGRA 3: Autenticação Dinâmica e Prioritária antes de qualquer Query
+            // Estados adicionais para copiar regras de segurança
+            const [copyRulesSuccess, setCopyRulesSuccess] = useState('');
+
             useEffect(() => {
                 const initAuth = async () => {
                     try {
@@ -345,7 +343,6 @@
                 return () => unsubscribe();
             }, []);
 
-            // Escuta dinâmica que acompanha o UID ativo no Firestore
             useEffect(() => {
                 if (!user) return;
                 
@@ -401,7 +398,7 @@
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
-                        if (t.type === 'entrada' || t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
+                        if (t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
                         else if (t.type === 'saida') bal[t.account] = (bal[t.account] || 0) - amt;
                         else if (t.type === 'transferencia') { 
                             bal[t.account] = (bal[t.account] || 0) - amt; 
@@ -806,7 +803,7 @@
                 }
             };
 
-            // SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA (FIREBASE RTDB / CLOUD FIRESTORE)
+            // SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA
             const handleFileSelect = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -822,13 +819,10 @@
                             throw new Error("O ficheiro JSON está vazio ou é inválido (retornou null). Verifique se exportou a pasta de dados correta.");
                         }
 
-                        // Procurar coleções em qualquer nível da árvore JSON (suporta exportações completas do Firebase RTDB)
                         const collections = findCollectionsInJSON(parsed);
-                        
                         const hasData = collections && (collections.transactions || collections.accounts || collections.dailyRecords);
                         
                         if (hasData) {
-                            // Normalizar coleções (converter objetos RTDB em arrays se necessário)
                             const normalized = {
                                 transactions: normalizeCollection(collections.transactions, 'transactions'),
                                 accounts: normalizeCollection(collections.accounts, 'accounts'),
@@ -838,7 +832,7 @@
                             };
 
                             setParsedBackup(normalized);
-                            setBackupLog(prev => prev + `✨ Ficheiro de Cópia de Segurança detetado e processado com sucesso!\n` +
+                            setBackupLog(prev => prev + `✨ Ficheiro de Cópia de Segurança processado com sucesso!\n` +
                                 `- Estrutura auto-detetada e normalizada.\n` +
                                 `- Transações: ${normalized.transactions?.length || 0}\n` +
                                 `- Contas Bancárias: ${normalized.accounts?.length || 0}\n` +
@@ -847,7 +841,7 @@
                                 `- Fornecedores: ${normalized.suppliers?.length || 0}\n`
                             );
                         } else {
-                            setBackupLog(prev => prev + "⚠️ Ficheiro JSON lido, mas não foram encontradas coleções de dados compatíveis (transactions, dailyRecords, accounts, etc.) em nenhum nível do documento.\n");
+                            setBackupLog(prev => prev + "⚠️ Ficheiro JSON lido, mas não foram encontradas coleções de dados compatíveis (transactions, dailyRecords, accounts, etc.) em nenhum nível.\n");
                         }
                     } catch(err) {
                         setBackupLog(prev => prev + `❌ Erro ao processar ficheiro JSON: ${err.message}\n`);
@@ -869,7 +863,6 @@
                     if (backupMode === 'overwrite') {
                         setBackupLog(prev => prev + `[Aviso] Limpando registos anteriores para substituição...\n`);
                         
-                        // Limpeza segura no Firestore
                         const txSnap = await db.collection(`${path}/transactions`).get();
                         const txBatch = db.batch();
                         txSnap.docs.forEach(doc => txBatch.delete(doc.ref));
@@ -883,7 +876,6 @@
 
                     setRestoreProgress(30);
 
-                    // Restaurar Contas
                     if (parsedBackup.accounts && parsedBackup.accounts.length > 0) {
                         setBackupLog(prev => prev + `Importando ${parsedBackup.accounts.length} contas...\n`);
                         for (const acc of parsedBackup.accounts) {
@@ -903,7 +895,6 @@
 
                     setRestoreProgress(50);
 
-                    // Restaurar Categorias
                     if (parsedBackup.categories && parsedBackup.categories.length > 0) {
                         for (const cat of parsedBackup.categories) {
                             if (cat.name) await db.collection(`${path}/categories`).add({ name: cat.name });
@@ -912,14 +903,12 @@
 
                     setRestoreProgress(70);
 
-                    // Restaurar Fornecedores
                     if (parsedBackup.suppliers && parsedBackup.suppliers.length > 0) {
                         for (const sup of parsedBackup.suppliers) {
                             if (sup.name) await db.collection(`${path}/suppliers`).add({ name: sup.name });
                         }
                     }
 
-                    // Restaurar Registos Diários de Venda
                     if (parsedBackup.dailyRecords && Object.keys(parsedBackup.dailyRecords).length > 0) {
                         setBackupLog(prev => prev + `Gravando caixas diários de vendas...\n`);
                         const days = Object.keys(parsedBackup.dailyRecords);
@@ -941,7 +930,6 @@
 
                     setRestoreProgress(90);
 
-                    // Restaurar Transações
                     if (parsedBackup.transactions && parsedBackup.transactions.length > 0) {
                         setBackupLog(prev => prev + `Gravando ${parsedBackup.transactions.length} transações financeiras...\n`);
                         let txBatch = db.batch();
@@ -997,6 +985,22 @@
                 downloadAnchor.click();
                 downloadAnchor.remove();
             };
+
+            const copyToClipboard = (text, rulesType) => {
+                const tempInput = document.createElement("textarea");
+                tempInput.value = text;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+                
+                setCopyRulesSuccess(rulesType);
+                setTimeout(() => setCopyRulesSuccess(''), 3000);
+            };
+
+            // Regras prontas para copiar
+            const firestoreRulesTemplate = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /artifacts/triboburger-financeiro/users/{userId}/{document=**} {\n      allow read, write: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}`;
+            const updatedRtdbRulesTemplate = `{\n  "rules": {\n    ".read": "auth != null",\n    ".write": "auth != null"\n  }\n}`;
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase tracking-widest">A carregar Tribo...</div>;
 
@@ -1083,7 +1087,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.1</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.2</h1>
                                 <span className={`text-[7px] font-black px-2 py-1 rounded-md ${user?.isAnonymous ? 'bg-amber-500 text-black animate-pulse' : 'bg-emerald-500 text-black'}`}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -1667,7 +1671,7 @@
                                 </div>
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-[#1A202C] space-y-6 h-fit">
                                      <h2 className="text-sm font-black uppercase border-b pb-4">Categorias</h2>
-                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}></Icon></button></div>
+                                     <div className="flex gap-2"><input type="text" className="flex-1 p-4 bg-slate-50 border rounded-2xl font-bold text-xs outline-none focus:border-black" id="new-cat" placeholder="Nova Categoria..." /><button type="button" onClick={async()=>{const v=document.getElementById('new-cat').value; if(!v) return; setIsActionLoading(true); try { await db.collection('artifacts').doc(appId).collection('categories').add({name:v}); document.getElementById('new-cat').value=''; } finally { setIsActionLoading(false); } }} className="bg-black text-white p-4 rounded-2xl"><Icon name="plus" size={18}></Icon></button></div>
                                      <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto no-scrollbar">
                                         {categories.sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c => (
                                             <div key={c.id} className="p-3 bg-white border rounded-xl flex justify-between items-center hover:border-black">
@@ -1676,6 +1680,47 @@
                                             </div>
                                         ))}
                                      </div>
+                                </div>
+
+                                {/* CENTRAL DE SEGURANÇA E REGRAS - PROTEÇÃO DE DADOS */}
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-red-500 space-y-6 h-fit lg:col-span-2">
+                                    <div className="flex items-center gap-3 border-b pb-4">
+                                        <div className="bg-red-100 p-2 rounded-2xl text-red-600 animate-pulse"><Icon name="lock" size={20}/></div>
+                                        <div>
+                                            <h2 className="text-sm font-black uppercase">Central de Permissões e Segurança do Firebase</h2>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase">Impeça a expiração das suas regras de segurança no dia 4 de julho de 2026</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl text-[9px] font-bold text-orange-800 uppercase leading-relaxed">
+                                        ⚠️ <strong>ATENÇÃO:</strong> As regras de teste da Google expiram em breve! Se não atualizar as regras na consola do Firebase, a sua aplicação deixará de ler ou guardar registos. Siga as instruções abaixo para resolver de forma permanente.
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-3 bg-white p-6 rounded-2xl border flex flex-col justify-between">
+                                            <div className="space-y-1">
+                                                <span className="text-[8px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded">Recomendado</span>
+                                                <h3 className="text-xs font-black uppercase text-slate-800 mt-2">1. Regras do Cloud Firestore (Ativo)</h3>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">A sua aplicação está ligada ao Cloud Firestore. Copie estas regras seguras (com proteção por login de utilizador) e cole-as no painel **Firestore Database -> Rules** no Firebase.</p>
+                                            </div>
+                                            <pre className="p-3 bg-slate-900 text-slate-300 font-mono text-[8px] rounded-xl overflow-x-auto whitespace-pre no-scrollbar mt-3 h-28">{firestoreRulesTemplate}</pre>
+                                            <button type="button" onClick={() => copyToClipboard(firestoreRulesTemplate, 'firestore')} className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                                                {copyRulesSuccess === 'firestore' ? <span className="text-green-300">Copiado!</span> : <><Icon name="copy" size={12}/> Copiar Regras do Firestore</>}
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-3 bg-white p-6 rounded-2xl border flex flex-col justify-between">
+                                            <div className="space-y-1">
+                                                <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-2.5 py-1 rounded">Backup / Histórico</span>
+                                                <h3 className="text-xs font-black uppercase text-slate-800 mt-2">2. Regras do Realtime Database (Seguro)</h3>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Caso pretenda manter o Realtime Database ativo para backups seguros, substitua a sua condição de expiração por data por uma verificação de utilizador autenticado permanente.</p>
+                                            </div>
+                                            <pre className="p-3 bg-slate-900 text-slate-300 font-mono text-[8px] rounded-xl overflow-x-auto whitespace-pre no-scrollbar mt-3 h-28">{updatedRtdbRulesTemplate}</pre>
+                                            <button type="button" onClick={() => copyToClipboard(updatedRtdbRulesTemplate, 'rtdb')} className="w-full mt-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] uppercase py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                                                {copyRulesSuccess === 'rtdb' ? <span className="text-green-300">Copiado!</span> : <><Icon name="copy" size={12}/> Copiar Regras do Realtime Database</>}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* CENTRAL DE RESTAURO DIRETO (FICHEIRO OU TEXTO COPIADO) */}
@@ -1730,7 +1775,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.1 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.2 SECURE</footer>
                 </div>
             );
         }
