@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.7.3 GOLDEN STABLE</title>
+    <title>Tribo Burger | v2.8.0 PRO BACKUP</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -43,6 +43,9 @@
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
         .scale-up-center { animation: scale-up-center 0.2s cubic-bezier(0.390, 0.575, 0.565, 1.000) both; }
         @keyframes scale-up-center { 0% { transform: scale(0.5); } 100% { transform: scale(1); } }
+        
+        /* Terminal de Logs do Backup */
+        .terminal-box { background-color: #0d1117; border: 1px solid #30363d; color: #58a6ff; font-family: 'Courier New', Courier, monospace; font-size: 11px; padding: 1rem; border-radius: 1rem; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); }
     </style>
 </head>
 <body class="antialiased">
@@ -82,13 +85,11 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        // ==========================================================
-        // ESCOPO SEGURO DE ÍCONES PARA O BABEL (Resolve ReferenceError)
-        // ==========================================================
+        // Escopo estrito e seguro de ícones Lucide mapeados para o compilador Babel
         const safeIcons = [
             'Utensils', 'Sprout', 'Edit', 'Edit2', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 
             'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 
-            'CalendarDays', 'ShoppingCart', 'CheckCircle', 'Lock', 'ShieldCheck', 'Copy'
+            'CalendarDays', 'ShoppingCart', 'CheckCircle', 'Lock', 'ShieldCheck', 'Copy', 'Download', 'CloudLightning'
         ];
         
         const IconComponents = {};
@@ -100,18 +101,18 @@
                 .replace('days', '-days')
                 .replace('card', '-card')
                 .replace('up', '-up')
-                .replace('check', '-check');
+                .replace('check', '-check')
+                .replace('lightning', '-lightning');
                 
             IconComponents[iconName] = (props) => (
                 <Icon name={normalized} size={props.size || 20} className={props.className || ""} />
             );
         });
 
-        // Desestruturação de componentes locais para acesso direto no JSX (Babel Compiler Friendly)
         const { 
             Utensils, Sprout, Edit, Edit2, Trash, Trash2, Plus, Check, Search, Bell, Calendar, 
             CreditCard, TrendingUp, CheckSquare, PlusCircle, CalendarDays, ShoppingCart, 
-            CheckCircle, Lock, ShieldCheck, Copy 
+            CheckCircle, Lock, ShieldCheck, Copy, Download, CloudLightning
         } = IconComponents;
 
         const parseDateUTC = (dateStr) => {
@@ -269,10 +270,7 @@
                     const arr = [];
                     for (let [key, val] of Object.entries(data)) {
                         if (val && typeof val === 'object') {
-                            arr.push({
-                                id: key,
-                                ...val
-                            });
+                            arr.push(Object.assign({ id: key }, val));
                         }
                     }
                     return arr;
@@ -795,6 +793,66 @@
                 }
             };
 
+            // ==========================================================
+            // EXPORTAÇÃO COMPLETA DA NUVEM (Equivalente ao seu script Node)
+            // ==========================================================
+            const handleLiveExportBackup = async () => {
+                if (!user) return;
+                setIsActionLoading(true);
+                setBackupLog("📡 Estabelecendo ligação com o Firestore da Google...\n");
+                try {
+                    const activeUid = user.uid;
+                    const path = "artifacts/" + appId + "/users/" + activeUid;
+                    
+                    setBackupLog(prev => prev + "⚡ Procurando e extraindo transações financeiras...\n");
+                    const txSnap = await db.collection(path + "/transactions").get();
+                    const transactionsList = txSnap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+                    setBackupLog(prev => prev + "✅ " + transactionsList.length + " transações encontradas.\n");
+                    
+                    setBackupLog(prev => prev + "⚡ Procurando e extraindo caixas diários (dailyRecords)...\n");
+                    const dailySnap = await db.collection(path + "/dailyRecords").get();
+                    const dailyRecordsObj = {};
+                    dailySnap.docs.forEach(doc => { dailyRecordsObj[doc.id] = doc.data(); });
+                    setBackupLog(prev => prev + "✅ " + Object.keys(dailyRecordsObj).length + " dias de caixa mapeados.\n");
+                    
+                    setBackupLog(prev => prev + "⚡ Extraindo contas bancárias cadastradas...\n");
+                    const accSnap = await db.collection(path + "/accounts").get();
+                    const accountsList = accSnap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+                    
+                    setBackupLog(prev => prev + "⚡ Extraindo categorias cadastradas...\n");
+                    const catSnap = await db.collection(path + "/categories").get();
+                    const categoriesList = catSnap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+                    
+                    setBackupLog(prev => prev + "⚡ Extraindo fornecedores cadastrados...\n");
+                    const supSnap = await db.collection(path + "/suppliers").get();
+                    const suppliersList = supSnap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+
+                    const backupPayload = {
+                        transactions: transactionsList,
+                        dailyRecords: dailyRecordsObj,
+                        accounts: accountsList,
+                        categories: categoriesList,
+                        suppliers: suppliersList
+                    };
+
+                    setBackupLog(prev => prev + "✨ Compilação concluída com sucesso! Iniciando transferência física do ficheiro...\n");
+
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
+                    const downloadAnchor = document.createElement('a');
+                    downloadAnchor.setAttribute("href", dataStr);
+                    downloadAnchor.setAttribute("download", "triboburger_financeiro_live_backup_" + activeUid + ".json");
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+
+                    setBackupLog(prev => prev + "✨ FICHEIRO DESCARREGADO! Guarde-o com segurança.\n");
+                } catch(err) {
+                    setBackupLog(prev => prev + "❌ Erro fatal ao extrair do Firestore: " + err.message + "\n");
+                } finally {
+                    setIsActionLoading(false);
+                }
+            };
+
             // ANALISAR TEXTO DE BACKUP COLADO DIRETAMENTE (MOTOR RECURSIVO INTEGRADO)
             const handleParseTextBackup = () => {
                 if (!backupText.trim()) return;
@@ -1002,18 +1060,6 @@
                 }
             };
 
-            const handleExportBackup = () => {
-                if (!user) return;
-                const dataToExport = { transactions, dailyRecords, accounts, categories, suppliers };
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
-                const downloadAnchor = document.createElement('a');
-                downloadAnchor.setAttribute("href", dataStr);
-                downloadAnchor.setAttribute("download", "triboburger_financeiro_backup_" + new Date().toISOString().slice(0,10) + ".json");
-                document.body.appendChild(downloadAnchor);
-                downloadAnchor.click();
-                downloadAnchor.remove();
-            };
-
             const copyToClipboard = (text, rulesType) => {
                 const tempInput = document.createElement("textarea");
                 tempInput.value = text;
@@ -1114,7 +1160,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.3</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.8.0</h1>
                                 <span className={"text-[7px] font-black px-2 py-1 rounded-md " + (user?.isAnonymous ? "bg-amber-500 text-black animate-pulse" : "bg-emerald-500 text-black")}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -1754,38 +1800,45 @@
                                     </div>
                                 </div>
 
-                                {/* CENTRAL DE RESTAURO DIRETO (FICHEIRO OU TEXTO COPIADO) */}
+                                {/* CENTRAL DE RESTAURO E EXPORTAÇÃO DIRETA DA NUVEM (Exatamente como o seu Node Script) */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-teal-600 space-y-6 h-fit lg:col-span-2">
-                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><CreditCard size={18} className="text-teal-600"/>Restaurar Lançamentos de Cópia de Segurança</h2>
+                                     <div className="flex items-center gap-3 border-b pb-4">
+                                         <div className="bg-teal-100 p-2 rounded-2xl text-teal-600"><CloudLightning size={20}/></div>
+                                         <div>
+                                             <h2 className="text-sm font-black uppercase">Central de Backup Dinâmico da Nuvem (Firestore)</h2>
+                                             <p className="text-[9px] font-bold text-slate-400 uppercase">Gere, transfira ou restaure todas as coleções diretamente da nuvem</p>
+                                         </div>
+                                     </div>
                                      
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200">
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção A: Exportar Cópia de Segurança</h3>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Guarde todas as transações, vendas e configurações num ficheiro JSON físico local para segurança.</p>
-                                            <button type="button" onClick={handleExportBackup} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black text-[10px] uppercase p-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"><CheckSquare size={16}/>Exportar Backup Completo</button>
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção A: Gerar Backup Seguro (Real-Time Pull)</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Executa uma consulta dinâmica em lote na sua base de dados Firestore da Google. Junta as transações, fornecedores, caixas e contas bancárias e gera um ficheiro de cópia de segurança física estável.</p>
+                                            <button type="button" onClick={handleLiveExportBackup} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black text-[10px] uppercase p-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2">
+                                                <Download size={16}/> Gerar Backup da Nuvem
+                                            </button>
                                         </div>
                                         
                                         <div className="space-y-4 border-t pt-6 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-slate-200">
-                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção B: Colar Texto de Cópia de Segurança (JSON)</h3>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Caso tenha o conteúdo do seu backup salvo em texto, cole-o no campo abaixo para restaurar de imediato.</p>
-                                            
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção B: Restaurar por Texto JSON</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Caso queira colar o conteúdo exportado do Node.js ou de outro backup, insira o texto JSON diretamente neste painel.</p>
                                             <textarea className="w-full h-24 p-3 bg-white border rounded-xl font-mono text-[9px] outline-none" placeholder='Exemplo: {"transactions": [...], "dailyRecords": {...}}' value={backupText} onChange={e=>setBackupText(e.target.value)}></textarea>
-                                            
-                                            <button type="button" onClick={handleParseTextBackup} className="w-full bg-black text-white font-black text-[9px] uppercase py-3 rounded-xl hover:bg-slate-800 transition-all">Analisar Texto de Backup</button>
+                                            <button type="button" onClick={handleParseTextBackup} className="w-full bg-black text-white font-black text-[9px] uppercase py-3 rounded-xl hover:bg-slate-800 transition-all">Analisar Texto Copiado</button>
                                         </div>
                                      </div>
 
                                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 space-y-4">
                                          <h3 className="text-xs font-black uppercase text-slate-600">Opção C: Carregar Ficheiro de Backup (.json)</h3>
+                                         <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Selecione o ficheiro gerado pelo script Node.js ou pela aplicação do Tribo Burger para restaurar todos os dados.</p>
                                          <input type="file" accept=".json" onChange={handleFileSelect} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" />
                                      </div>
 
                                      {parsedBackup && (
                                          <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-300 space-y-4 fade-in">
-                                             <h4 className="text-xs font-black text-amber-800 uppercase">Confirmar Restauro de Dados no ID: <span className="font-mono text-black">{user.uid}</span></h4>
+                                             <h4 className="text-xs font-black text-amber-800 uppercase">Mecanismo de Escrita Detectado para o ID: <span className="font-mono text-black">{user.uid}</span></h4>
                                              <div className="flex gap-2">
-                                                 <button type="button" onClick={()=>setBackupMode('merge')} className={"flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all " + (backupMode==='merge'?'bg-black text-[#F8CC82]':'bg-white text-slate-400')}>Mesclar c/ Existentes</button>
-                                                 <button type="button" onClick={()=>setBackupMode('overwrite')} className={"flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all " + (backupMode==='overwrite'?'bg-red-600 text-white':'bg-white text-slate-400')}>Substituir Tudo</button>
+                                                 <button type="button" onClick={()=>setBackupMode('merge')} className={"flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all " + (backupMode==='merge'?'bg-black text-[#F8CC82]':'bg-white text-slate-400')}>Mesclar com Existentes</button>
+                                                 <button type="button" onClick={()=>setBackupMode('overwrite')} className={"flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all " + (backupMode==='overwrite'?'bg-red-600 text-white':'bg-white text-slate-400')}>Limpar e Substituir Tudo</button>
                                              </div>
                                              <button type="button" onClick={handleExecuteRestore} className="w-full bg-emerald-500 text-white font-black text-xs uppercase py-4 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all">Confirmar e Gravar Dados</button>
                                          </div>
@@ -1793,8 +1846,8 @@
 
                                      {backupLog && (
                                          <div className="space-y-2">
-                                             <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Histórico de Importação / Operações</label>
-                                             <div className="bg-[#1A202C] text-slate-300 p-4 rounded-2xl font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap lowercase">{backupLog}</div>
+                                             <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Consola de Operações da Nuvem (Logs em Tempo Real)</label>
+                                             <pre className="terminal-box h-48 overflow-y-auto no-scrollbar whitespace-pre-wrap">{backupLog}</pre>
                                              {restoreProgress > 0 && (
                                                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                                      <div className="bg-teal-600 h-full transition-all duration-300" style={{width: restoreProgress + "%"}}></div>
@@ -1806,7 +1859,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.3 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.8.0 PRO BACKUP</footer>
                 </div>
             );
         }
