@@ -716,6 +716,34 @@
                 }
             };
 
+            // NOVA FUNÇÃO: SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA
+            const handleFileSelect = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setBackupLog(prev => prev + `A ler o ficheiro: ${file.name}...\n`);
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (parsed.transactions || parsed.accounts || parsed.dailyRecords) {
+                            setParsedBackup(parsed);
+                            setBackupLog(prev => prev + `Ficheiro lido com sucesso!\n` +
+                                `- Transações detetadas: ${parsed.transactions?.length || 0}\n` +
+                                `- Contas detetadas: ${parsed.accounts?.length || 0}\n` +
+                                `- Registos de vendas: ${Object.keys(parsed.dailyRecords || {}).length || 0}\n`
+                            );
+                        } else {
+                            setBackupLog(prev => prev + "Ficheiro JSON válido, mas não contém chaves de dados compatíveis com o Tribo Burger.\n");
+                        }
+                    } catch(err) {
+                        setBackupLog(prev => prev + `Erro ao processar ficheiro JSON: ${err.message}\n`);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             const handleExecuteRestore = async () => {
                 if (!user || !parsedBackup) return;
                 setIsActionLoading(true);
