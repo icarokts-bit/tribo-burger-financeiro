@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.6.5 STABLE</title>
+    <title>Tribo Burger | v2.7.0 RECOVERY</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -51,7 +51,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Configurações dinâmicas injetadas pelo ambiente Canvas
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'tribo-burger-financeiro';
         const firebaseConfig = typeof __firebase_config !== 'undefined' 
             ? JSON.parse(__firebase_config) 
@@ -191,6 +190,13 @@
             const [loading, setLoading] = useState(true);
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
+            
+            // Credenciais para Login Manual (para reaver o ID kwOLw2kxNKTHLHnbK2Lx74oefTu2)
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isRegistering, setIsRegistering] = useState(false);
+            const [authError, setAuthError] = useState('');
+            const [authMode, setAuthMode] = useState('auto'); // 'auto' ou 'manual'
 
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
@@ -235,7 +241,14 @@
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
 
-            // CUMPRIMENTO EXIGIDO DA REGRA 3: Autenticação Segura e Prioritária antes de qualquer Query
+            // Estados para importação via área de texto direto
+            const [backupText, setBackupText] = useState('');
+            const [parsedBackup, setParsedBackup] = useState(null);
+            const [backupLog, setBackupLog] = useState('');
+            const [backupMode, setBackupMode] = useState('merge');
+            const [restoreProgress, setRestoreProgress] = useState(0);
+
+            // CUMPRIMENTO RIGOROSO DA REGRA 3: Autenticação Dinâmica e Prioritária antes de qualquer Query
             useEffect(() => {
                 const initAuth = async () => {
                     try {
@@ -245,8 +258,7 @@
                             await auth.signInAnonymously();
                         }
                     } catch (err) {
-                        console.error("Falha ao inicializar autenticação segura:", err);
-                        // Fallback redundante para manter o sistema operacional
+                        console.error("Falha ao inicializar autenticação automática:", err);
                         try { await auth.signInAnonymously(); } catch(e) {}
                     }
                 };
@@ -259,7 +271,7 @@
                 return () => unsubscribe();
             }, []);
 
-            // Escuta dinâmica que acompanha o UID correto (sem permissões em conflito)
+            // Escuta dinâmica que acompanha o UID ativo no Firestore
             useEffect(() => {
                 if (!user) return;
                 
@@ -315,7 +327,7 @@
                 transactions.forEach(t => {
                     if (t.status === 'pago') {
                         const amt = p(t.amount);
-                        if (t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
+                        if (t.type === 'entrada' || t.type === 'entrada') bal[t.account] = (bal[t.account] || 0) + amt;
                         else if (t.type === 'saida') bal[t.account] = (bal[t.account] || 0) - amt;
                         else if (t.type === 'transferencia') { 
                             bal[t.account] = (bal[t.account] || 0) - amt; 
@@ -454,6 +466,34 @@
                 });
                 return items.sort((a, b) => a.diffDays - b.diffDays);
             }, [transactions, accounts, filterMonth]);
+
+            const handleManualLogin = (e) => {
+                e.preventDefault();
+                setAuthError('');
+                setIsActionLoading(true);
+                
+                if (isRegistering) {
+                    auth.createUserWithEmailAndPassword(email, password)
+                        .then(() => {
+                            setIsActionLoading(false);
+                            setAuthMode('auto');
+                        })
+                        .catch(err => {
+                            setAuthError(err.message);
+                            setIsActionLoading(false);
+                        });
+                } else {
+                    auth.signInWithEmailAndPassword(email, password)
+                        .then(() => {
+                            setIsActionLoading(false);
+                            setAuthMode('auto');
+                        })
+                        .catch(err => {
+                            setAuthError(err.message);
+                            setIsActionLoading(false);
+                        });
+                }
+            };
 
             const handleSaveTx = async (e) => {
                 e.preventDefault();
@@ -656,112 +696,43 @@
                 }
             };
 
-            // MOTOR DE PARSING DE CÓPIAS DE SEGURANÇA (XML / JSON)
-            const handleFileSelect = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const text = evt.target.result;
-                    let parsedData = null;
-
-                    setBackupLog(`A ler ficheiro "${file.name}"...\n`);
-
-                    if (file.name.endsWith('.xml')) {
-                        try {
-                            const parser = new DOMParser();
-                            const xmlDoc = parser.parseFromString(text, "text/xml");
-                            
-                            const getChildrenAsObj = (node) => {
-                                const obj = {};
-                                Array.from(node.children).forEach(c => {
-                                    obj[c.tagName] = c.textContent;
-                                });
-                                return obj;
-                            };
-
-                            const parsed = {
-                                transactions: [],
-                                dailyRecords: {},
-                                accounts: [],
-                                categories: [],
-                                suppliers: []
-                            };
-
-                            // Ler Transações
-                            const txs = xmlDoc.getElementsByTagName("transaction");
-                            Array.from(txs).forEach(node => parsed.transactions.push(getChildrenAsObj(node)));
-
-                            // Ler Contas Bancárias
-                            const accs = xmlDoc.getElementsByTagName("account") || xmlDoc.getElementsByTagName("bankAccount");
-                            Array.from(accs).forEach(node => parsed.accounts.push(getChildrenAsObj(node)));
-
-                            // Ler Categorias
-                            const cats = xmlDoc.getElementsByTagName("category");
-                            Array.from(cats).forEach(node => parsed.categories.push(getChildrenAsObj(node)));
-
-                            // Ler Fornecedores
-                            const sups = xmlDoc.getElementsByTagName("supplier");
-                            Array.from(sups).forEach(node => parsed.suppliers.push(getChildrenAsObj(node)));
-
-                            // Ler Registos Diários de Vendas
-                            const recs = xmlDoc.getElementsByTagName("record") || xmlDoc.getElementsByTagName("dailyRecord");
-                            Array.from(recs).forEach(node => {
-                                const dayId = node.getAttribute("id") || node.getElementsByTagName("date")[0]?.textContent;
-                                if (dayId) {
-                                    parsed.dailyRecords[dayId] = getChildrenAsObj(node);
-                                }
-                            });
-
-                            parsedData = parsed;
-                        } catch (err) {
-                            setBackupLog(prev => prev + `Erro ao processar ficheiro XML: ${err.message}\n`);
-                        }
-                    } else if (file.name.endsWith('.json')) {
-                        try {
-                            parsedData = JSON.parse(text);
-                        } catch (err) {
-                            setBackupLog(prev => prev + `Erro ao ler ficheiro JSON: ${err.message}\n`);
-                        }
-                    } else {
-                        setBackupLog(prev => prev + "Formato inválido. Por favor, carregue um ficheiro .xml ou .json.\n");
-                    }
-
-                    if (parsedData) {
-                        setParsedBackup(parsedData);
-                        setBackupLog(prev => prev + `Ficheiro analisado com sucesso!\n` +
-                            `- Transações identificadas: ${parsedData.transactions?.length || 0}\n` +
-                            `- Contas identificadas: ${parsedData.accounts?.length || 0}\n` +
-                            `- Registos de vendas: ${Object.keys(parsedData.dailyRecords || {}).length || 0}\n` +
-                            `- Categorias: ${parsedData.categories?.length || 0}\n` +
-                            `- Fornecedores: ${parsedData.suppliers?.length || 0}\n`
+            // ANALISAR TEXTO DE BACKUP COLADO DIRETAMENTE (MOTOR DE TEXTO BULLETPROOF)
+            const handleParseTextBackup = () => {
+                if (!backupText.trim()) return;
+                try {
+                    const parsed = JSON.parse(backupText);
+                    if (parsed.transactions || parsed.accounts || parsed.dailyRecords) {
+                        setParsedBackup(parsed);
+                        setBackupLog(`Sucesso ao ler texto de Cópia de Segurança!\n` +
+                            `- Transações detetadas: ${parsed.transactions?.length || 0}\n` +
+                            `- Contas detetadas: ${parsed.accounts?.length || 0}\n` +
+                            `- Registos de vendas: ${Object.keys(parsed.dailyRecords || {}).length || 0}\n`
                         );
+                    } else {
+                        setBackupLog("JSON válido, mas não contém chaves de dados do Tribo Burger.");
                     }
-                };
-                reader.readAsText(file);
+                } catch(e) {
+                    setBackupLog(`Erro de formatação JSON: ${e.message}`);
+                }
             };
 
             const handleExecuteRestore = async () => {
                 if (!user || !parsedBackup) return;
                 setIsActionLoading(true);
                 setRestoreProgress(5);
-                setBackupLog(prev => prev + `A iniciar processo de restauro no Firebase...\n`);
+                setBackupLog(prev => prev + `Iniciando gravação direta no ID: ${user.uid}...\n`);
 
                 try {
                     const activeUid = user.uid;
                     const path = `artifacts/${appId}/users/${activeUid}`;
 
-                    // Se for modo Overwrite, limpar dados anteriores de forma assíncrona primeiro
                     if (backupMode === 'overwrite') {
-                        setBackupLog(prev => prev + `[Aviso] Modo Overwrite: A remover registos anteriores...\n`);
-                        // Apagar transações antigas
+                        setBackupLog(prev => prev + `[Aviso] Limpando registos anteriores para substituição...\n`);
                         const txSnap = await db.collection(`${path}/transactions`).get();
                         const txBatch = db.batch();
                         txSnap.docs.forEach(doc => txBatch.delete(doc.ref));
                         await txBatch.commit();
 
-                        // Apagar registos diários antigos
                         const drSnap = await db.collection(`${path}/dailyRecords`).get();
                         const drBatch = db.batch();
                         drSnap.docs.forEach(doc => drBatch.delete(doc.ref));
@@ -772,7 +743,7 @@
 
                     // Restaurar Contas
                     if (parsedBackup.accounts && parsedBackup.accounts.length > 0) {
-                        setBackupLog(prev => prev + `A carregar ${parsedBackup.accounts.length} contas...\n`);
+                        setBackupLog(prev => prev + `Importando ${parsedBackup.accounts.length} contas...\n`);
                         for (const acc of parsedBackup.accounts) {
                             if (acc.name) {
                                 await db.collection(`${path}/accounts`).add({
@@ -792,31 +763,23 @@
 
                     // Restaurar Categorias
                     if (parsedBackup.categories && parsedBackup.categories.length > 0) {
-                        setBackupLog(prev => prev + `A carregar ${parsedBackup.categories.length} categorias...\n`);
                         for (const cat of parsedBackup.categories) {
-                            if (cat.name) {
-                                await db.collection(`${path}/categories`).add({ name: cat.name });
-                            }
+                            if (cat.name) await db.collection(`${path}/categories`).add({ name: cat.name });
                         }
                     }
 
-                    setRestoreProgress(65);
+                    setRestoreProgress(70);
 
                     // Restaurar Fornecedores
                     if (parsedBackup.suppliers && parsedBackup.suppliers.length > 0) {
-                        setBackupLog(prev => prev + `A carregar ${parsedBackup.suppliers.length} fornecedores...\n`);
                         for (const sup of parsedBackup.suppliers) {
-                            if (sup.name) {
-                                await db.collection(`${path}/suppliers`).add({ name: sup.name });
-                            }
+                            if (sup.name) await db.collection(`${path}/suppliers`).add({ name: sup.name });
                         }
                     }
 
-                    setRestoreProgress(80);
-
-                    // Restaurar Registos Diários de Venda (em lotes)
+                    // Restaurar Registos Diários de Venda
                     if (parsedBackup.dailyRecords && Object.keys(parsedBackup.dailyRecords).length > 0) {
-                        setBackupLog(prev => prev + `A carregar registos diários de vendas...\n`);
+                        setBackupLog(prev => prev + `Gravando caixas diários de vendas...\n`);
                         const days = Object.keys(parsedBackup.dailyRecords);
                         let drBatch = db.batch();
                         let count = 0;
@@ -836,18 +799,16 @@
 
                     setRestoreProgress(90);
 
-                    // Restaurar Transações (em lotes/batches de 450 para segurança do Firestore)
+                    // Restaurar Transações
                     if (parsedBackup.transactions && parsedBackup.transactions.length > 0) {
-                        setBackupLog(prev => prev + `A carregar ${parsedBackup.transactions.length} transações de histórico...\n`);
+                        setBackupLog(prev => prev + `Gravando ${parsedBackup.transactions.length} transações financeiras...\n`);
                         let txBatch = db.batch();
                         let count = 0;
 
                         for (const tx of parsedBackup.transactions) {
                             const newRef = db.collection(`${path}/transactions`).doc();
-                            
-                            // Higienização completa de campos numéricos e datas para evitar crashes futuros
                             const cleanTx = {
-                                description: tx.description || 'Lançamento Restaurado',
+                                description: tx.description || 'Lançamento',
                                 amount: p(tx.amount),
                                 type: tx.type || 'saida',
                                 status: tx.status || 'pago',
@@ -873,11 +834,11 @@
                     }
 
                     setRestoreProgress(100);
-                    setBackupLog(prev => prev + `\n✨ RESTAURO CONCLUÍDO COM SUCESSO! Todos os dados estão no ar.`);
+                    setBackupLog(prev => prev + `\n✨ DADOS RESTAURADOS COM SUCESSO NO SEU ID ATUAL!`);
                     setParsedBackup(null);
+                    setBackupText('');
                 } catch (err) {
-                    console.error(err);
-                    setBackupLog(prev => prev + `\n[Erro Crítico] Falha ao gravar dados: ${err.message}`);
+                    setBackupLog(prev => prev + `\n❌ Erro ao gravar: ${err.message}`);
                 } finally {
                     setIsActionLoading(false);
                 }
@@ -885,15 +846,7 @@
 
             const handleExportBackup = () => {
                 if (!user) return;
-                
-                const dataToExport = {
-                    transactions,
-                    dailyRecords,
-                    accounts,
-                    categories,
-                    suppliers
-                };
-
+                const dataToExport = { transactions, dailyRecords, accounts, categories, suppliers };
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
                 const downloadAnchor = document.createElement('a');
                 downloadAnchor.setAttribute("href", dataStr);
@@ -988,9 +941,9 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.6.5</h1>
-                                <span className="bg-emerald-500 text-black text-[7px] font-black px-2 py-1 rounded-md animate-pulse">
-                                    SESSÃO ATIVA
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.7.0</h1>
+                                <span className={`text-[7px] font-black px-2 py-1 rounded-md ${user?.isAnonymous ? 'bg-amber-500 text-black animate-pulse' : 'bg-emerald-500 text-black'}`}>
+                                    {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
@@ -1001,22 +954,64 @@
                                 ))}
                             </nav>
                             <div className="flex items-center gap-3 flex-wrap justify-end">
-                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider bg-slate-800 px-3 py-1 rounded-lg">
-                                    UID: {user?.uid}
-                                </span>
+                                <button onClick={() => setAuthMode(authMode === 'manual' ? 'auto' : 'manual')} className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[8px] font-black uppercase px-3 py-1.5 rounded-xl transition-all">
+                                    {authMode === 'manual' ? 'Fechar Login' : 'Entrar c/ E-mail'}
+                                </button>
+                                <button onClick={async () => { await auth.signOut(); await auth.signInAnonymously(); }} className="bg-red-500 hover:bg-red-600 text-white font-black text-[8px] uppercase px-3 py-1.5 rounded-xl transition-all">
+                                    Reiniciar
+                                </button>
                             </div>
                         </div>
                     </header>
 
-                    <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
-                        {/* AVISO DE CONEXÃO ESTÁVEL */}
-                        <div className="p-4 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-[2rem] text-center shadow-inner flex flex-col sm:flex-row items-center justify-between gap-4 fade-in">
-                            <div className="text-left">
-                                <h4 className="text-xs font-black text-emerald-850 uppercase">✅ Conexão com Firebase Estabelecida com Sucesso</h4>
-                                <p className="text-[9px] font-bold text-emerald-600 uppercase mt-0.5">O sistema resolveu todas as permissões. Os seus dados históricos estão visíveis abaixo.</p>
+                    {authMode === 'manual' && (
+                        <div className="bg-[#1A202C] p-6 border-b-4 border-amber-500 text-white flex justify-center">
+                            <div className="max-w-md w-full p-6 bg-white text-slate-800 rounded-3xl shadow-xl flex flex-col gap-4">
+                                <div className="text-center">
+                                    <h3 className="font-black text-sm uppercase text-slate-800">Recuperar Conta Mestre</h3>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Inicie sessão com o seu e-mail original para reaver o ID kwOLw2kxNKTHLHnbK2Lx74oefTu2</p>
+                                </div>
+                                {authError && <div className="p-3 bg-red-100 text-red-600 text-[9px] font-black uppercase rounded-xl">{authError}</div>}
+                                <form onSubmit={handleManualLogin} className="space-y-3">
+                                    <input type="email" placeholder="Seu E-mail" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={email} onChange={e=>setEmail(e.target.value)} />
+                                    <input type="password" placeholder="Sua Senha" required className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold uppercase" value={password} onChange={e=>setPassword(e.target.value)} />
+                                    <button className="w-full bg-black text-[#F8CC82] p-4 rounded-xl font-black text-[10px] uppercase">{isRegistering ? 'Criar Nova Conta' : 'Entrar na Conta Mestre'}</button>
+                                </form>
+                                <div className="text-center">
+                                    <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-[8px] font-black uppercase text-amber-600 tracking-wider">
+                                        {isRegistering ? 'Já tenho conta? Fazer Login' : 'Criar um registo de e-mail novo'}
+                                    </button>
+                                </div>
                             </div>
-                            <div className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-3 py-1.5 rounded-xl uppercase">
-                                Autenticação Segura
+                        </div>
+                    )}
+
+                    <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
+                        
+                        {/* PAINEL DE DIAGNÓSTICO DE CONEXÃO E DADOS */}
+                        <div className="glass-card p-6 rounded-[2.5rem] border-l-8 border-[#D97757] shadow-md flex flex-col md:flex-row justify-between items-center gap-4 bg-white">
+                            <div>
+                                <h3 className="text-xs font-black uppercase text-slate-800 flex items-center gap-2">
+                                    <Icon name="bell" size={16} className="text-[#D97757]" /> Painel de Diagnóstico do Sistema
+                                </h3>
+                                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2.5 py-1 rounded">
+                                        ID Autenticado: <span className="font-mono text-slate-800">{user?.uid}</span>
+                                    </span>
+                                    <span className={`text-[9px] font-black px-2.5 py-1 rounded uppercase ${transactions.length > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-pulse'}`}>
+                                        {transactions.length > 0 ? `${transactions.length} Lançamentos Carregados` : '0 Lançamentos na Nuvem'}
+                                    </span>
+                                </div>
+                                {transactions.length === 0 && (
+                                    <p className="text-[9px] font-bold text-red-500 uppercase mt-2 leading-relaxed">
+                                        * Atenção: O seu ID atual não possui dados guardados no Firebase. Para ver o seu histórico, inicie sessão com o seu e-mail ou utilize a ferramenta de importação no final da página para colar o seu backup de dados.
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={()=>setActiveTab('ajustes')} className="bg-black hover:bg-slate-800 text-[#F8CC82] text-[9px] font-black uppercase px-4 py-3 rounded-xl transition-all">
+                                    Ir para Importar / Ajustes
+                                </button>
                             </div>
                         </div>
 
@@ -1541,32 +1536,42 @@
                                      </div>
                                 </div>
 
-                                {/* CENTRAL AVANÇADA DE CÓPIAS DE SEGURANÇA E RESTAURO DE DADOS */}
+                                {/* CENTRAL DE RESTAURO DIRETO (FICHEIRO OU TEXTO COPIADO) */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-teal-600 space-y-6 h-fit lg:col-span-2">
-                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="credit-card" size={18} className="text-teal-600"/>Central de Cópia de Segurança e Restauro de Dados</h2>
+                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="credit-card" size={18} className="text-teal-600"/>Restaurar Lançamentos de Cópia de Segurança</h2>
+                                     
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-[2rem] border-2 border-dashed border-slate-200">
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção 1: Exportar Cópia de Segurança</h3>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Guarde todas as transações, vendas e configurações num ficheiro JSON de segurança para manter um histórico físico local.</p>
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção A: Exportar Cópia de Segurança</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Guarde todas as transações, vendas e configurações num ficheiro JSON físico local para segurança.</p>
                                             <button type="button" onClick={handleExportBackup} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black text-[10px] uppercase p-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"><Icon name="check-square" size={16}/>Exportar Backup Completo</button>
                                         </div>
+                                        
                                         <div className="space-y-4 border-t pt-6 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-slate-200">
-                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção 2: Restaurar Dados (Importar XML / JSON)</h3>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Selecione o seu arquivo JSON para carregar os seus lançamentos de histórico instantaneamente na sua conta.</p>
-                                            <input type="file" accept=".xml,.json" onChange={handleFileSelect} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" />
+                                            <h3 className="text-xs font-black uppercase text-slate-600">Opção B: Colar Texto de Cópia de Segurança (JSON)</h3>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Caso tenha o conteúdo do seu backup salvo em texto, cole-o no campo abaixo para restaurar de imediato.</p>
                                             
-                                            {parsedBackup && (
-                                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
-                                                    <p className="text-[9px] font-black text-amber-800 uppercase">Configurações de Importação:</p>
-                                                    <div className="flex gap-2">
-                                                        <button type="button" onClick={()=>setBackupMode('merge')} className={`flex-1 p-2 rounded-lg text-[8px] font-black uppercase border transition-all ${backupMode==='merge'?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>Mesclar Dados</button>
-                                                        <button type="button" onClick={()=>setBackupMode('overwrite')} className={`flex-1 p-2 rounded-lg text-[8px] font-black uppercase border transition-all ${backupMode==='overwrite'?'bg-red-600 text-white':'bg-white text-slate-400'}`}>Substituir Tudo</button>
-                                                    </div>
-                                                    <button type="button" onClick={handleExecuteRestore} className="w-full bg-black text-[#F8CC82] font-black text-[10px] uppercase py-3 rounded-xl hover:bg-slate-800 transition-all">Confirmar e Restaurar</button>
-                                                </div>
-                                            )}
+                                            <textarea className="w-full h-24 p-3 bg-white border rounded-xl font-mono text-[9px] outline-none" placeholder='Exemplo: {"transactions": [...], "dailyRecords": {...}}' value={backupText} onChange={e=>setBackupText(e.target.value)}></textarea>
+                                            
+                                            <button type="button" onClick={handleParseTextBackup} className="w-full bg-black text-white font-black text-[9px] uppercase py-3 rounded-xl hover:bg-slate-800 transition-all">Analisar Texto de Backup</button>
                                         </div>
                                      </div>
+
+                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 space-y-4">
+                                         <h3 className="text-xs font-black uppercase text-slate-600">Opção C: Carregar Ficheiro de Backup (.json)</h3>
+                                         <input type="file" accept=".json" onChange={handleFileSelect} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" />
+                                     </div>
+
+                                     {parsedBackup && (
+                                         <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-300 space-y-4 fade-in">
+                                             <h4 className="text-xs font-black text-amber-800 uppercase">Confirmar Restauro de Dados no ID: <span className="font-mono text-black">{user.uid}</span></h4>
+                                             <div className="flex gap-2">
+                                                 <button type="button" onClick={()=>setBackupMode('merge')} className={`flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all ${backupMode==='merge'?'bg-black text-[#F8CC82]':'bg-white text-slate-400'}`}>Mesclar c/ Existentes</button>
+                                                 <button type="button" onClick={()=>setBackupMode('overwrite')} className={`flex-1 p-3 rounded-xl text-[9px] font-black uppercase border transition-all ${backupMode==='overwrite'?'bg-red-600 text-white':'bg-white text-slate-400'}`}>Substituir Tudo</button>
+                                             </div>
+                                             <button type="button" onClick={handleExecuteRestore} className="w-full bg-emerald-500 text-white font-black text-xs uppercase py-4 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all">Confirmar e Gravar Dados</button>
+                                         </div>
+                                     )}
 
                                      {backupLog && (
                                          <div className="space-y-2">
@@ -1583,7 +1588,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.6.5 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.7.0 GOLDEN STABLE</footer>
                 </div>
             );
         }
