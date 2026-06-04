@@ -194,6 +194,9 @@
             const [isRegistering, setIsRegistering] = useState(false);
             const [authError, setAuthError] = useState('');
 
+            // Gestão dinâmica de UID customizado (para restaurar kwOLw2kxNKTHLHnbK2Lx74oefTu2)
+            const [customUid, setCustomUid] = useState(() => localStorage.getItem('tribo_custom_uid') || '');
+
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
             const [accounts, setAccounts] = useState([]);
@@ -253,7 +256,10 @@
 
             useEffect(() => {
                 if (!user) return;
-                const path = `artifacts/${appId}/users/${user.uid}`;
+                
+                // Determina qual é o UID ativo na sessão
+                const activeUid = customUid ? customUid : user.uid;
+                const path = `artifacts/${appId}/users/${activeUid}`;
                 
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
                 const unsubDaily = db.collection(`${path}/dailyRecords`).onSnapshot(s => { const r = {}; s.docs.forEach(d => { if (d.exists) r[d.id] = d.data(); }); setDailyRecords(r); }, e => console.error(e));
@@ -263,7 +269,7 @@
                 const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); }, e => console.error(e));
 
                 return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
-            }, [user]);
+            }, [user, customUid]);
 
             useEffect(() => {
                 setVisibleCount(30);
@@ -471,7 +477,8 @@
                 if (!user || !val) return;
                 setIsActionLoading(true);
                 try {
-                    const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                    const activeUid = customUid ? customUid : user.uid;
+                    const path = `artifacts/${appId}/users/${activeUid}/transactions`;
                     const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
                     const batch = db.batch();
                     const numInst = (type === 'transferencia') ? 1 : (parseInt(inst) || 1);
@@ -528,7 +535,8 @@
                 if (!user || !invoiceModal || !invoiceSourceAcc) return;
                 setIsActionLoading(true);
                 try {
-                    const path = `artifacts/${appId}/users/${user.uid}/transactions`;
+                    const activeUid = customUid ? customUid : user.uid;
+                    const path = `artifacts/${appId}/users/${activeUid}/transactions`;
                     const totalInvoiceAmount = invoiceModal.total;
                     const paidAmount = invoicePayType === 'integral' ? totalInvoiceAmount : p(invoicePartialVal);
 
@@ -614,7 +622,8 @@
 
             const handleOpenNewDay = async () => {
                 if (!user) return; setIsActionLoading(true);
-                try { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); } finally { setIsActionLoading(false); }
+                const activeUid = customUid ? customUid : user.uid;
+                try { await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); } finally { setIsActionLoading(false); }
             };
 
             const openLiquidation = (t) => {
@@ -625,20 +634,22 @@
             const executeLiquidation = async () => {
                 if (!user || !liqModal) return;
                 setIsActionLoading(true);
+                const activeUid = customUid ? customUid : user.uid;
                 try {
-                    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('transactions').doc(liqModal.id).update({ status: 'pago', clearanceDate: liqModal.date, amount: p(liqModal.amount) });
+                    await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('transactions').doc(liqModal.id).update({ status: 'pago', clearanceDate: liqModal.date, amount: p(liqModal.amount) });
                     setLiqModal(null);
                 } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
-            const saveMeta = async (v) => { if (!user) return; await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('settings').doc('config').set({ meta: p(v) }, { merge: true }); };
+            const saveMeta = async (v) => { if (!user) return; const activeUid = customUid ? customUid : user.uid; await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('settings').doc('config').set({ meta: p(v) }, { merge: true }); };
 
             const handleSaveAccount = async () => {
                 if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
                 if (accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id)) { setAccFormError('Já existe este nome.'); return; }
                 setAccFormError(''); setIsActionLoading(true);
+                const activeUid = customUid ? customUid : user.uid;
                 try {
-                    const pth = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('accounts');
+                    const pth = db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('accounts');
                     if (accForm.id) await pth.doc(accForm.id).update(accForm); else await pth.add(accForm);
                     setAccForm({id:null, name:'', type:'corrente', group:'operacional', closing:'25', due:'10', pos:'1', highlight:false});
                 } finally { setIsActionLoading(false); }
@@ -646,10 +657,11 @@
 
             const executeDelete = async (collectionName, id) => {
                 if (!user || !user.uid || !collectionName || !id || typeof id !== 'string' || id.trim() === '') return;
+                const activeUid = customUid ? customUid : user.uid;
                 if (deleteConfirmId === id) {
                     setIsActionLoading(true);
                     try { 
-                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection(collectionName).doc(id).delete(); 
+                        await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection(collectionName).doc(id).delete(); 
                         setDeleteConfirmId(null); 
                     } catch (e) { 
                         console.error("Erro na exclusão:", e); 
@@ -660,6 +672,18 @@
                     setDeleteConfirmId(id); 
                     setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); 
                 }
+            };
+
+            // Mudar e persistir o UID alvo ativamente na sessão
+            const handleSwitchUid = (uidVal) => {
+                if (uidVal && uidVal.trim()) {
+                    setCustomUid(uidVal.trim());
+                    localStorage.setItem('tribo_custom_uid', uidVal.trim());
+                } else {
+                    setCustomUid('');
+                    localStorage.removeItem('tribo_custom_uid');
+                }
+                setVisibleCount(30);
             };
 
             // MOTOR DE PARSING DE CÓPIAS DE SEGURANÇA (XML / JSON)
@@ -755,7 +779,8 @@
                 setBackupLog(prev => prev + `A iniciar processo de restauro no Firebase...\n`);
 
                 try {
-                    const path = `artifacts/${appId}/users/${user.uid}`;
+                    const activeUid = customUid ? customUid : user.uid;
+                    const path = `artifacts/${appId}/users/${activeUid}`;
 
                     // Se for modo Overwrite, limpar dados anteriores de forma assíncrona primeiro
                     if (backupMode === 'overwrite') {
@@ -1033,6 +1058,11 @@
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
                                 <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.6.0</h1>
+                                {customUid && (
+                                    <span className="bg-amber-500 text-black text-[7px] font-black px-2 py-1 rounded-md animate-pulse">
+                                        ADMIN: VÍNCULO ATIVO
+                                    </span>
+                                )}
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -1041,7 +1071,7 @@
                                     </button>
                                 ))}
                             </nav>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-wrap justify-end">
                                 <span className="text-[8px] font-bold text-slate-400 normal-case hidden lg:inline-block truncate max-w-[150px]">{user.email}</span>
                                 <button onClick={() => auth.signOut()} className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] uppercase px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm">
                                     <Icon name="logout" size={12} /> Sair
@@ -1051,6 +1081,18 @@
                     </header>
 
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
+                        {customUid && (
+                            <div className="p-4 bg-amber-50 border-2 border-dashed border-amber-300 rounded-[2rem] text-center shadow-inner flex flex-col sm:flex-row items-center justify-between gap-4 fade-in">
+                                <div className="text-left">
+                                    <h4 className="text-xs font-black text-amber-850 uppercase">⚠️ A visualizar base de dados de utilizador alternativo</h4>
+                                    <p className="text-[9px] font-bold text-amber-600 uppercase mt-0.5">UID de origem: {customUid}</p>
+                                </div>
+                                <button onClick={() => handleSwitchUid('')} className="bg-black hover:bg-slate-800 text-[#F8CC82] text-[9px] font-black uppercase px-6 py-3 rounded-xl transition-all active:scale-95 shadow-md">
+                                    Restaurar Meu Acesso Padrão
+                                </button>
+                            </div>
+                        )}
+
                         <div className="flex justify-center">
                             <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm">
                                 <span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span>
@@ -1563,6 +1605,27 @@
                                                 <button type="button" onClick={() => executeDelete('categories', c.id)} className={`transition-all p-2 rounded-lg ${deleteConfirmId === c.id ? 'delete-confirm' : 'text-red-500'}`}>{deleteConfirmId === c.id ? <span className="text-[8px] font-black uppercase">Sim</span> : <Icon name="trash-2" size={12}></Icon>}</button>
                                             </div>
                                         ))}
+                                     </div>
+                                </div>
+
+                                {/* ASSOCIAÇÃO DIRETA DE OUTRO UTILIZADOR DO FIREBASE (NOVO) */}
+                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-amber-500 space-y-6 h-fit lg:col-span-2">
+                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="plus-circle" size={18} className="text-amber-500"/>Associação Avançada de Utilizador (UID Firebase)</h2>
+                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-dashed border-slate-300 space-y-4">
+                                         <p className="text-[9px] font-bold text-slate-500 leading-relaxed uppercase">
+                                             Insira o identificador de utilizador (UID) de destino para carregar, gerir ou herdar dados de outra conta diretamente neste dispositivo.
+                                         </p>
+                                         <div className="flex flex-col md:flex-row gap-2">
+                                             <input type="text" className="flex-1 p-4 bg-white border rounded-2xl font-mono text-xs font-bold outline-none text-[#D97757] tracking-wider uppercase" placeholder="Cole o UID do Firebase aqui..." value={customUid} onChange={e=>handleSwitchUid(e.target.value)} />
+                                             <button type="button" onClick={() => handleSwitchUid('kwOLw2kxNKTHLHnbK2Lx74oefTu2')} className="bg-[#1A202C] hover:bg-black text-[#F8CC82] font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95 whitespace-nowrap">
+                                                 Vincular kwOLw2kxNKTH...
+                                             </button>
+                                             {customUid && (
+                                                 <button type="button" onClick={() => handleSwitchUid('')} className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95">
+                                                     Limpar Vínculo
+                                                 </button>
+                                             )}
+                                         </div>
                                      </div>
                                 </div>
 
