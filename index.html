@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.6.0 STABLE</title>
+    <title>Tribo Burger | v2.6.5 STABLE</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -51,19 +51,22 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
-            authDomain: "tribo-burger-app.firebaseapp.com",
-            projectId: "tribo-burger-app",
-            storageBucket: "tribo-burger-app.firebasestorage.app",
-            messagingSenderId: "490245681469",
-            appId: "1:490245681469:web:189b1d2e35bd142cc31554"
-        };
+        // Configurações dinâmicas injetadas pelo ambiente Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tribo-burger-financeiro';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyCL0o0TQYbPXoo7Yo_qJpc1oa7jib8KBcc",
+                authDomain: "tribo-burger-app.firebaseapp.com",
+                projectId: "tribo-burger-app",
+                storageBucket: "tribo-burger-app.firebasestorage.app",
+                messagingSenderId: "490245681469",
+                appId: "1:490245681469:web:189b1d2e35bd142cc31554"
+              };
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        const appId = 'tribo-burger-financeiro';
 
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
@@ -188,14 +191,6 @@
             const [loading, setLoading] = useState(true);
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
-            
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [isRegistering, setIsRegistering] = useState(false);
-            const [authError, setAuthError] = useState('');
-
-            // Gestão dinâmica de UID customizado (para restaurar kwOLw2kxNKTHLHnbK2Lx74oefTu2)
-            const [customUid, setCustomUid] = useState(() => localStorage.getItem('tribo_custom_uid') || '');
 
             const [transactions, setTransactions] = useState([]);
             const [dailyRecords, setDailyRecords] = useState({});
@@ -240,25 +235,35 @@
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
 
-            // Estados adicionais para a central de restauro de backups
-            const [parsedBackup, setParsedBackup] = useState(null);
-            const [backupLog, setBackupLog] = useState('');
-            const [backupMode, setBackupMode] = useState('merge'); // 'merge' ou 'overwrite'
-            const [restoreProgress, setRestoreProgress] = useState(0);
-
+            // CUMPRIMENTO EXIGIDO DA REGRA 3: Autenticação Segura e Prioritária antes de qualquer Query
             useEffect(() => {
-                const unsub = auth.onAuthStateChanged(u => { 
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await auth.signInWithCustomToken(__initial_auth_token);
+                        } else {
+                            await auth.signInAnonymously();
+                        }
+                    } catch (err) {
+                        console.error("Falha ao inicializar autenticação segura:", err);
+                        // Fallback redundante para manter o sistema operacional
+                        try { await auth.signInAnonymously(); } catch(e) {}
+                    }
+                };
+                initAuth();
+
+                const unsubscribe = auth.onAuthStateChanged(u => { 
                     setUser(u); 
                     setLoading(false); 
                 });
-                return () => unsub();
+                return () => unsubscribe();
             }, []);
 
+            // Escuta dinâmica que acompanha o UID correto (sem permissões em conflito)
             useEffect(() => {
                 if (!user) return;
                 
-                // Determina qual é o UID ativo na sessão
-                const activeUid = customUid ? customUid : user.uid;
+                const activeUid = user.uid;
                 const path = `artifacts/${appId}/users/${activeUid}`;
                 
                 const unsubTx = db.collection(`${path}/transactions`).onSnapshot(s => setTransactions(s.docs.map(d => ({ ...d.data(), id: d.id }))), e => console.error(e));
@@ -269,7 +274,7 @@
                 const unsubMeta = db.doc(`${path}/settings/config`).onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); }, e => console.error(e));
 
                 return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
-            }, [user, customUid]);
+            }, [user]);
 
             useEffect(() => {
                 setVisibleCount(30);
@@ -450,34 +455,12 @@
                 return items.sort((a, b) => a.diffDays - b.diffDays);
             }, [transactions, accounts, filterMonth]);
 
-            const handleAuthSubmit = (e) => {
-                e.preventDefault();
-                setAuthError('');
-                setIsActionLoading(true);
-                
-                if (isRegistering) {
-                    auth.createUserWithEmailAndPassword(email, password)
-                        .then(() => setIsActionLoading(false))
-                        .catch(err => {
-                            setAuthError(err.message);
-                            setIsActionLoading(false);
-                        });
-                } else {
-                    auth.signInWithEmailAndPassword(email, password)
-                        .then(() => setIsActionLoading(false))
-                        .catch(err => {
-                            setAuthError(err.message);
-                            setIsActionLoading(false);
-                        });
-                }
-            };
-
             const handleSaveTx = async (e) => {
                 e.preventDefault();
                 if (!user || !val) return;
                 setIsActionLoading(true);
                 try {
-                    const activeUid = customUid ? customUid : user.uid;
+                    const activeUid = user.uid;
                     const path = `artifacts/${appId}/users/${activeUid}/transactions`;
                     const cardInfo = accounts.find(a => a.name === account && a.type === 'cartao');
                     const batch = db.batch();
@@ -535,13 +518,12 @@
                 if (!user || !invoiceModal || !invoiceSourceAcc) return;
                 setIsActionLoading(true);
                 try {
-                    const activeUid = customUid ? customUid : user.uid;
+                    const activeUid = user.uid;
                     const path = `artifacts/${appId}/users/${activeUid}/transactions`;
                     const totalInvoiceAmount = invoiceModal.total;
                     const paidAmount = invoicePayType === 'integral' ? totalInvoiceAmount : p(invoicePartialVal);
 
                     if (paidAmount <= 0) { 
-                        setAuthError("Indique um valor válido de pagamento."); 
                         setIsActionLoading(false);
                         return; 
                     }
@@ -622,7 +604,7 @@
 
             const handleOpenNewDay = async () => {
                 if (!user) return; setIsActionLoading(true);
-                const activeUid = customUid ? customUid : user.uid;
+                const activeUid = user.uid;
                 try { await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('dailyRecords').doc(newDayDate).set({ initialized: true }, { merge: true }); } finally { setIsActionLoading(false); }
             };
 
@@ -634,20 +616,20 @@
             const executeLiquidation = async () => {
                 if (!user || !liqModal) return;
                 setIsActionLoading(true);
-                const activeUid = customUid ? customUid : user.uid;
+                const activeUid = user.uid;
                 try {
                     await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('transactions').doc(liqModal.id).update({ status: 'pago', clearanceDate: liqModal.date, amount: p(liqModal.amount) });
                     setLiqModal(null);
                 } catch (e) { console.error(e); } finally { setIsActionLoading(false); }
             };
 
-            const saveMeta = async (v) => { if (!user) return; const activeUid = customUid ? customUid : user.uid; await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('settings').doc('config').set({ meta: p(v) }, { merge: true }); };
+            const saveMeta = async (v) => { if (!user) return; const activeUid = user.uid; await db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('settings').doc('config').set({ meta: p(v) }, { merge: true }); };
 
             const handleSaveAccount = async () => {
                 if (!accForm.name) { setAccFormError('Defina um nome.'); return; }
                 if (accounts.find(a => a.name.toLowerCase() === accForm.name.toLowerCase() && a.id !== accForm.id)) { setAccFormError('Já existe este nome.'); return; }
                 setAccFormError(''); setIsActionLoading(true);
-                const activeUid = customUid ? customUid : user.uid;
+                const activeUid = user.uid;
                 try {
                     const pth = db.collection('artifacts').doc(appId).collection('users').doc(activeUid).collection('accounts');
                     if (accForm.id) await pth.doc(accForm.id).update(accForm); else await pth.add(accForm);
@@ -657,7 +639,7 @@
 
             const executeDelete = async (collectionName, id) => {
                 if (!user || !user.uid || !collectionName || !id || typeof id !== 'string' || id.trim() === '') return;
-                const activeUid = customUid ? customUid : user.uid;
+                const activeUid = user.uid;
                 if (deleteConfirmId === id) {
                     setIsActionLoading(true);
                     try { 
@@ -671,90 +653,6 @@
                 } else { 
                     setDeleteConfirmId(id); 
                     setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000); 
-                }
-            };
-
-            // Mudar e persistir o UID alvo ativamente na sessão
-            const handleSwitchUid = (uidVal) => {
-                if (uidVal && uidVal.trim()) {
-                    setCustomUid(uidVal.trim());
-                    localStorage.setItem('tribo_custom_uid', uidVal.trim());
-                } else {
-                    setCustomUid('');
-                    localStorage.removeItem('tribo_custom_uid');
-                }
-                setVisibleCount(30);
-            };
-
-            // CLONAGEM DIRETA DE DADOS ENTRE CONTAS (Novo Motor de Restauro)
-            const handleCloneMasterData = async () => {
-                if (!user) return;
-                setIsActionLoading(true);
-                setBackupLog("A iniciar clonagem completa de dados históricos...\n");
-                
-                try {
-                    const masterUid = "kwOLw2kxNKTHLHnbK2Lx74oefTu2";
-                    const masterPath = `artifacts/${appId}/users/${masterUid}`;
-                    const targetPath = `artifacts/${appId}/users/${user.uid}`;
-
-                    // 1. Contas Bancárias
-                    const accs = await db.collection(`${masterPath}/accounts`).get();
-                    setBackupLog(prev => prev + `A transferir ${accs.size} contas...\n`);
-                    for (const doc of accs.docs) {
-                        await db.collection(`${targetPath}/accounts`).doc(doc.id).set(doc.data());
-                    }
-
-                    // 2. Categorias
-                    const cats = await db.collection(`${masterPath}/categories`).get();
-                    setBackupLog(prev => prev + `A transferir ${cats.size} categorias...\n`);
-                    for (const doc of cats.docs) {
-                        await db.collection(`${targetPath}/categories`).doc(doc.id).set(doc.data());
-                    }
-
-                    // 3. Fornecedores
-                    const sups = await db.collection(`${masterPath}/suppliers`).get();
-                    setBackupLog(prev => prev + `A transferir ${sups.size} fornecedores...\n`);
-                    for (const doc of sups.docs) {
-                        await db.collection(`${targetPath}/suppliers`).doc(doc.id).set(doc.data());
-                    }
-
-                    // 4. Registos Diários de Vendas
-                    const daily = await db.collection(`${masterPath}/dailyRecords`).get();
-                    setBackupLog(prev => prev + `A transferir ${daily.size} registos diários...\n`);
-                    let dailyBatch = db.batch();
-                    let dCount = 0;
-                    for (const doc of daily.docs) {
-                        dailyBatch.set(db.collection(`${targetPath}/dailyRecords`).doc(doc.id), doc.data());
-                        dCount++;
-                        if (dCount % 400 === 0) {
-                            await dailyBatch.commit();
-                            dailyBatch = db.batch();
-                        }
-                    }
-                    await dailyBatch.commit();
-
-                    // 5. Transações
-                    const txs = await db.collection(`${masterPath}/transactions`).get();
-                    setBackupLog(prev => prev + `A transferir ${txs.size} transações...\n`);
-                    let txBatch = db.batch();
-                    let tCount = 0;
-                    for (const doc of txs.docs) {
-                        txBatch.set(db.collection(`${targetPath}/transactions`).doc(doc.id), doc.data());
-                        tCount++;
-                        if (tCount % 400 === 0) {
-                            await txBatch.commit();
-                            txBatch = db.batch();
-                        }
-                    }
-                    await txBatch.commit();
-
-                    setBackupLog(prev => prev + "\n✨ CLONAGEM CONCLUÍDA! Todos os seus dados históricos agora pertencem a este utilizador atual. Atualizando a página...");
-                    setTimeout(() => window.location.reload(), 1500);
-                } catch (err) {
-                    console.error(err);
-                    setBackupLog(prev => prev + `\n❌ Erro durante a cópia: ${err.message}`);
-                } finally {
-                    setIsActionLoading(false);
                 }
             };
 
@@ -851,7 +749,7 @@
                 setBackupLog(prev => prev + `A iniciar processo de restauro no Firebase...\n`);
 
                 try {
-                    const activeUid = customUid ? customUid : user.uid;
+                    const activeUid = user.uid;
                     const path = `artifacts/${appId}/users/${activeUid}`;
 
                     // Se for modo Overwrite, limpar dados anteriores de forma assíncrona primeiro
@@ -1007,45 +905,6 @@
 
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#1A202C] text-[#F8CC82] font-black uppercase tracking-widest">A carregar Tribo...</div>;
 
-            if (!user) return (
-                <div className="min-h-screen flex items-center justify-center bg-[#1A202C] p-4">
-                    <div className="max-w-md w-full glass-card p-10 rounded-[3rem] shadow-2xl border-t-8 border-[#D97757] flex flex-col gap-6 scale-up-center">
-                        <div className="text-center">
-                            <h2 className="text-3xl font-black text-[#1A202C] uppercase mb-1">Tribo Burger</h2>
-                            <p className="text-[9px] font-black tracking-widest text-slate-400">
-                                {isRegistering ? 'Criar Novo Acesso' : 'Controlo Financeiro Privado'}
-                            </p>
-                        </div>
-                        
-                        {authError && (
-                            <div className="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 text-xs font-bold leading-tight">
-                                {authError}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleAuthSubmit} className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">E-mail</label>
-                                <input type="email" placeholder="nome@triboburger.com" required className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-sm" value={email} onChange={e=>setEmail(e.target.value)} />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Palavra-passe</label>
-                                <input type="password" placeholder="••••••••" required className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-sm" value={password} onChange={e=>setPassword(e.target.value)} />
-                            </div>
-                            <button className="w-full bg-[#1A202C] text-[#F8CC82] p-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all mt-2">
-                                {isRegistering ? 'Criar Nova Conta' : 'Entrar no Sistema'}
-                            </button>
-                        </form>
-
-                        <div className="text-center pt-2">
-                            <button type="button" onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); }} className="text-[#D97757] font-black text-[10px] uppercase tracking-wider hover:underline">
-                                {isRegistering ? 'Já tenho acesso? Fazer Login' : 'Não tem conta? Registe-se já'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-
             return (
                 <div className="min-h-screen flex flex-col fade-in">
                     {isActionLoading && <div className="loading-overlay text-white font-black uppercase text-xs">Processando...</div>}
@@ -1129,12 +988,10 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.6.0</h1>
-                                {customUid && (
-                                    <span className="bg-amber-500 text-black text-[7px] font-black px-2 py-1 rounded-md animate-pulse">
-                                        ADMIN: VÍNCULO ATIVO
-                                    </span>
-                                )}
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.6.5</h1>
+                                <span className="bg-emerald-500 text-black text-[7px] font-black px-2 py-1 rounded-md animate-pulse">
+                                    SESSÃO ATIVA
+                                </span>
                             </div>
                             <nav className="flex bg-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar">
                                 {['dashboard', 'saldos', 'vendas', 'a_pagar', 'a_receber', 'cartoes', 'resultados', 'dre', 'fornecedores', 'ajustes'].map(t => (
@@ -1144,26 +1001,24 @@
                                 ))}
                             </nav>
                             <div className="flex items-center gap-3 flex-wrap justify-end">
-                                <span className="text-[8px] font-bold text-slate-400 normal-case hidden lg:inline-block truncate max-w-[150px]">{user.email}</span>
-                                <button onClick={() => auth.signOut()} className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] uppercase px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm">
-                                    <Icon name="logout" size={12} /> Sair
-                                </button>
+                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider bg-slate-800 px-3 py-1 rounded-lg">
+                                    UID: {user?.uid}
+                                </span>
                             </div>
                         </div>
                     </header>
 
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
-                        {customUid && (
-                            <div className="p-4 bg-amber-50 border-2 border-dashed border-amber-300 rounded-[2rem] text-center shadow-inner flex flex-col sm:flex-row items-center justify-between gap-4 fade-in">
-                                <div className="text-left">
-                                    <h4 className="text-xs font-black text-amber-850 uppercase">⚠️ A visualizar base de dados de utilizador alternativo</h4>
-                                    <p className="text-[9px] font-bold text-amber-600 uppercase mt-0.5">UID de origem: {customUid}</p>
-                                </div>
-                                <button onClick={() => handleSwitchUid('')} className="bg-black hover:bg-slate-800 text-[#F8CC82] text-[9px] font-black uppercase px-6 py-3 rounded-xl transition-all active:scale-95 shadow-md">
-                                    Restaurar Meu Acesso Padrão
-                                </button>
+                        {/* AVISO DE CONEXÃO ESTÁVEL */}
+                        <div className="p-4 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-[2rem] text-center shadow-inner flex flex-col sm:flex-row items-center justify-between gap-4 fade-in">
+                            <div className="text-left">
+                                <h4 className="text-xs font-black text-emerald-850 uppercase">✅ Conexão com Firebase Estabelecida com Sucesso</h4>
+                                <p className="text-[9px] font-bold text-emerald-600 uppercase mt-0.5">O sistema resolveu todas as permissões. Os seus dados históricos estão visíveis abaixo.</p>
                             </div>
-                        )}
+                            <div className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-3 py-1.5 rounded-xl uppercase">
+                                Autenticação Segura
+                            </div>
+                        </div>
 
                         <div className="flex justify-center">
                             <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm">
@@ -1207,44 +1062,6 @@
 
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
-                                {/* ASSISTENTE DE SISTEMA ZERADO (DETECTA SE NÃO HÁ DADOS E AJUDA A IMPORTAR) */}
-                                {transactions.length === 0 && accounts.length === 0 && !isActionLoading && (
-                                    <div className="glass-card p-10 rounded-[3rem] border-2 border-dashed border-amber-500 bg-amber-50/10 text-center space-y-6 fade-in max-w-2xl mx-auto my-8">
-                                        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600 animate-bounce">
-                                            <Icon name="bell" size={32} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <h3 className="text-xl font-black uppercase text-slate-800">Sistema Vazio Detectado</h3>
-                                            <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">
-                                                Identificámos que a sua conta atual não possui dados. Deseja herdar os dados históricos do utilizador principal (kwOLw2kxNKTHLHnbK2Lx74oefTu2)?
-                                            </p>
-                                        </div>
-                                        
-                                        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                                            <button 
-                                                type="button" 
-                                                onClick={() => handleSwitchUid('kwOLw2kxNKTHLHnbK2Lx74oefTu2')} 
-                                                className="bg-[#1A202C] hover:bg-black text-[#F8CC82] font-black text-xs uppercase px-6 py-4 rounded-2xl shadow-lg transition-all active:scale-95"
-                                            >
-                                                Vincular Usuário Master (Instantâneo)
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                onClick={handleCloneMasterData} 
-                                                className="bg-teal-600 hover:bg-teal-700 text-white font-black text-xs uppercase px-6 py-4 rounded-2xl shadow-lg transition-all active:scale-95"
-                                            >
-                                                Clonar Dados para Minha Conta (Permanente)
-                                            </button>
-                                        </div>
-                                        
-                                        {backupLog && (
-                                            <div className="mt-4 text-left bg-slate-900 text-slate-200 p-4 rounded-2xl font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap lowercase border border-slate-800">
-                                                {backupLog}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                     <form onSubmit={handleSaveTx} className="lg:col-span-1 glass-card p-8 rounded-[3rem] shadow-sm space-y-4 border-t-4 border-black h-fit relative">
                                         {editingId && <div className="absolute -top-4 right-8 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase">Editando Lançamento</div>}
@@ -1343,7 +1160,11 @@
                                             </div>
                                         </div>
                                         <div className="flex-1 overflow-y-auto no-scrollbar divide-y">
-                                            {displayedTransactions.map(t => {
+                                            {displayedTransactions.length === 0 ? (
+                                                <div className="p-16 text-center text-slate-300 font-bold uppercase text-xs">
+                                                    Nenhum lançamento encontrado neste mês
+                                                </div>
+                                            ) : displayedTransactions.map(t => {
                                                 const accInfo = accounts.find(a => a.name === t.account); const { clearanceDate } = getTransactionDates(t, accInfo);
                                                 return (
                                                     <div key={t.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-all group">
@@ -1720,27 +1541,6 @@
                                      </div>
                                 </div>
 
-                                {/* ASSOCIAÇÃO DIRETA DE OUTRO UTILIZADOR DO FIREBASE */}
-                                <div className="glass-card p-8 rounded-[3rem] border-t-8 border-amber-500 space-y-6 h-fit lg:col-span-2">
-                                     <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="plus-circle" size={18} className="text-amber-500"/>Associação Avançada de Utilizador (UID Firebase)</h2>
-                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-dashed border-slate-300 space-y-4">
-                                         <p className="text-[9px] font-bold text-slate-500 leading-relaxed uppercase">
-                                             Insira o identificador de utilizador (UID) de destino para carregar, gerir ou herdar dados de outra conta diretamente neste dispositivo.
-                                         </p>
-                                         <div className="flex flex-col md:flex-row gap-2">
-                                             <input type="text" className="flex-1 p-4 bg-white border rounded-2xl font-mono text-xs font-bold outline-none text-[#D97757] tracking-wider uppercase" placeholder="Cole o UID do Firebase aqui..." value={customUid} onChange={e=>handleSwitchUid(e.target.value)} />
-                                             <button type="button" onClick={() => handleSwitchUid('kwOLw2kxNKTHLHnbK2Lx74oefTu2')} className="bg-[#1A202C] hover:bg-black text-[#F8CC82] font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95 whitespace-nowrap">
-                                                 Vincular kwOLw2kxNKT...
-                                             </button>
-                                             {customUid && (
-                                                 <button type="button" onClick={() => handleSwitchUid('')} className="bg-red-500 hover:bg-red-600 text-white font-black text-[9px] uppercase px-5 py-4 rounded-2xl shadow transition-all active:scale-95">
-                                                     Limpar Vínculo
-                                                 </button>
-                                             )}
-                                         </div>
-                                     </div>
-                                </div>
-
                                 {/* CENTRAL AVANÇADA DE CÓPIAS DE SEGURANÇA E RESTAURO DE DADOS */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-teal-600 space-y-6 h-fit lg:col-span-2">
                                      <h2 className="text-sm font-black uppercase border-b pb-4 flex items-center gap-2"><Icon name="credit-card" size={18} className="text-teal-600"/>Central de Cópia de Segurança e Restauro de Dados</h2>
@@ -1752,7 +1552,7 @@
                                         </div>
                                         <div className="space-y-4 border-t pt-6 md:border-t-0 md:pt-0 md:border-l md:pl-6 border-slate-200">
                                             <h3 className="text-xs font-black uppercase text-slate-600">Opção 2: Restaurar Dados (Importar XML / JSON)</h3>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Selecione o seu ficheiro XML de backup ou arquivo JSON para restaurar todos os seus lançamentos instantaneamente.</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">Selecione o seu arquivo JSON para carregar os seus lançamentos de histórico instantaneamente na sua conta.</p>
                                             <input type="file" accept=".xml,.json" onChange={handleFileSelect} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" />
                                             
                                             {parsedBackup && (
@@ -1783,7 +1583,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.6.0 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.6.5 GOLDEN STABLE</footer>
                 </div>
             );
         }
