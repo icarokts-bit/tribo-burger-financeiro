@@ -1,40 +1,62 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, query } from 'firebase/firestore';
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Transação - Tribo Burger</title>
+    <!-- Tailwind para Estilo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React e Babel (para transformar JSX no navegador) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div id="root"></div>
 
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    <script type="text/babel">
+        // Configuração do Firebase
+        const firebaseConfig = JSON.parse(__firebase_config);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-export default function App() {
-  const [categorias, setCategorias] = useState([]);
+        function App() {
+            const [categorias, setCategorias] = React.useState([]);
 
-  useEffect(() => {
-    // Simulação da busca de categorias no Firestore
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'categorias');
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const listaBruta = snapshot.docs.map(doc => doc.data().nome);
-      
-      // LOGICA DE ORDENAÇÃO ALFABÉTICA
-      const listaOrdenada = listaBruta.sort((a, b) => a.localeCompare(b));
-      
-      setCategorias(listaOrdenada);
-    });
+            React.useEffect(() => {
+                const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('categorias');
+                
+                const unsubscribe = q.onSnapshot((snapshot) => {
+                    const listaBruta = snapshot.docs.map(doc => doc.data().nome);
+                    
+                    // Ordenação Alfabética Corrigida
+                    const listaOrdenada = listaBruta.sort((a, b) => a.localeCompare(b));
+                    
+                    setCategorias(listaOrdenada);
+                });
 
-    return () => unsubscribe();
-  }, []);
+                return () => unsubscribe();
+            }, []);
 
-  return (
-    <div className="p-6 max-w-md mx-auto">
-      <h2 className="text-xl font-bold mb-4">Nova Transação</h2>
-      <label className="block mb-2">Categoria:</label>
-      <select className="w-full p-2 border rounded">
-        {categorias.map((cat, index) => (
-          <option key={index} value={cat}>{cat}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
+            return (
+                <div className="p-6 max-w-md mx-auto">
+                    <h2 className="text-xl font-bold mb-4">Nova Transação</h2>
+                    <label className="block mb-2 font-medium">Categoria:</label>
+                    <select className="w-full p-2 border rounded-lg shadow-sm">
+                        {categorias.map((cat, index) => (
+                            <option key={index} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
