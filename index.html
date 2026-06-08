@@ -445,6 +445,7 @@
 
             const stats = useMemo(() => {
                 let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0; let totalPedidos = 0;
+                let entradas = 0; let contasPagas = 0;
                 Object.keys(dailyRecords).forEach(d => {
                     if (d.startsWith(filterMonth)) {
                         const r = dailyRecords[d];
@@ -459,7 +460,12 @@
                     const accInfo = accounts.find(a => a.name === t.account);
                     const { clearanceDate } = getTransactionDates(t, accInfo);
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
-                        if (t.type === 'saida') catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                        if (t.type === 'saida') {
+                            catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                            contasPagas += p(t.amount);
+                        } else if (t.type === 'entrada') {
+                            entradas += p(t.amount);
+                        }
                     }
                 });
                 const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
@@ -471,7 +477,10 @@
                     diasAtivos, 
                     totalPedidos,
                     ticketDiario: diasAtivos > 0 ? rb / diasAtivos : 0,
-                    ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0
+                    ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0,
+                    entradas,
+                    contasPagas,
+                    lucroCaixa: entradas - contasPagas
                 };
             }, [dailyRecords, transactions, filterMonth]);
 
@@ -1686,9 +1695,9 @@
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Receita Bruta</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.rb)}</h3></div>
-                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Custos Totais</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.totalCosts)}</h3></div>
-                                     <div className={"glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 " + (stats.lucro>=0?'border-blue-600':'border-red-600')}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={"text-2xl font-black " + (stats.lucro>=0?'text-blue-600':'text-red-600')}>{formatMoney(stats.lucro)}</h3></div>
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Entradas</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.entradas)}</h3></div>
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Contas Pagas</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.contasPagas)}</h3></div>
+                                     <div className={"glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 " + (stats.lucroCaixa>=0?'border-blue-600':'border-red-600')}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={"text-2xl font-black " + (stats.lucroCaixa>=0?'text-blue-600':'text-red-600')}>{formatMoney(stats.lucroCaixa)}</h3></div>
                                 </div>
                             </div>
                         )}
