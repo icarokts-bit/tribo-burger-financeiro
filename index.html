@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | v2.8.5 GOLDEN STABLE</title>
+    <title>Tribo Burger | Gestão Financeira v2.8.5</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -84,7 +84,6 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        // Escopo estrito de ícones Lucide mapeados para o compilador Babel
         const safeIcons = [
             'Utensils', 'Sprout', 'Edit', 'Edit2', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 
             'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 
@@ -212,19 +211,11 @@
             );
         };
 
-        // ==========================================================
         // MOTOR DE PESQUISA RECURSIVA & NORMALIZAÇÃO BULLETPROOF
-        // ==========================================================
         const findCollectionsInJSON = (obj) => {
             if (!obj || typeof obj !== 'object') return null;
 
-            let found = {
-                transactions: null,
-                dailyRecords: null,
-                accounts: null,
-                categories: null,
-                suppliers: null
-            };
+            let found = { transactions: null, dailyRecords: null, accounts: null, categories: null, suppliers: null };
 
             function search(current) {
                 if (!current || typeof current !== 'object') return;
@@ -251,31 +242,23 @@
 
         const normalizeCollection = (data, type) => {
             if (!data) return type === 'dailyRecords' ? {} : [];
-
-            if (Array.isArray(data)) {
-                return data.filter(item => item !== null && typeof item === 'object');
-            }
+            if (Array.isArray(data)) return data.filter(item => item !== null && typeof item === 'object');
 
             if (typeof data === 'object') {
                 if (type === 'dailyRecords') {
                     const clean = {};
                     for (let [dateKey, val] of Object.entries(data)) {
-                        if (val && typeof val === 'object') {
-                            clean[dateKey] = val;
-                        }
+                        if (val && typeof val === 'object') clean[dateKey] = val;
                     }
                     return clean;
                 } else {
                     const arr = [];
                     for (let [key, val] of Object.entries(data)) {
-                        if (val && typeof val === 'object') {
-                            arr.push(Object.assign({ id: key }, val));
-                        }
+                        if (val && typeof val === 'object') arr.push(Object.assign({ id: key }, val));
                     }
                     return arr;
                 }
             }
-
             return type === 'dailyRecords' ? {} : [];
         };
 
@@ -344,7 +327,6 @@
 
             const [copyRulesSuccess, setCopyRulesSuccess] = useState('');
 
-            // CUMPRIMENTO RIGOROSO DA REGRA 3: Autenticação Dinâmica e Prioritária antes de qualquer Query
             useEffect(() => {
                 const initAuth = async () => {
                     try {
@@ -367,7 +349,6 @@
                 return () => unsubscribe();
             }, []);
 
-            // Escuta dinâmica que acompanha o UID ativo no Firestore
             useEffect(() => {
                 if (!user) return;
                 
@@ -391,7 +372,6 @@
             const p = (v) => parseFloat(String(v || 0).replace(',', '.')) || 0;
             const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-            // Ordenar Categorias em Ordem Alfabética de Forma Reativa e Segura (Resolve pedido de categoria por ordem alfabética)
             const sortedCategories = useMemo(() => {
                 return [...categories].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
             }, [categories]);
@@ -446,6 +426,7 @@
             const stats = useMemo(() => {
                 let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0; let totalPedidos = 0;
                 let entradas = 0; let contasPagas = 0;
+
                 Object.keys(dailyRecords).forEach(d => {
                     if (d.startsWith(filterMonth)) {
                         const r = dailyRecords[d];
@@ -456,19 +437,29 @@
                         totalPedidos += p(r.qtdPedidos);
                     }
                 });
+
                 transactions.forEach(t => {
                     const accInfo = accounts.find(a => a.name === t.account);
                     const { clearanceDate } = getTransactionDates(t, accInfo);
+                    
+                    // Condição rígida: Apenas status PAGO. Ignora completamentente as pendentes.
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
+                        
                         if (t.type === 'saida') {
                             catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                            // Todas as saídas PAGAS entram como "Contas Pagas" no Fluxo de Caixa Real
                             contasPagas += p(t.amount);
                         } else if (t.type === 'entrada') {
-                            entradas += p(t.amount);
+                            // Ignora lançamentos de baixa/ajuste de fatura (são entradas fakes para equilibrar limite do cartão)
+                            if (!isInvoicePayment(t)) {
+                                entradas += p(t.amount);
+                            }
                         }
                     }
                 });
+
                 const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
+                
                 return { 
                     rb, 
                     totalCosts: operCosts + custos, 
@@ -577,7 +568,6 @@
                 return items.sort((a, b) => a.diffDays - b.diffDays);
             }, [transactions, accounts, filterMonth]);
 
-            // Login manual consolidado e limpo (sem duplicidades)
             const handleManualLogin = (e) => {
                 e.preventDefault();
                 setAuthError('');
@@ -606,7 +596,6 @@
                 }
             };
 
-            // Login integrado pelo Google (completamente compatível)
             const handleGoogleLogin = async () => {
                 setAuthError('');
                 setIsActionLoading(true);
@@ -822,9 +811,6 @@
                 }
             };
 
-            // ==========================================================
-            // EXPORTAÇÃO COMPLETA DA NUVEM (Equivalente ao seu script Node)
-            // ==========================================================
             const handleLiveExportBackup = async () => {
                 if (!user) return;
                 setIsActionLoading(true);
@@ -882,7 +868,6 @@
                 }
             };
 
-            // ANALISAR TEXTO DE BACKUP COLADO DIRETAMENTE (MOTOR RECURSIVO INTEGRADO)
             const handleParseTextBackup = () => {
                 if (!backupText.trim()) return;
                 try {
@@ -918,7 +903,6 @@
                 }
             };
 
-            // SELECIONAR E PROCESSAR FICHEIRO JSON DE CÓPIA DE SEGURANÇA
             const handleFileSelect = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -1247,7 +1231,6 @@
 
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
                         
-                        {/* PAINEL DE DIAGNÓSTICO DE CONEXÃO E DADOS */}
                         <div className="glass-card p-6 rounded-[2.5rem] border-l-8 border-[#D97757] shadow-md flex flex-col md:flex-row justify-between items-center gap-4 bg-white">
                             <div>
                                 <h3 className="text-xs font-black uppercase text-slate-800 flex items-center gap-2">
@@ -1799,7 +1782,6 @@
                                      </div>
                                 </div>
 
-                                {/* CENTRAL DE SEGURANÇA E REGRAS - PROTEÇÃO DE DADOS */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-red-500 space-y-6 h-fit lg:col-span-2">
                                     <div className="flex items-center gap-3 border-b pb-4">
                                         <div className="bg-red-100 p-2 rounded-2xl text-red-600 animate-pulse"><Lock size={20}/></div>
@@ -1840,7 +1822,6 @@
                                     </div>
                                 </div>
 
-                                {/* CENTRAL DE RESTAURO E EXPORTAÇÃO DIRETA DA NUVEM (Exatamente como o seu Node Script) */}
                                 <div className="glass-card p-8 rounded-[3rem] border-t-8 border-teal-600 space-y-6 h-fit lg:col-span-2">
                                      <div className="flex items-center gap-3 border-b pb-4">
                                          <div className="bg-teal-100 p-2 rounded-2xl text-teal-600"><CloudLightning size={20}/></div>
