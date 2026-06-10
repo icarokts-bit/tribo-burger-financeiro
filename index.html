@@ -382,7 +382,9 @@
             const filteredDashboard = useMemo(() => {
                 return transactions.filter(t => {
                     if (!t) return false;
-                    if (isInvoicePayment(t)) return false; 
+                    
+                    // CORREÇÃO: Oculta a entrada falsa da Baixa da Fatura para não inflacionar as Entradas (IN) no Dashboard
+                    if (t.type === 'entrada' && isInvoicePayment(t)) return false;
                     
                     const accInfo = accounts.find(a => a.name === t.account);
                     const { clearanceDate, billingMonth } = getTransactionDates(t, accInfo);
@@ -398,9 +400,7 @@
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
             }, [transactions, filterMonth, searchQuery, typeFilter, accFilter, catFilter, hideCards, hideForecasts, accounts]);
 
-            const filteredSummary = useMemo(() => {
-                let entradas = 0;
-                let saidas = 0;
+            // NOVO MEMO PARA CALCULAR OS TOTAIS DO FILTRO DO DASHBOARD
                 let transfs = 0;
                 filteredDashboard.forEach(t => {
                     const v = p(t.amount);
@@ -457,8 +457,11 @@
                     
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
                         if (t.type === 'saida') {
-                            catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
-                            contasPagas += p(t.amount);
+                            // PREVENÇÃO DE DUPLICIDADE: Impede que o dinheiro debitado do banco para pagar a fatura duplique as suas despesas no DRE
+                            if (!isInvoicePayment(t)) {
+                                catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                                contasPagas += p(t.amount);
+                            }
                         } else if (t.type === 'entrada') {
                             if (!isInvoicePayment(t)) {
                                 entradas += p(t.amount);
