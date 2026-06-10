@@ -401,6 +401,9 @@
             }, [transactions, filterMonth, searchQuery, typeFilter, accFilter, catFilter, hideCards, hideForecasts, accounts]);
 
             // NOVO MEMO PARA CALCULAR OS TOTAIS DO FILTRO DO DASHBOARD
+            const filteredSummary = useMemo(() => {
+                let entradas = 0;
+                let saidas = 0;
                 let transfs = 0;
                 filteredDashboard.forEach(t => {
                     const v = p(t.amount);
