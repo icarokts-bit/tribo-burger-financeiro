@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v1.0 OFICIAL</title>
+    <title>Tribo Burger | Gestão Financeira v2.8.7</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -87,7 +87,8 @@
         const safeIcons = [
             'Utensils', 'Sprout', 'Edit', 'Edit2', 'Trash', 'Trash2', 'Plus', 'Check', 'Search', 
             'Bell', 'Calendar', 'CreditCard', 'TrendingUp', 'CheckSquare', 'PlusCircle', 
-            'CalendarDays', 'ShoppingCart', 'CheckCircle', 'Lock', 'ShieldCheck', 'Copy', 'Download', 'CloudLightning'
+            'CalendarDays', 'ShoppingCart', 'CheckCircle', 'Lock', 'ShieldCheck', 'Copy', 'Download', 'CloudLightning',
+            'Target', 'TrendingDown', 'AlertTriangle'
         ];
         
         const IconComponents = {};
@@ -99,8 +100,10 @@
                 .replace('days', '-days')
                 .replace('card', '-card')
                 .replace('up', '-up')
+                .replace('down', '-down')
                 .replace('check', '-check')
-                .replace('lightning', '-lightning');
+                .replace('lightning', '-lightning')
+                .replace('triangle', '-triangle');
                 
             IconComponents[iconName] = (props) => (
                 <Icon name={normalized} size={props.size || 20} className={props.className || ""} />
@@ -110,7 +113,7 @@
         const { 
             Utensils, Sprout, Edit, Edit2, Trash, Trash2, Plus, Check, Search, Bell, Calendar, 
             CreditCard, TrendingUp, CheckSquare, PlusCircle, CalendarDays, ShoppingCart, 
-            CheckCircle, Lock, ShieldCheck, Copy, Download, CloudLightning
+            CheckCircle, Lock, ShieldCheck, Copy, Download, CloudLightning, Target, TrendingDown, AlertTriangle
         } = IconComponents;
 
         const parseDateUTC = (dateStr) => {
@@ -268,6 +271,7 @@
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
             
+            // Credenciais para Login Manual
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [isRegistering, setIsRegistering] = useState(false);
@@ -317,6 +321,7 @@
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
 
+            // Estados para importação via área de texto direto
             const [backupText, setBackupText] = useState('');
             const [parsedBackup, setParsedBackup] = useState(null);
             const [backupLog, setBackupLog] = useState('');
@@ -383,7 +388,7 @@
                 return transactions.filter(t => {
                     if (!t) return false;
                     
-                    // CORREÇÃO: Oculta a entrada falsa da Baixa da Fatura para não inflacionar as Entradas (IN) no Dashboard
+                    // Impede que a falsa entrada de pagamento de fatura polua a listagem e os cálculos do Dashboard
                     if (t.type === 'entrada' && isInvoicePayment(t)) return false;
                     
                     const accInfo = accounts.find(a => a.name === t.account);
@@ -460,9 +465,9 @@
                     
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
                         if (t.type === 'saida') {
-                            // PREVENÇÃO DE DUPLICIDADE: Impede que o dinheiro debitado do banco para pagar a fatura duplique as suas despesas no DRE
+                            catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
+                            // Prevenção Duplicidade de Despesa: Se for a retirada da conta bancária para pagar fatura, não é custo operacional extra
                             if (!isInvoicePayment(t)) {
-                                catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
                                 contasPagas += p(t.amount);
                             }
                         } else if (t.type === 'entrada') {
@@ -474,7 +479,46 @@
                 });
 
                 const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
+                const ticketDiario = diasAtivos > 0 ? rb / diasAtivos : 0;
                 
+                // MOTOR INTELIGENTE DE PROJEÇÃO DE VENDAS
+                // Passo 1: Determinar quantos dias úteis (Qua a Dom) existem no mês filtrado
+                let diasUteisTotaisMes = 0;
+                let diasUteisPassados = 0; // Dias úteis até hoje
+                const parts = filterMonth.split('-');
+                const anoFiltro = parseInt(parts[0]);
+                const mesFiltro = parseInt(parts[1]) - 1; // 0 indexado
+                
+                const ultimoDiaMes = new Date(anoFiltro, mesFiltro + 1, 0).getDate();
+                const hoje = new Date();
+                
+                for (let dia = 1; dia <= ultimoDiaMes; dia++) {
+                    const dataCorrente = new Date(anoFiltro, mesFiltro, dia);
+                    const diaDaSemana = dataCorrente.getDay(); // 0 = Dom, 1 = Seg, 2 = Ter...
+                    
+                    // Dias Úteis Tribo Burger: Qua(3), Qui(4), Sex(5), Sáb(6), Dom(0)
+                    if (diaDaSemana !== 1 && diaDaSemana !== 2) {
+                        diasUteisTotaisMes++;
+                        
+                        // Se o mês filtrado for o mês atual, conta quantos dias úteis já passaram ou é hoje
+                        if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth()) {
+                            if (dia <= hoje.getDate()) {
+                                diasUteisPassados++;
+                            }
+                        }
+                    }
+                }
+                
+                let projecaoMensal = rb; // Se for um mês passado ou futuro distante, a projeção é o total real faturado ou zero.
+                
+                // Se estivermos a olhar para o mês ATUAL
+                if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth()) {
+                    const diasUteisRestantes = diasUteisTotaisMes - diasUteisPassados;
+                    if (diasUteisRestantes > 0) {
+                        projecaoMensal = rb + (ticketDiario * diasUteisRestantes);
+                    }
+                }
+
                 return { 
                     rb, 
                     totalCosts: operCosts + custos, 
@@ -482,11 +526,12 @@
                     catCosts, 
                     diasAtivos, 
                     totalPedidos,
-                    ticketDiario: diasAtivos > 0 ? rb / diasAtivos : 0,
+                    ticketDiario,
                     ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0,
                     entradas,
                     contasPagas,
-                    lucroCaixa: entradas - contasPagas
+                    lucroCaixa: entradas - contasPagas,
+                    projecaoMensal
                 };
             }, [dailyRecords, transactions, filterMonth]);
 
@@ -1188,7 +1233,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v1.0 OFICIAL</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.8.7</h1>
                                 <span className={"text-[7px] font-black px-2 py-1 rounded-md " + (user?.isAnonymous ? "bg-amber-500 text-black animate-pulse" : "bg-emerald-500 text-black")}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -1701,10 +1746,25 @@
                                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all" style={{width: Math.min(100, (stats.rb/(metaVendas || 1))*100) + "%"}}></div></div>
                                         <p className="text-[10px] font-black text-green-600">{((stats.rb/(metaVendas || 1))*100).toFixed(1)}% Atingido</p>
                                     </div>
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 text-center flex flex-col justify-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Dias com Venda</p>
-                                        <h3 className="text-5xl font-black">{stats.diasAtivos} <span className="text-sm text-slate-300">DIAS</span></h3>
+                                    
+                                    {/* NOVO CARD: Projeção de Faturamento Mensal (Qua a Dom) */}
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 flex flex-col justify-between">
+                                        <div className="text-center">
+                                            <div className="flex justify-center mb-2 text-blue-500"><Target size={24} /></div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projeção Mensal (Qua-Dom)</p>
+                                        </div>
+                                        <h3 className="text-3xl font-black text-center text-slate-800 my-4">{formatMoney(stats.projecaoMensal)}</h3>
+                                        {stats.projecaoMensal > 0 && (
+                                            <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center justify-center gap-2">
+                                                {stats.projecaoMensal >= (metaVendas || 1) ? (
+                                                    <span className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase"><TrendingUp size={12}/> Meta será batida</span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1 text-[9px] font-black text-amber-500 uppercase"><TrendingDown size={12}/> Alerta de Meta</span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
+                                    
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Dia Ativo)</p>
                                         <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticketDiario)}</h3>
@@ -1712,7 +1772,9 @@
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-purple-500 text-center flex flex-col justify-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ticket Médio (Pedidos)</p>
                                         <h3 className="text-3xl font-black text-purple-600">{formatMoney(stats.ticketPedido)}</h3>
-                                        <p className="text-[8px] font-black text-slate-300 mt-2 uppercase">{(stats.totalPedidos || 0)} PEDIDOS TOTAIS</p>
+                                        <p className="text-[8px] font-black text-slate-400 mt-2 uppercase flex items-center justify-center gap-2">
+                                            <Calendar size={10}/> {stats.diasAtivos} DIAS • {stats.totalPedidos || 0} PEDIDOS
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -1918,7 +1980,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v1.0 OFICIAL</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.8.7 GOLDEN STABLE</footer>
                 </div>
             );
         }
