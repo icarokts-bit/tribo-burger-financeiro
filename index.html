@@ -1890,7 +1890,6 @@
                                             {[1, 2, 3, 4, 5].map(wk => {
                                                 const current = stats.weeklyCurrent[wk] || 0;
                                                 const prev = stats.weeklyPrev[wk] || 0;
-                                                if (current === 0 && prev === 0) return null;
                                                 const diff = current - prev;
                                                 const percent = prev > 0 ? (diff / prev) * 100 : (current > 0 ? 100 : 0);
                                                 return (
