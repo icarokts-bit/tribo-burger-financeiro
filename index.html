@@ -444,18 +444,72 @@
                 return accounts.filter(a => a.type === 'corrente').reduce((acc, a) => acc + (accountBalances[a.name] || 0), 0);
             }, [accounts, accountBalances]);
 
+            /* =========================================================================
+               MOTOR MATEMÁTICO AVANÇADO (VERSÃO 2.8.7)
+               Cálculos de Semanas, Dias Úteis, Projeções e Margens Reais.
+               ========================================================================= */
             const stats = useMemo(() => {
                 let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0; let totalPedidos = 0;
                 let entradas = 0; let contasPagas = 0;
 
+                const parts = filterMonth.split('-');
+                const anoFiltro = parseInt(parts[0]);
+                const mesFiltro = parseInt(parts[1]) - 1; // 0 indexado
+
+                let prevMes = mesFiltro - 1;
+                let prevAno = anoFiltro;
+                if (prevMes < 0) { prevMes = 11; prevAno--; }
+                const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
+
+                // Divide o mês em semanas começando sempre na Quarta-feira
+                const buildWeekMap = (ano, mes) => {
+                    const map = {};
+                    const lastDay = new Date(ano, mes + 1, 0).getDate();
+                    let currentWeek = 1;
+                    for(let d=1; d<=lastDay; d++) {
+                        const data = new Date(ano, mes, d);
+                        if (data.getDay() === 3 && d !== 1) currentWeek++; // Incrementa na Quarta-feira
+                        const dayStr = ano + "-" + String(mes+1).padStart(2, '0') + "-" + String(d).padStart(2,'0');
+                        map[dayStr] = currentWeek;
+                    }
+                    return map;
+                };
+
+                const currentMonthWeeks = buildWeekMap(anoFiltro, mesFiltro);
+                const prevMonthWeeks = buildWeekMap(prevAno, prevMes);
+
+                let weeklyCurrent = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+                let weeklyPrev = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+                
+                // Mapeamento exato dos dias (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb)
+                let weekdaySums = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0}; 
+                let weekdayCounts = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+
                 Object.keys(dailyRecords).forEach(d => {
+                    const r = dailyRecords[d];
+                    const totalDia = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((s,f)=>s+p(r[f]), 0);
+                    
                     if (d.startsWith(filterMonth)) {
-                        const r = dailyRecords[d];
-                        const totalDia = ['pix','pixOnline','fiado','dinheiro','ifood','debito','credito','vr','ticket','alelo'].reduce((s,f)=>s+p(r[f]), 0);
                         if (totalDia > 0) diasAtivos++;
                         rb += totalDia;
                         custos += p(r.motoboy) + p(r.taxaEntrega);
                         totalPedidos += p(r.qtdPedidos);
+
+                        // Registo Semanal
+                        const wk = currentMonthWeeks[d];
+                        if(wk) weeklyCurrent[wk] += totalDia;
+
+                        // Média por dia da semana (ignorando dias sem venda para não estragar a média real)
+                        const [y, m, day] = d.split('-');
+                        const localDate = new Date(parseInt(y), parseInt(m)-1, parseInt(day));
+                        const wd = localDate.getDay();
+                        if(weekdaySums[wd] !== undefined && totalDia > 0) {
+                            weekdaySums[wd] += totalDia;
+                            weekdayCounts[wd]++;
+                        }
+                    } else if (d.startsWith(prevMonthStr)) {
+                        const wk = prevMonthWeeks[d];
+                        if(wk) weeklyPrev[wk] += totalDia;
                     }
                 });
 
@@ -463,7 +517,9 @@
                     const accInfo = accounts.find(a => a.name === t.account);
                     const { clearanceDate } = getTransactionDates(t, accInfo);
                     
+                    // Condição rígida: Apenas status PAGO. Ignora completamentente as pendentes.
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
+                        
                         if (t.type === 'saida') {
                             catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
                             // Prevenção Duplicidade de Despesa: Se for a retirada da conta bancária para pagar fatura, não é custo operacional extra
@@ -471,6 +527,7 @@
                                 contasPagas += p(t.amount);
                             }
                         } else if (t.type === 'entrada') {
+                            // Ignora lançamentos de baixa/ajuste de fatura (são entradas fakes para equilibrar limite do cartão)
                             if (!isInvoicePayment(t)) {
                                 entradas += p(t.amount);
                             }
@@ -478,62 +535,80 @@
                     }
                 });
 
-                const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
-                const ticketDiario = diasAtivos > 0 ? rb / diasAtivos : 0;
-                
-                // MOTOR INTELIGENTE DE PROJEÇÃO DE VENDAS
-                // Passo 1: Determinar quantos dias úteis (Qua a Dom) existem no mês filtrado
+                // PROJEÇÃO E META DIÁRIA (Considerando apenas Qua a Dom)
                 let diasUteisTotaisMes = 0;
-                let diasUteisPassados = 0; // Dias úteis até hoje
-                const parts = filterMonth.split('-');
-                const anoFiltro = parseInt(parts[0]);
-                const mesFiltro = parseInt(parts[1]) - 1; // 0 indexado
-                
+                let diasUteisPassados = 0; 
                 const ultimoDiaMes = new Date(anoFiltro, mesFiltro + 1, 0).getDate();
                 const hoje = new Date();
                 
                 for (let dia = 1; dia <= ultimoDiaMes; dia++) {
                     const dataCorrente = new Date(anoFiltro, mesFiltro, dia);
-                    const diaDaSemana = dataCorrente.getDay(); // 0 = Dom, 1 = Seg, 2 = Ter...
-                    
-                    // Dias Úteis Tribo Burger: Qua(3), Qui(4), Sex(5), Sáb(6), Dom(0)
-                    if (diaDaSemana !== 1 && diaDaSemana !== 2) {
+                    const diaDaSemana = dataCorrente.getDay(); 
+                    if (diaDaSemana !== 1 && diaDaSemana !== 2) { // Não é Segunda nem Terça
                         diasUteisTotaisMes++;
-                        
-                        // Se o mês filtrado for o mês atual, conta quantos dias úteis já passaram ou é hoje
-                        if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth()) {
-                            if (dia <= hoje.getDate()) {
-                                diasUteisPassados++;
-                            }
+                        if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth() && dia <= hoje.getDate()) {
+                            diasUteisPassados++;
                         }
                     }
                 }
-                
-                let projecaoMensal = rb; // Se for um mês passado ou futuro distante, a projeção é o total real faturado ou zero.
-                
-                // Se estivermos a olhar para o mês ATUAL
+
+                let projecaoMensal = rb; 
+                let metaDiaria = 0;
+
                 if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth()) {
                     const diasUteisRestantes = diasUteisTotaisMes - diasUteisPassados;
+                    const ticketDiarioAtual = diasAtivos > 0 ? rb / diasAtivos : 0;
                     if (diasUteisRestantes > 0) {
-                        projecaoMensal = rb + (ticketDiario * diasUteisRestantes);
+                        projecaoMensal = rb + (ticketDiarioAtual * diasUteisRestantes);
                     }
+                    
+                    // Cálculo da Meta Diária para bater a meta do mês
+                    const restanteMeta = p(metaVendas) - rb;
+                    if (restanteMeta > 0 && diasUteisRestantes > 0) {
+                        metaDiaria = restanteMeta / diasUteisRestantes;
+                    }
+                } else if (new Date(anoFiltro, mesFiltro, 1) > hoje) {
+                    // Mês futuro, precisa bater a meta inteira nos dias úteis totais
+                    if (diasUteisTotaisMes > 0) metaDiaria = p(metaVendas) / diasUteisTotaisMes;
                 }
+
+                const operCosts = Object.values(catCosts).reduce((a,b)=>a+b, 0);
+                const lucroDRE = rb - (operCosts + custos);
+                const lucroCaixa = entradas - contasPagas;
+                
+                // Margens Reais (%)
+                const margemDRE = rb > 0 ? (lucroDRE / rb) * 100 : 0;
+                const margemCaixa = entradas > 0 ? (lucroCaixa / entradas) * 100 : 0;
+
+                const weekdayNames = {0:'Domingo', 1:'Segunda', 2:'Terça', 3:'Quarta', 4:'Quinta', 5:'Sexta', 6:'Sábado'};
+                const weekdayAverages = Object.keys(weekdaySums).map(wd => ({
+                    name: weekdayNames[wd],
+                    avg: weekdayCounts[wd] > 0 ? weekdaySums[wd] / weekdayCounts[wd] : 0,
+                    total: weekdaySums[wd]
+                })).filter(x => x.avg > 0).sort((a, b) => b.avg - a.avg);
 
                 return { 
                     rb, 
                     totalCosts: operCosts + custos, 
-                    lucro: rb - (operCosts + custos), 
+                    lucro: lucroDRE, 
                     catCosts, 
                     diasAtivos, 
                     totalPedidos,
-                    ticketDiario,
+                    ticketDiario: diasAtivos > 0 ? rb / diasAtivos : 0,
                     ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0,
                     entradas,
                     contasPagas,
-                    lucroCaixa: entradas - contasPagas,
-                    projecaoMensal
+                    lucroCaixa,
+                    projecaoMensal,
+                    metaDiaria,
+                    margemDRE,
+                    margemCaixa,
+                    weeklyCurrent,
+                    weeklyPrev,
+                    weekdayAverages,
+                    diasUteisRestantes: Math.max(0, diasUteisTotaisMes - diasUteisPassados)
                 };
-            }, [dailyRecords, transactions, filterMonth]);
+            }, [dailyRecords, transactions, filterMonth, metaVendas]);
 
             const columnTotals = useMemo(() => {
                 const days = Object.keys(dailyRecords).filter(d => d.startsWith(filterMonth));
@@ -1740,31 +1815,40 @@
                         {activeTab === 'resultados' && (
                             <div className="space-y-8 animate-in fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center space-y-4">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta de Vendas</p>
-                                        <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
-                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all" style={{width: Math.min(100, (stats.rb/(metaVendas || 1))*100) + "%"}}></div></div>
-                                        <p className="text-[10px] font-black text-green-600">{((stats.rb/(metaVendas || 1))*100).toFixed(1)}% Atingido</p>
+                                    <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-orange-500 text-center flex flex-col justify-between">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Meta de Vendas</p>
+                                            <div className="flex items-center justify-center gap-2"><span className="font-black text-slate-400">R$</span><input type="text" className="text-3xl font-black w-40 text-center bg-transparent border-b-2 outline-none focus:border-black" value={metaVendas} onChange={e=>setMetaVendas(e.target.value)} onBlur={e=>saveMeta(e.target.value)} /></div>
+                                        </div>
+                                        <div>
+                                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-4 mb-2"><div className="bg-green-500 h-full transition-all" style={{width: Math.min(100, (stats.rb/(metaVendas || 1))*100) + "%"}}></div></div>
+                                            <p className="text-[10px] font-black text-green-600">{((stats.rb/(metaVendas || 1))*100).toFixed(1)}% Atingido</p>
+                                        </div>
+                                        {stats.metaDiaria > 0 && stats.diasUteisRestantes > 0 && (
+                                            <div className="mt-4 p-3 bg-orange-50 rounded-2xl border border-orange-100">
+                                                <p className="text-[9px] font-black text-orange-600 uppercase">Faltam {stats.diasUteisRestantes} dias úteis</p>
+                                                <p className="text-xs font-black text-orange-800">Alvo: {formatMoney(stats.metaDiaria)} / dia</p>
+                                            </div>
+                                        )}
                                     </div>
                                     
-                                    {/* NOVO CARD: Projeção de Faturamento Mensal (Qua a Dom) */}
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-blue-500 flex flex-col justify-between">
                                         <div className="text-center">
                                             <div className="flex justify-center mb-2 text-blue-500"><Target size={24} /></div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projeção Mensal (Qua-Dom)</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projeção (Qua-Dom)</p>
                                         </div>
                                         <h3 className="text-3xl font-black text-center text-slate-800 my-4">{formatMoney(stats.projecaoMensal)}</h3>
                                         {stats.projecaoMensal > 0 && (
                                             <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center justify-center gap-2">
                                                 {stats.projecaoMensal >= (metaVendas || 1) ? (
-                                                    <span className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase"><TrendingUp size={12}/> Meta será batida</span>
+                                                    <span className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase"><TrendingUp size={12}/> Vai bater a meta!</span>
                                                 ) : (
-                                                    <span className="flex items-center gap-1 text-[9px] font-black text-amber-500 uppercase"><TrendingDown size={12}/> Alerta de Meta</span>
+                                                    <span className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase"><TrendingDown size={12}/> Abaixo da meta</span>
                                                 )}
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-green-500 text-center flex flex-col justify-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Média Diária (Dia Ativo)</p>
                                         <h3 className="text-3xl font-black text-green-600">{formatMoney(stats.ticketDiario)}</h3>
@@ -1772,15 +1856,63 @@
                                     <div className="glass-card p-10 rounded-[3rem] shadow-xl border-t-8 border-purple-500 text-center flex flex-col justify-center">
                                         <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ticket Médio (Pedidos)</p>
                                         <h3 className="text-3xl font-black text-purple-600">{formatMoney(stats.ticketPedido)}</h3>
-                                        <p className="text-[8px] font-black text-slate-400 mt-2 uppercase flex items-center justify-center gap-2">
-                                            <Calendar size={10}/> {stats.diasAtivos} DIAS • {stats.totalPedidos || 0} PEDIDOS
-                                        </p>
+                                        <p className="text-[8px] font-black text-slate-400 mt-2 uppercase">{stats.diasAtivos} DIAS • {(stats.totalPedidos || 0)} PEDIDOS</p>
                                     </div>
                                 </div>
+                                
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Entradas</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.entradas)}</h3></div>
+                                     <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-green-500"><p className="text-[9px] font-black text-slate-400 uppercase">Entradas Caixa</p><h3 className="text-2xl font-black text-green-600">{formatMoney(stats.entradas)}</h3></div>
                                      <div className="glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 border-red-500"><p className="text-[9px] font-black text-slate-400 uppercase">Contas Pagas</p><h3 className="text-2xl font-black text-red-600">{formatMoney(stats.contasPagas)}</h3></div>
-                                     <div className={"glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 " + (stats.lucroCaixa>=0?'border-blue-600':'border-red-600')}><p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido</p><h3 className={"text-2xl font-black " + (stats.lucroCaixa>=0?'text-blue-600':'text-red-600')}>{formatMoney(stats.lucroCaixa)}</h3></div>
+                                     <div className={"glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 flex flex-col items-center justify-center " + (stats.lucroCaixa>=0?'border-blue-600':'border-red-600')}>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido (Caixa)</p>
+                                        <h3 className={"text-2xl font-black mb-2 " + (stats.lucroCaixa>=0?'text-blue-600':'text-red-600')}>{formatMoney(stats.lucroCaixa)}</h3>
+                                        <span className={"text-[10px] font-black px-3 py-1 rounded-lg " + (stats.margemCaixa>=0?'bg-blue-50 text-blue-600':'bg-red-50 text-red-600')}>MARGEM: {stats.margemCaixa.toFixed(1)}%</span>
+                                     </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <div className="glass-card p-8 rounded-[3rem] shadow-sm border-t-4 border-slate-800">
+                                        <h3 className="text-sm font-black uppercase text-slate-800 mb-6 flex items-center gap-2"><CalendarDays size={18}/> Comparativo Semanal</h3>
+                                        <div className="space-y-4">
+                                            <div className="flex text-[9px] font-black text-slate-400 border-b pb-2 uppercase"><span className="w-16">Semana</span><span className="flex-1 text-center">Este Mês</span><span className="flex-1 text-center">Mês Passado</span><span className="w-16 text-right">Evolução</span></div>
+                                            {[1, 2, 3, 4, 5].map(wk => {
+                                                const current = stats.weeklyCurrent[wk] || 0;
+                                                const prev = stats.weeklyPrev[wk] || 0;
+                                                if (current === 0 && prev === 0) return null;
+                                                const diff = current - prev;
+                                                const percent = prev > 0 ? (diff / prev) * 100 : (current > 0 ? 100 : 0);
+                                                return (
+                                                    <div key={wk} className="flex text-xs font-black items-center py-2 hover:bg-slate-50 rounded-xl transition-all px-2">
+                                                        <span className="w-16 text-slate-500 uppercase">Sem. {wk}</span>
+                                                        <span className="flex-1 text-center text-slate-800">{formatMoney(current)}</span>
+                                                        <span className="flex-1 text-center text-slate-400">{formatMoney(prev)}</span>
+                                                        <span className={"w-16 text-right text-[10px] " + (diff >= 0 ? 'text-green-500' : 'text-red-500')}>{diff >= 0 ? '+' : ''}{percent.toFixed(1)}%</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-card p-8 rounded-[3rem] shadow-sm border-t-4 border-slate-800">
+                                        <h3 className="text-sm font-black uppercase text-slate-800 mb-6 flex items-center gap-2"><TrendingUp size={18}/> Melhores Dias de Venda (Média)</h3>
+                                        <div className="space-y-4">
+                                            {stats.weekdayAverages.length === 0 ? <p className="text-[10px] text-slate-400 text-center font-black uppercase">Sem dados suficientes</p> : stats.weekdayAverages.map((day, idx) => {
+                                                const maxAvg = stats.weekdayAverages[0]?.avg || 1;
+                                                const width = Math.max(10, (day.avg / maxAvg) * 100);
+                                                return (
+                                                    <div key={day.name} className="space-y-1">
+                                                        <div className="flex justify-between text-[10px] font-black uppercase">
+                                                            <span className="text-slate-600">{idx + 1}º {day.name}</span>
+                                                            <span className="text-green-600">{formatMoney(day.avg)}</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                                                            <div className={"h-full transition-all " + (idx === 0 ? 'bg-green-500' : 'bg-blue-400')} style={{width: width + "%"}}></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1796,8 +1928,11 @@
                                             <div key={c} className="flex justify-between px-4 py-2 text-[10px] font-bold text-slate-600 uppercase"><span>(-) {c}</span><span className="text-red-400 font-black">{formatMoney(v)}</span></div>
                                         ))}
                                     </div>
-                                    <div className={"flex justify-between p-8 rounded-[2.5rem] mt-6 shadow-xl " + (stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white')}>
-                                        <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                                    <div className={"flex justify-between items-center p-8 rounded-[2.5rem] mt-6 shadow-xl " + (stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white')}>
+                                        <div>
+                                            <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                                            <p className="text-[10px] font-black opacity-70 uppercase mt-1">Margem Operacional: {stats.margemDRE.toFixed(1)}%</p>
+                                        </div>
                                         <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
                                     </div>
                                 </div>
