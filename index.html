@@ -461,14 +461,26 @@
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
-                // Divide o mês em semanas começando sempre na Quarta-feira
+                // Lógica de calendário exclusiva Tribo Burger: Folgas (Seg/Ter) não contam para o início do mês.
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
                     let currentWeek = 1;
+                    let seenWorkingDay = false;
+
                     for(let d=1; d<=lastDay; d++) {
                         const data = new Date(ano, mes, d);
-                        if (data.getDay() === 3 && d !== 1) currentWeek++; // Incrementa na Quarta-feira
+                        const wd = data.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+
+                        if (wd === 3) { 
+                            // É Quarta-feira! Só avança a semana se já tivermos dias úteis anteriores neste mês
+                            if (seenWorkingDay) currentWeek++;
+                            seenWorkingDay = true;
+                        } else if (wd === 0 || wd > 3) {
+                            // Se o mês começar numa Qui, Sex, Sáb ou Dom, a semana 1 teve os seus dias úteis.
+                            seenWorkingDay = true;
+                        }
+                        
                         const dayStr = ano + "-" + String(mes+1).padStart(2, '0') + "-" + String(d).padStart(2,'0');
                         map[dayStr] = currentWeek;
                     }
