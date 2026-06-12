@@ -53,7 +53,7 @@
         <div class="flex items-center justify-center min-h-screen">
             <div class="text-center">
                 <div class="w-12 h-12 border-4 border-[#133054] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p class="font-bold text-slate-400 animate-pulse uppercase tracking-widest text-xs">A carregar IcaroInvest Elite v11.14...</p>
+                <p class="font-bold text-slate-400 animate-pulse uppercase tracking-widest text-xs">A carregar IcaroInvest Elite v11.16...</p>
             </div>
         </div>
     </div>
@@ -68,7 +68,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        // ADICIONADO: getDoc na linha abaixo
+        // ADICIONADO: getDoc na linha abaixo para permitir a migração
         import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
@@ -258,7 +258,6 @@
                 quantidade: '', precoMedio: '', precoAtual: '', valorAplicado: '', valorAtual: '', metaRs: ''
             });
 
-            // Authentication Effect
             useEffect(() => {
                 if (!window.firebaseAPI) {
                     setAuthLoading(false);
@@ -300,7 +299,6 @@
                 if (activeTab === 'mercado') fetchMarketMovers();
             }, [activeTab]);
 
-            // Funções de Autenticação com Email e Senha
             const handleEmailAuth = async (e) => {
                 e.preventDefault();
                 const { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } = window.firebaseAPI;
@@ -319,7 +317,6 @@
                     }
                 } catch (error) {
                     console.error("Auth error:", error);
-                    // Tratamento de mensagens de erro comuns do Firebase para Português
                     if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
                         setLoginError("Credenciais inválidas. Verifique o seu email e senha.");
                     } else if (error.code === 'auth/email-already-in-use') {
@@ -374,7 +371,6 @@
                     }
                 };
                 reader.readAsText(file);
-                // Reset input
                 if (fileInputRef.current) fileInputRef.current.value = "";
             };
 
@@ -388,13 +384,12 @@
                     setSyncStatus("A importar dados antigos...");
                     const { db, doc, getDoc, setDoc } = window.firebaseAPI;
                     
-                    // Vai buscar ao documento antigo
                     const oldDocRef = doc(db, 'investments', 'portfolio_principal');
                     const oldDocSnap = await getDoc(oldDocRef);
 
                     if (oldDocSnap.exists()) {
                         const oldData = oldDocSnap.data();
-                        const next = { ...investments, ...oldData }; // Junta os dados antigos com o formato atual
+                        const next = { ...investments, ...oldData }; 
                         setInvestments(next);
                         await setDoc(doc(db, 'users', user.uid), next);
                         setSyncStatus("Migração concluída com sucesso!");
@@ -416,7 +411,6 @@
                 await setDoc(doc(db, 'users', user.uid), newData);
             };
 
-            // Gráfico Labels
             const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name, value }) => {
                 const connectorLength = isMobile ? 12 : 24;
                 const RADIAN = Math.PI / 180;
@@ -572,6 +566,9 @@
                     return marketSort.dir === 'desc' ? valB - valA : valA - valB;
                 });
             }, [investments, marketSort]);
+
+            const handleMarketSort = (key) => setMarketSort(prev => ({ key, dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc' }));
+            const handleSectionSort = (key) => setSectionSort(prev => ({ key, dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc' }));
 
             const syncGlobalPortfolio = async () => {
                 const categories = [
@@ -962,7 +959,6 @@
                 );
             };
 
-            // Loading / Login Screens
             if (authLoading) {
                 return (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -1120,10 +1116,10 @@
                                                 </label>
                                             </div>
 
-                                            {/* NOVO BOTÃO DE MIGRAÇÃO */}
+                                            {/* O BOTÃO DE MIGRAÇÃO ESTÁ AQUI */}
                                             <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
                                                 <h3 className="font-black text-blue-800 uppercase tracking-widest text-[10px] mb-2">3. Migrar Dados Antigos</h3>
-                                                <p className="text-xs text-blue-700 mb-4 opacity-80">Importe os dados que estavam salvos de forma global no "portfolio_principal" para o seu usuário atual.</p>
+                                                <p className="text-xs text-blue-700 mb-4 opacity-80">Importe os dados que estavam salvos de forma global no "portfolio_principal" para o seu utilizador atual.</p>
                                                 <button onClick={handleMigrateOldData} className="bg-blue-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-sm flex items-center justify-center gap-2 w-full transition-all">
                                                     <LucideIcon name="DatabaseBackup" size={14} /> Importar portfolio_principal
                                                 </button>
@@ -1635,6 +1631,7 @@
                         </div>
                     )}
 
+                    <footer className="mt-20 py-10 text-center border-t border-slate-100 text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">IcaroInvest Elite Management v11.16</footer>
                 </div>
             );
         };
