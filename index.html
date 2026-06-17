@@ -6,9 +6,10 @@
     <title>Tribo Burger | Gestão Financeira v1.0 Oficial</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Versão fixada do Babel para evitar erros de jsx-runtime e importações -->
+    <script src="https://unpkg.com/@babel/standalone@7.21.0/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -57,7 +58,7 @@
 <body class="antialiased">
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-type="text/javascript">
         const { useState, useEffect, useMemo, useRef } = React;
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'tribo-burger-financeiro';
@@ -460,7 +461,6 @@
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
-                // Lógica de semanas ajustada (Quarta a Domingo, ignorando Segunda e Terça)
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
