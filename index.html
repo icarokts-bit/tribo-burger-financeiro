@@ -460,22 +460,28 @@
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
+                // Lógica de semanas ajustada (Quarta a Domingo, ignorando Segunda e Terça)
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
                     let currentWeek = 1;
-                    let seenWorkingDay = false;
+                    let seenWorkingDay = false; // Flag para saber se a semana atual já teve dias de trabalho
 
                     for(let d = 1; d <= lastDay; d++) {
                         const data = new Date(ano, mes, d);
-                        const wd = data.getDay();
+                        const wd = data.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
 
-                        if (wd === 3) { 
-                            if (seenWorkingDay) currentWeek++;
-                            seenWorkingDay = true;
-                        } else if (wd === 0 || wd > 3) {
+                        if (wd === 3) { // Se for Quarta-feira
+                            // Só avança para a próxima semana se a semana atual teve algum dia de trabalho válido
+                            if (seenWorkingDay) {
+                                currentWeek++;
+                                seenWorkingDay = false; // Reseta para a nova semana
+                            }
+                            seenWorkingDay = true; // Quarta já é dia de trabalho
+                        } else if (wd === 0 || wd > 3) { // Se for Qui, Sex, Sab ou Dom
                             seenWorkingDay = true;
                         }
+                        // Dias 1 (Seg) e 2 (Ter) não marcam 'seenWorkingDay'
                         
                         const dayStr = ano + "-" + String(mes+1).padStart(2, '0') + "-" + String(d).padStart(2,'0');
                         map[dayStr] = currentWeek;
@@ -1498,7 +1504,6 @@
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
                                         <div className="p-4 bg-slate-50 border-b space-y-4">
-                                            {/* SUMÁRIO INTELIGENTE DOS FILTROS */}
                                             <div className="flex flex-wrap justify-between items-center bg-white p-3 rounded-2xl border shadow-sm gap-2 animate-in fade-in">
                                                 <span className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1">
                                                     <Search size={12} /> Resultados da Pesquisa ({filteredDashboard.length})
