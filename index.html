@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v2.8.7</title>
+    <title>Tribo Burger | Gestão Financeira v1.0 Oficial</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -76,7 +76,6 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // Componente base de Ícones Lucide
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -222,7 +221,6 @@
             );
         };
 
-        // MOTOR DE PESQUISA RECURSIVA & NORMALIZAÇÃO BULLETPROOF
         const findCollectionsInJSON = (obj) => {
             if (!obj || typeof obj !== 'object') return null;
 
@@ -279,7 +277,6 @@
             const [isActionLoading, setIsActionLoading] = useState(false);
             const [activeTab, setActiveTab] = useState('dashboard');
             
-            // Credenciais para Login Manual
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [isRegistering, setIsRegistering] = useState(false);
@@ -329,7 +326,6 @@
             const [invoicePartialVal, setInvoicePartialVal] = useState('');
             const [invoiceSourceAcc, setInvoiceSourceAcc] = useState('');
 
-            // Estados para importação via área de texto direto
             const [backupText, setBackupText] = useState('');
             const [parsedBackup, setParsedBackup] = useState(null);
             const [backupLog, setBackupLog] = useState('');
@@ -366,12 +362,13 @@
                 const activeUid = user.uid;
                 const path = "artifacts/" + appId + "/users/" + activeUid;
                 
-                const unsubTx = db.collection(path + "/transactions").onSnapshot(s => setTransactions(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
-                const unsubDaily = db.collection(path + "/dailyRecords").onSnapshot(s => { const r = {}; s.docs.forEach(d => { if (d.exists) r[d.id] = d.data(); }); setDailyRecords(r); }, e => console.error(e));
-                const unsubAcc = db.collection(path + "/accounts").onSnapshot(s => setAccounts(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
-                const unsubCat = db.collection(path + "/categories").onSnapshot(s => setCategories(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
-                const unsubSup = db.collection(path + "/suppliers").onSnapshot(s => setSuppliers(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
-                const unsubMeta = db.doc(path + "/settings/config").onSnapshot(s => { if(s.exists) setMetaVendas(s.data().meta || 0); }, e => console.error(e));
+                const unsubTx = onSnapshot(collection(db, path + "/transactions"), s => setTransactions(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
+                const unsubDaily = onSnapshot(collection(db, path + "/dailyRecords"), s => { const r = {}; s.docs.forEach(d => { if (d.exists) r[d.id] = d.data(); }); setDailyRecords(r); }, e => console.error(e));
+                const unsubAcc = onSnapshot(collection(db, path + "/accounts"), s => setAccounts(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
+                const unsubCat = onSnapshot(collection(db, path + "/categories"), s => setCategories(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
+                const unsubSup = onSnapshot(collection(db, path + "/suppliers"), s => setSuppliers(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), e => console.error(e));
+                
+                const unsubMeta = onSnapshot(doc(db, path + "/settings/config"), s => { if(s.exists()) setMetaVendas(s.data().meta || 0); }, e => console.error(e));
 
                 return () => { unsubTx(); unsubDaily(); unsubAcc(); unsubCat(); unsubSup(); unsubMeta(); };
             }, [user]);
@@ -396,7 +393,6 @@
                 return transactions.filter(t => {
                     if (!t) return false;
                     
-                    // Impede que a falsa entrada de pagamento de fatura polua a listagem e os cálculos do Dashboard
                     if (t.type === 'entrada' && isInvoicePayment(t)) return false;
                     
                     const accInfo = accounts.find(a => a.name === t.account);
@@ -413,7 +409,6 @@
                 }).sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
             }, [transactions, filterMonth, searchQuery, typeFilter, accFilter, catFilter, hideCards, hideForecasts, accounts]);
 
-            // NOVO MEMO PARA CALCULAR OS TOTAIS DO FILTRO DO DASHBOARD
             const filteredSummary = useMemo(() => {
                 let entradas = 0;
                 let saidas = 0;
@@ -452,40 +447,36 @@
                 return accounts.filter(a => a.type === 'corrente').reduce((acc, a) => acc + (accountBalances[a.name] || 0), 0);
             }, [accounts, accountBalances]);
 
-            /* =========================================================================
-               MOTOR MATEMÁTICO AVANÇADO (VERSÃO 2.8.7)
-               Cálculos de Semanas, Dias Úteis, Projeções e Margens Reais.
-               ========================================================================= */
             const stats = useMemo(() => {
                 let rb = 0; let custos = 0; let catCosts = {}; let diasAtivos = 0; let totalPedidos = 0;
                 let entradas = 0; let contasPagas = 0;
 
                 const parts = filterMonth.split('-');
                 const anoFiltro = parseInt(parts[0]);
-                const mesFiltro = parseInt(parts[1]) - 1; // 0 indexado
+                const mesFiltro = parseInt(parts[1]) - 1;
 
                 let prevMes = mesFiltro - 1;
                 let prevAno = anoFiltro;
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
-                // Lógica de calendário exclusiva Tribo Burger: Folgas (Seg/Ter) não contam para o início do mês.
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
                     let currentWeek = 1;
                     let seenWorkingDay = false;
 
-                    for(let d=1; d<=lastDay; d++) {
+                    for(let d = 1; d <= lastDay; d++) {
                         const data = new Date(ano, mes, d);
-                        const wd = data.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+                        const wd = data.getDay(); 
 
-                        if (wd === 3) { 
-                            // É Quarta-feira! Só avança a semana se já tivermos dias úteis anteriores neste mês
-                            if (seenWorkingDay) currentWeek++;
+                        if (wd === 3) {
+                            if (seenWorkingDay) {
+                                currentWeek++;
+                                seenWorkingDay = false;
+                            }
                             seenWorkingDay = true;
                         } else if (wd === 0 || wd > 3) {
-                            // Se o mês começar numa Qui, Sex, Sáb ou Dom, a semana 1 teve os seus dias úteis.
                             seenWorkingDay = true;
                         }
                         
@@ -501,7 +492,6 @@
                 let weeklyCurrent = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
                 let weeklyPrev = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
                 
-                // Mapeamento exato dos dias (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb)
                 let weekdaySums = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0}; 
                 let weekdayCounts = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
 
@@ -515,11 +505,9 @@
                         custos += p(r.motoboy) + p(r.taxaEntrega);
                         totalPedidos += p(r.qtdPedidos);
 
-                        // Registo Semanal
                         const wk = currentMonthWeeks[d];
                         if(wk) weeklyCurrent[wk] += totalDia;
 
-                        // Média por dia da semana (ignorando dias sem venda para não estragar a média real)
                         const [y, m, day] = d.split('-');
                         const localDate = new Date(parseInt(y), parseInt(m)-1, parseInt(day));
                         const wd = localDate.getDay();
@@ -537,17 +525,13 @@
                     const accInfo = accounts.find(a => a.name === t.account);
                     const { clearanceDate } = getTransactionDates(t, accInfo);
                     
-                    // Condição rígida: Apenas status PAGO. Ignora completamentente as pendentes.
                     if (t.status === 'pago' && (t.date?.startsWith(filterMonth) || clearanceDate?.startsWith(filterMonth))) {
-                        
                         if (t.type === 'saida') {
                             catCosts[t.category] = (catCosts[t.category] || 0) + p(t.amount);
-                            // Prevenção Duplicidade de Despesa: Se for a retirada da conta bancária para pagar fatura, não é custo operacional extra
                             if (!isInvoicePayment(t)) {
                                 contasPagas += p(t.amount);
                             }
                         } else if (t.type === 'entrada') {
-                            // Ignora lançamentos de baixa/ajuste de fatura (são entradas fakes para equilibrar limite do cartão)
                             if (!isInvoicePayment(t)) {
                                 entradas += p(t.amount);
                             }
@@ -555,7 +539,6 @@
                     }
                 });
 
-                // PROJEÇÃO E META DIÁRIA (Considerando apenas Qua a Dom)
                 let diasUteisTotaisMes = 0;
                 let diasUteisPassados = 0; 
                 const ultimoDiaMes = new Date(anoFiltro, mesFiltro + 1, 0).getDate();
@@ -564,7 +547,7 @@
                 for (let dia = 1; dia <= ultimoDiaMes; dia++) {
                     const dataCorrente = new Date(anoFiltro, mesFiltro, dia);
                     const diaDaSemana = dataCorrente.getDay(); 
-                    if (diaDaSemana !== 1 && diaDaSemana !== 2) { // Não é Segunda nem Terça
+                    if (diaDaSemana !== 1 && diaDaSemana !== 2) { 
                         diasUteisTotaisMes++;
                         if (anoFiltro === hoje.getFullYear() && mesFiltro === hoje.getMonth() && dia <= hoje.getDate()) {
                             diasUteisPassados++;
@@ -582,13 +565,11 @@
                         projecaoMensal = rb + (ticketDiarioAtual * diasUteisRestantes);
                     }
                     
-                    // Cálculo da Meta Diária para bater a meta do mês
                     const restanteMeta = p(metaVendas) - rb;
                     if (restanteMeta > 0 && diasUteisRestantes > 0) {
                         metaDiaria = restanteMeta / diasUteisRestantes;
                     }
                 } else if (new Date(anoFiltro, mesFiltro, 1) > hoje) {
-                    // Mês futuro, precisa bater a meta inteira nos dias úteis totais
                     if (diasUteisTotaisMes > 0) metaDiaria = p(metaVendas) / diasUteisTotaisMes;
                 }
 
@@ -596,7 +577,6 @@
                 const lucroDRE = rb - (operCosts + custos);
                 const lucroCaixa = entradas - contasPagas;
                 
-                // Margens Reais (%)
                 const margemDRE = rb > 0 ? (lucroDRE / rb) * 100 : 0;
                 const margemCaixa = entradas > 0 ? (lucroCaixa / entradas) * 100 : 0;
 
@@ -609,24 +589,11 @@
                 })).filter(x => x.avg > 0).sort((a, b) => b.avg - a.avg);
 
                 return { 
-                    rb, 
-                    totalCosts: operCosts + custos, 
-                    lucro: lucroDRE, 
-                    catCosts, 
-                    diasAtivos, 
-                    totalPedidos,
+                    rb, totalCosts: operCosts + custos, lucro: lucroDRE, catCosts, diasAtivos, totalPedidos,
                     ticketDiario: diasAtivos > 0 ? rb / diasAtivos : 0,
                     ticketPedido: totalPedidos > 0 ? rb / totalPedidos : 0,
-                    entradas,
-                    contasPagas,
-                    lucroCaixa,
-                    projecaoMensal,
-                    metaDiaria,
-                    margemDRE,
-                    margemCaixa,
-                    weeklyCurrent,
-                    weeklyPrev,
-                    weekdayAverages,
+                    entradas, contasPagas, lucroCaixa, projecaoMensal, metaDiaria, margemDRE, margemCaixa,
+                    weeklyCurrent, weeklyPrev, weekdayAverages,
                     diasUteisRestantes: Math.max(0, diasUteisTotaisMes - diasUteisPassados)
                 };
             }, [dailyRecords, transactions, filterMonth, metaVendas]);
@@ -1329,7 +1296,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.8.7</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v1.0 Oficial</h1>
                                 <span className={"text-[7px] font-black px-2 py-1 rounded-md " + (user?.isAnonymous ? "bg-amber-500 text-black animate-pulse" : "bg-emerald-500 text-black")}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -1387,7 +1354,7 @@
 
                     <main className="p-4 max-w-7xl mx-auto w-full flex-1 space-y-6">
                         
-                        <div className="glass-card p-6 rounded-[2.5rem] border-l-8 border-[#D97757] shadow-md flex flex-col md:flex-row justify-between items-center gap-4 bg-white">
+                        <div className="glass-card p-6 rounded-[2.5rem] border-l-8 border-[#D97757] shadow-md flex flex-col md:flex-row justify-between items-center gap-4 bg-white print:hidden">
                             <div>
                                 <h3 className="text-xs font-black uppercase text-slate-800 flex items-center gap-2">
                                     <Bell size={16} className="text-[#D97757]" /> Painel de Diagnóstico do Sistema
@@ -1413,7 +1380,7 @@
                             </div>
                         </div>
 
-                        <div className="flex justify-center">
+                        <div className="flex justify-center print:hidden">
                             <div className="glass-card px-6 py-2 rounded-full flex items-center gap-4 border shadow-sm">
                                 <span className="text-[9px] font-black uppercase text-slate-400">Mês Base:</span>
                                 <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="bg-transparent border-0 outline-none font-black text-[#D97757] text-sm cursor-pointer" />
@@ -1421,7 +1388,7 @@
                         </div>
 
                         {alerts.length > 0 && (
-                            <div className="glass-card p-6 rounded-[2.5rem] border-t-8 border-amber-500 bg-amber-50/10 shadow-lg space-y-4 fade-in">
+                            <div className="glass-card p-6 rounded-[2.5rem] border-t-8 border-amber-500 bg-amber-50/10 shadow-lg space-y-4 fade-in print:hidden">
                                 <div className="flex items-center gap-3">
                                     <div className="bg-amber-100 p-2 rounded-2xl text-amber-600 animate-pulse"><Bell size={18} /></div>
                                     <div>
@@ -1534,7 +1501,6 @@
 
                                     <div className="lg:col-span-2 glass-card rounded-[2.5rem] shadow-sm h-[700px] flex flex-col border overflow-hidden">
                                         <div className="p-4 bg-slate-50 border-b space-y-4">
-                                            {/* SUMÁRIO INTELIGENTE DOS FILTROS */}
                                             <div className="flex flex-wrap justify-between items-center bg-white p-3 rounded-2xl border shadow-sm gap-2 animate-in fade-in">
                                                 <span className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1">
                                                     <Search size={12} /> Resultados da Pesquisa ({filteredDashboard.length})
@@ -1958,6 +1924,8 @@
                                     <div className={"flex justify-between items-center p-8 rounded-[2.5rem] mt-6 shadow-xl " + (stats.lucro>=0?'bg-[#1A202C] text-[#F8CC82]':'bg-red-600 text-white')}>
                                         <div>
                                             <h3 className="text-xl font-black uppercase">Resultado Líquido</h3>
+                                            <p className="text-[9px] font-black uppercase opacity-70 mt-1">Margem Real: {stats.margemDRE.toFixed(1)}%</p>
+                                        </div>
                                         <span className="text-4xl font-black">{formatMoney(stats.lucro)}</span>
                                     </div>
                                 </div>
@@ -2156,11 +2124,11 @@
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded">Recomendado</span>
                                                 <h3 className="text-xs font-black uppercase text-slate-800 mt-2">1. Regras do Cloud Firestore (Ativo)</h3>
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">A sua aplicação está ligada ao Cloud Firestore. Copie estas regras seguras (com proteção por login de utilizador) e cole-as no painel **Firestore Database -> Rules** no Firebase.</p>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">A sua aplicação está ligada ao Cloud Firestore. Copie estas regras seguras (com proteção por login de utilizador) e cole-as no painel Firestore Database (aba Rules) no Firebase.</p>
                                             </div>
                                             <pre className="p-3 bg-slate-900 text-slate-300 font-mono text-[8px] rounded-xl overflow-x-auto whitespace-pre no-scrollbar mt-3 h-28">{firestoreRulesTemplate}</pre>
                                             <button type="button" onClick={() => copyToClipboard(firestoreRulesTemplate, 'firestore')} className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-                                                {copyRulesSuccess === 'firestore' ? <span className="text-green-300">Copiado!</span> : <React.Fragment><Copy size={12}/> Copiar Regras do Firestore</React.Fragment>}
+                                                {copyRulesSuccess === 'firestore' ? <span className="text-green-300">Copiado!</span> : <><Copy size={12}/> Copiar Regras do Firestore</>}
                                             </button>
                                         </div>
 
@@ -2172,7 +2140,7 @@
                                             </div>
                                             <pre className="p-3 bg-slate-900 text-slate-300 font-mono text-[8px] rounded-xl overflow-x-auto whitespace-pre no-scrollbar mt-3 h-28">{updatedRtdbRulesTemplate}</pre>
                                             <button type="button" onClick={() => copyToClipboard(updatedRtdbRulesTemplate, 'rtdb')} className="w-full mt-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] uppercase py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-                                                {copyRulesSuccess === 'rtdb' ? <span className="text-green-300">Copiado!</span> : <React.Fragment><Copy size={12}/> Copiar Regras do Realtime Database</React.Fragment>}
+                                                {copyRulesSuccess === 'rtdb' ? <span className="text-green-300">Copiado!</span> : <><Copy size={12}/> Copiar Regras do Realtime Database</>}
                                             </button>
                                         </div>
                                     </div>
@@ -2236,7 +2204,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.8.7 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v1.0 OFICIAL</footer>
                 </div>
             );
         }
