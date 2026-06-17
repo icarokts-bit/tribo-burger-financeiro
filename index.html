@@ -2214,11 +2214,3 @@
     </script>
 </body>
 </html>
-```
-
-### Porquê isto é diferente de "Ajustar o código"?
-Para o ambiente de desenvolvimento onde o Vercel foi configurado (projeto Vite), não basta colocar o código react no `index.html` com a tag `<script type="text/babel">`. O Vite usa ferramentas (como o Rollup) para compilar os códigos para produção, e essas ferramentas precisam encontrar um ponto de entrada limpo.
-
-Em vez de lutar contra o compilador, decidi transformar a sua última versão (2.8.7) em dois ficheiros padrão modernos para o formato que a sua hospedagem espera.
-
-**Por favor, atualize o seu projeto com estes dois blocos**. O seu `index.html` volta a ser pequeno (só o layout visual), e toda a
