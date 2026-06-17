@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tribo Burger | Gestão Financeira v2.8.7</title>
+    <title>Tribo Burger | Gestão Financeira v1.0 Oficial</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -76,7 +76,6 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // Componente base de Ícones Lucide
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -460,28 +459,22 @@
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
-                // Lógica de semanas ajustada (Quarta a Domingo, ignorando Segunda e Terça)
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
                     let currentWeek = 1;
-                    let seenWorkingDay = false; // Flag para saber se a semana atual já teve dias de trabalho
+                    let seenWorkingDay = false;
 
                     for(let d = 1; d <= lastDay; d++) {
                         const data = new Date(ano, mes, d);
-                        const wd = data.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+                        const wd = data.getDay();
 
-                        if (wd === 3) { // Se for Quarta-feira
-                            // Só avança para a próxima semana se a semana atual teve algum dia de trabalho válido
-                            if (seenWorkingDay) {
-                                currentWeek++;
-                                seenWorkingDay = false; // Reseta para a nova semana
-                            }
-                            seenWorkingDay = true; // Quarta já é dia de trabalho
-                        } else if (wd === 0 || wd > 3) { // Se for Qui, Sex, Sab ou Dom
+                        if (wd === 3) { 
+                            if (seenWorkingDay) currentWeek++;
+                            seenWorkingDay = true;
+                        } else if (wd === 0 || wd > 3) {
                             seenWorkingDay = true;
                         }
-                        // Dias 1 (Seg) e 2 (Ter) não marcam 'seenWorkingDay'
                         
                         const dayStr = ano + "-" + String(mes+1).padStart(2, '0') + "-" + String(d).padStart(2,'0');
                         map[dayStr] = currentWeek;
@@ -1299,7 +1292,7 @@
                         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="bg-white p-1 rounded-full"><img src="logo.png" className="h-8 w-8 object-contain" alt="Logo" /></div>
-                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v2.8.7</h1>
+                                <h1 className="text-lg font-black text-[#F8CC82] uppercase tracking-tighter">Tribo Burger v1.0</h1>
                                 <span className={"text-[7px] font-black px-2 py-1 rounded-md " + (user?.isAnonymous ? "bg-amber-500 text-black animate-pulse" : "bg-emerald-500 text-black")}>
                                     {user?.isAnonymous ? 'ACESSO ANÓNIMO' : 'CONTA REGISTADA'}
                                 </span>
@@ -2207,7 +2200,7 @@
                             </div>
                         )}
                     </main>
-                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v2.8.7 GOLDEN STABLE</footer>
+                    <footer className="py-8 text-center opacity-30 font-black text-[9px] uppercase tracking-[0.5em]">Tribo Burger Financeiro • v1.0 OFICIAL</footer>
                 </div>
             );
         }
