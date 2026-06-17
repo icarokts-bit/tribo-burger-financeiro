@@ -76,7 +76,6 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // Componente base de Ícones Lucide
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -460,24 +459,23 @@
                 if (prevMes < 0) { prevMes = 11; prevAno--; }
                 const prevMonthStr = prevAno + "-" + String(prevMes + 1).padStart(2, '0');
 
-                // Lógica de semanas ajustada (Quarta a Domingo, ignorando Segunda e Terça)
                 const buildWeekMap = (ano, mes) => {
                     const map = {};
                     const lastDay = new Date(ano, mes + 1, 0).getDate();
                     let currentWeek = 1;
-                    let seenWorkingDay = false;
+                    let seenWorkingDay = false; 
 
                     for(let d = 1; d <= lastDay; d++) {
                         const data = new Date(ano, mes, d);
                         const wd = data.getDay(); 
 
-                        if (wd === 3) { // Se for Quarta-feira
+                        if (wd === 3) { 
                             if (seenWorkingDay) {
                                 currentWeek++;
-                                seenWorkingDay = false;
+                                seenWorkingDay = false; 
                             }
-                            seenWorkingDay = true;
-                        } else if (wd === 0 || wd > 3) { // Se for Qui, Sex, Sab ou Dom
+                            seenWorkingDay = true; 
+                        } else if (wd === 0 || wd > 3) { 
                             seenWorkingDay = true;
                         }
                         
@@ -1855,7 +1853,7 @@
                                      <div className={"glass-card p-10 rounded-[3rem] shadow-sm text-center border-t-8 flex flex-col items-center justify-center " + (stats.lucroCaixa>=0?'border-blue-600':'border-red-600')}>
                                         <p className="text-[9px] font-black text-slate-400 uppercase">Lucro Líquido (Caixa)</p>
                                         <h3 className={"text-2xl font-black mb-2 " + (stats.lucroCaixa>=0?'text-blue-600':'text-red-600')}>{formatMoney(stats.lucroCaixa)}</h3>
-                                        <span className={"text-[10px] font-black px-3 py-1 rounded-lg " + (stats.margemCaixa>=0?'bg-blue-50 text-blue-600':'bg-red-50 text-red-600')}>MAR ঘন {stats.margemCaixa.toFixed(1)}%</span>
+                                        <span className={"text-[10px] font-black px-3 py-1 rounded-lg " + (stats.margemCaixa>=0?'bg-blue-50 text-blue-600':'bg-red-50 text-red-600')}>MARGEM: {stats.margemCaixa.toFixed(1)}%</span>
                                      </div>
                                 </div>
 
@@ -2126,7 +2124,7 @@
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded">Recomendado</span>
                                                 <h3 className="text-xs font-black uppercase text-slate-800 mt-2">1. Regras do Cloud Firestore (Ativo)</h3>
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">A sua aplicação está ligada ao Cloud Firestore. Copie estas regras seguras (com proteção por login de utilizador) e cole-as no painel **Firestore Database &rarr; Rules** no Firebase.</p>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">A sua aplicação está ligada ao Cloud Firestore. Copie estas regras seguras (com proteção por login de utilizador) e cole-as no painel **Firestore Database -> Rules** no Firebase.</p>
                                             </div>
                                             <pre className="p-3 bg-slate-900 text-slate-300 font-mono text-[8px] rounded-xl overflow-x-auto whitespace-pre no-scrollbar mt-3 h-28">{firestoreRulesTemplate}</pre>
                                             <button type="button" onClick={() => copyToClipboard(firestoreRulesTemplate, 'firestore')} className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase py-3 rounded-xl transition-all flex items-center justify-center gap-2">
@@ -2216,3 +2214,11 @@
     </script>
 </body>
 </html>
+```
+
+### Porquê isto é diferente de "Ajustar o código"?
+Para o ambiente de desenvolvimento onde o Vercel foi configurado (projeto Vite), não basta colocar o código react no `index.html` com a tag `<script type="text/babel">`. O Vite usa ferramentas (como o Rollup) para compilar os códigos para produção, e essas ferramentas precisam encontrar um ponto de entrada limpo.
+
+Em vez de lutar contra o compilador, decidi transformar a sua última versão (2.8.7) em dois ficheiros padrão modernos para o formato que a sua hospedagem espera.
+
+**Por favor, atualize o seu projeto com estes dois blocos**. O seu `index.html` volta a ser pequeno (só o layout visual), e toda a
